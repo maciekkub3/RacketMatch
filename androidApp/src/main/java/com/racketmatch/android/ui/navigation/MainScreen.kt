@@ -1,7 +1,5 @@
 package com.racketmatch.android.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -13,8 +11,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.tab.CurrentTab
@@ -24,6 +20,7 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.racketmatch.android.ui.coaches.CoachesScreen
 import com.racketmatch.android.ui.matches.MatchListScreen
 import com.racketmatch.android.ui.players.PlayersScreen
+import com.racketmatch.android.ui.profile.ProfileScreen
 
 object MainScreen : Screen {
 
@@ -93,9 +90,5 @@ object ProfileTab : Tab {
         )
 
     @Composable
-    override fun Content() {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Profil — Task 14")
-        }
-    }
+    override fun Content() = ProfileScreen.Content()
 }

@@ -1,0 +1,53 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "/api/users/me"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": "user-1",
+          "displayName": "Jan Kowalski",
+          "city": "Warszawa",
+          "eloRating": 1520,
+          "avatarUrl": null,
+          "isMaster": false,
+          "subscriptionActive": false
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/api/users/me/stats"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "eloHistory": [
+            { "timestamp": 1700000000000, "rating": 1400 },
+            { "timestamp": 1700100000000, "rating": 1440 },
+            { "timestamp": 1700200000000, "rating": 1420 },
+            { "timestamp": 1700300000000, "rating": 1480 },
+            { "timestamp": 1700400000000, "rating": 1520 }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/api/matches/me"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": []
+      }
+    }
+  ]
+}
