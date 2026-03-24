@@ -9,6 +9,7 @@ import com.racketmatch.data.remote.api.CoachApi
 import com.racketmatch.data.remote.api.MatchApi
 import com.racketmatch.data.remote.api.PaymentApi
 import com.racketmatch.data.remote.api.PlayerApi
+import com.racketmatch.data.remote.api.UserApi
 import com.racketmatch.data.repository.AuthRepositoryImpl
 import com.racketmatch.data.repository.ChatRepositoryImpl
 import com.racketmatch.data.repository.CoachRepositoryImpl
@@ -42,6 +43,7 @@ val apiModule = module {
     single { ChatApi(get()) }
     single { CoachApi(get()) }
     single { PaymentApi(get()) }
+    single { UserApi(get()) }
 }
 
 val repositoryModule = module {

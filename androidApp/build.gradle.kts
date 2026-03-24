@@ -52,5 +52,6 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.ktor)
     implementation("com.stripe:stripe-android:20.50.0")
+    implementation("com.google.firebase:firebase-messaging:23.4.1")
     debugImplementation(libs.compose.ui.tooling)
 }
