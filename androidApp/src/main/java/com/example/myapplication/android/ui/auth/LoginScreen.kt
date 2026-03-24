@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.android.ui.navigation.MainScreen
 import com.racketmatch.presentation.viewmodel.LoginEffect
 import com.racketmatch.presentation.viewmodel.LoginEvent
 import com.racketmatch.presentation.viewmodel.LoginState
@@ -35,7 +36,7 @@ fun LoginScreenContent(viewModel: LoginViewModel) {
     LaunchedEffect(Unit) {
         viewModel.effectFlow.collect { effect ->
             when (effect) {
-                is LoginEffect.NavigateToHome -> navigator.replace(HomeScreen())
+                is LoginEffect.NavigateToHome -> navigator.replace(MainScreen)
                 is LoginEffect.ShowError -> { /* Snackbar — Task 13 */ }
             }
         }

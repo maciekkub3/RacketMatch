@@ -29,6 +29,7 @@ import com.racketmatch.presentation.viewmodel.MatchViewModel
 import com.racketmatch.presentation.viewmodel.PaymentViewModel
 import com.racketmatch.presentation.viewmodel.PlayersViewModel
 import com.racketmatch.presentation.viewmodel.RegisterViewModel
+import com.racketmatch.presentation.viewmodel.SplashViewModel
 import org.koin.dsl.module
 
 val networkModule = module {
@@ -63,4 +64,5 @@ val viewModelModule = module {
     factory { CoachesViewModel(get()) }
     factory { (coachId: String) -> CoachDetailViewModel(get(), coachId) }
     factory { PaymentViewModel(get()) }
+    factory { SplashViewModel(get()) }
 }

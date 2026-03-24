@@ -49,6 +49,8 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.voyager.navigator)
     implementation(libs.voyager.koin)
+    implementation(libs.voyager.tab.navigator)
+    implementation(libs.voyager.transitions)
     implementation(libs.coil.compose)
     implementation(libs.coil.ktor)
     implementation("com.stripe:stripe-android:20.50.0")
