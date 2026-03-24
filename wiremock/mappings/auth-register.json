@@ -1,0 +1,23 @@
+{
+  "request": { "method": "POST", "url": "/api/auth/register" },
+  "response": {
+    "status": 201,
+    "jsonBody": {
+      "accessToken": "mock-access-token",
+      "refreshToken": "mock-refresh-token",
+      "user": {
+        "id": "user-1",
+        "email": "jan@test.com",
+        "displayName": "Jan Kowalski",
+        "avatarUrl": null,
+        "isCoach": false,
+        "city": "Kraków",
+        "eloRating": 1200,
+        "isMaster": false,
+        "masterFee": null,
+        "subscriptionActive": false
+      }
+    },
+    "headers": { "Content-Type": "application/json" }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "request": { "method": "GET", "urlPathPattern": "/api/matches/me.*" },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      { "id": "match-1", "challengerId": "user-1", "challengedId": "user-2", "type": "RANKED", "status": "PENDING", "sport": "TENNIS", "scheduledAt": null, "eloChanges": null },
+      { "id": "match-2", "challengerId": "user-3", "challengedId": "user-1", "type": "CASUAL", "status": "COMPLETED", "sport": "PADEL", "scheduledAt": "2026-03-20T14:00:00Z", "eloChanges": { "user-1": 18, "user-3": -18 } }
+    ],
+    "headers": { "Content-Type": "application/json" }
+  }
+}

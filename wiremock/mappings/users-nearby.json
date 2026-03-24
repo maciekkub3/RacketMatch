@@ -1,0 +1,12 @@
+{
+  "request": { "method": "GET", "urlPathPattern": "/api/users/nearby.*" },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      { "id": "user-2", "displayName": "Marek Nowak", "eloRating": 1420, "isMaster": true, "masterFee": 5000, "city": "Kraków", "avatarUrl": null, "isCoach": false, "subscriptionActive": true },
+      { "id": "user-3", "displayName": "Anna Wiśniewska", "eloRating": 1280, "isMaster": false, "masterFee": null, "city": "Kraków", "avatarUrl": null, "isCoach": false, "subscriptionActive": true },
+      { "id": "user-4", "displayName": "Piotr Zając", "eloRating": 1510, "isMaster": true, "masterFee": 8000, "city": "Kraków", "avatarUrl": null, "isCoach": false, "subscriptionActive": true }
+    ],
+    "headers": { "Content-Type": "application/json" }
+  }
+}

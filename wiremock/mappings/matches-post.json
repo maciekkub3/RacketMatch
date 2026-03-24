@@ -1,0 +1,8 @@
+{
+  "request": { "method": "POST", "url": "/api/matches" },
+  "response": {
+    "status": 201,
+    "jsonBody": { "id": "match-new", "status": "PENDING", "type": "RANKED", "sport": "TENNIS" },
+    "headers": { "Content-Type": "application/json" }
+  }
+}
