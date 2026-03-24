@@ -1,0 +1,23 @@
+{
+  "request": { "method": "GET", "urlPattern": "/api/matches/.+/messages" },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": [
+      {
+        "id": "msg1",
+        "matchId": "m1",
+        "senderId": "u1",
+        "text": "Hej, gramy jutro o 10?",
+        "timestamp": 1711267200000
+      },
+      {
+        "id": "msg2",
+        "matchId": "m1",
+        "senderId": "u2",
+        "text": "Jasne, widzimy się na kortach Zamek!",
+        "timestamp": 1711267320000
+      }
+    ]
+  }
+}

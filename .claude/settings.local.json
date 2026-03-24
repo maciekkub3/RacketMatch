@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx skills:*)",
+      "Bash(nvm list:*)",
+      "Bash(source ~/.nvm/nvm.sh)",
+      "Bash(nvm use:*)",
+      "Skill(update-config)",
+      "Bash(chmod:*)",
+      "Bash(/Users/sequenex/AndroidStudioProjects/GolfTracker/.claude/hooks/session-start)",
+      "Bash(git:*)",
+      "Bash(./gradlew:*)",
+      "Bash(jar:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(unzip:*)",
+      "Bash(java -version)",
+      "Read(//c/Program Files/Android/Android Studio/**)",
+      "Read(//c/Program Files/Android/**)",
+      "Bash(\"C:/Program Files/Android/Android Studio/jbr/bin/java\" -version 2>&1)",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}
