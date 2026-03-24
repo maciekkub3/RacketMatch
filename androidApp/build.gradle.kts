@@ -51,5 +51,6 @@ dependencies {
     implementation(libs.voyager.koin)
     implementation(libs.coil.compose)
     implementation(libs.coil.ktor)
+    implementation("com.stripe:stripe-android:20.50.0")
     debugImplementation(libs.compose.ui.tooling)
 }

@@ -1,0 +1,26 @@
+{
+  "mappings": [
+    {
+      "request": { "method": "POST", "url": "/api/payments/subscription/create-intent" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "clientSecret": "pi_test_subscription_secret_mock",
+          "amount": 999
+        }
+      }
+    },
+    {
+      "request": { "method": "POST", "url": "/api/payments/master-match" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "clientSecret": "pi_test_master_match_secret_mock",
+          "amount": 5000
+        }
+      }
+    }
+  ]
+}

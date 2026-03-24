@@ -7,21 +7,25 @@ import com.racketmatch.data.remote.api.AuthApi
 import com.racketmatch.data.remote.api.ChatApi
 import com.racketmatch.data.remote.api.CoachApi
 import com.racketmatch.data.remote.api.MatchApi
+import com.racketmatch.data.remote.api.PaymentApi
 import com.racketmatch.data.remote.api.PlayerApi
 import com.racketmatch.data.repository.AuthRepositoryImpl
 import com.racketmatch.data.repository.ChatRepositoryImpl
 import com.racketmatch.data.repository.CoachRepositoryImpl
 import com.racketmatch.data.repository.MatchRepositoryImpl
+import com.racketmatch.data.repository.PaymentRepositoryImpl
 import com.racketmatch.data.repository.PlayerRepositoryImpl
 import com.racketmatch.domain.repository.AuthRepository
 import com.racketmatch.domain.repository.ChatRepository
 import com.racketmatch.domain.repository.CoachRepository
 import com.racketmatch.domain.repository.MatchRepository
+import com.racketmatch.domain.repository.PaymentRepository
 import com.racketmatch.domain.repository.PlayerRepository
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
 import com.racketmatch.presentation.viewmodel.CoachesViewModel
 import com.racketmatch.presentation.viewmodel.LoginViewModel
 import com.racketmatch.presentation.viewmodel.MatchViewModel
+import com.racketmatch.presentation.viewmodel.PaymentViewModel
 import com.racketmatch.presentation.viewmodel.PlayersViewModel
 import com.racketmatch.presentation.viewmodel.RegisterViewModel
 import org.koin.dsl.module
@@ -37,6 +41,7 @@ val apiModule = module {
     single { MatchApi(get()) }
     single { ChatApi(get()) }
     single { CoachApi(get()) }
+    single { PaymentApi(get()) }
 }
 
 val repositoryModule = module {
@@ -45,6 +50,7 @@ val repositoryModule = module {
     single<MatchRepository> { MatchRepositoryImpl(get()) }
     single<ChatRepository> { ChatRepositoryImpl(get()) }
     single<CoachRepository> { CoachRepositoryImpl(get()) }
+    single<PaymentRepository> { PaymentRepositoryImpl(get()) }
 }
 
 val viewModelModule = module {
@@ -54,4 +60,5 @@ val viewModelModule = module {
     factory { MatchViewModel(get()) }
     factory { CoachesViewModel(get()) }
     factory { (coachId: String) -> CoachDetailViewModel(get(), coachId) }
+    factory { PaymentViewModel(get()) }
 }
