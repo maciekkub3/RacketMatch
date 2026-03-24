@@ -3,8 +3,8 @@
   "response": {
     "status": 200,
     "jsonBody": [
-      { "userId": "coach-1", "displayName": "Tomasz Trener", "bio": "Trener z 10-letnim doświadczeniem, certyfikat PTT.", "hourlyRate": 15000, "sports": ["TENNIS"], "certifications": ["PTT Level 2"], "city": "Kraków", "eloRating": 1700 },
-      { "userId": "coach-2", "displayName": "Katarzyna Pro", "bio": "Specjalistka padla, były zawodnik.", "hourlyRate": 12000, "sports": ["PADEL", "TENNIS"], "certifications": [], "city": "Kraków", "eloRating": 1580 }
+      { "userId": "coach-1", "displayName": "Tomasz Trener", "avatarUrl": null, "bio": "Trener z 10-letnim doświadczeniem, certyfikat PTT.", "hourlyRate": 15000, "sports": ["TENNIS"], "certifications": ["PTT Level 2"], "city": "Kraków", "eloRating": 1700 },
+      { "userId": "coach-2", "displayName": "Katarzyna Pro", "avatarUrl": null, "bio": "Specjalistka padla, były zawodnik.", "hourlyRate": 12000, "sports": ["PADEL", "TENNIS"], "certifications": [], "city": "Kraków", "eloRating": 1580 }
     ],
     "headers": { "Content-Type": "application/json" }
   }
