@@ -33,7 +33,8 @@ object HttpClientFactory {
                     )
                 }
                 refreshTokens {
-                    // TODO Task 4: call /api/auth/refresh
+                    // On 401, clear tokens to force re-login
+                    tokenStorage.clear()
                     null
                 }
             }
