@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -11,16 +12,17 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.android.ui.navigation.MainScreen
 import com.racketmatch.presentation.viewmodel.RegisterEffect
 import com.racketmatch.presentation.viewmodel.RegisterEvent
 import com.racketmatch.presentation.viewmodel.RegisterState
 import com.racketmatch.presentation.viewmodel.RegisterViewModel
-import org.koin.compose.koinInject
+import org.koin.androidx.compose.koinViewModel
 
 class RegisterScreen : Screen {
     @Composable
     override fun Content() {
-        val viewModel: RegisterViewModel = koinInject()
+        val viewModel: RegisterViewModel = koinViewModel()
         RegisterScreenContent(viewModel)
     }
 }
@@ -38,8 +40,8 @@ fun RegisterScreenContent(viewModel: RegisterViewModel) {
     LaunchedEffect(Unit) {
         viewModel.effectFlow.collect { effect ->
             when (effect) {
-                is RegisterEffect.NavigateToHome -> navigator.replace(HomeScreen())
-                is RegisterEffect.ShowError -> { /* Snackbar — Task 13 */ }
+                is RegisterEffect.NavigateToHome -> navigator.replace(MainScreen)
+                is RegisterEffect.ShowError -> { /* Snackbar */ }
             }
         }
     }
@@ -78,7 +80,7 @@ fun RegisterScreenContent(viewModel: RegisterViewModel) {
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isCoach, onCheckedChange = { isCoach = it })
             Spacer(Modifier.width(8.dp))
             Text("Jestem trenerem")

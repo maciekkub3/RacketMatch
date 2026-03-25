@@ -14,12 +14,12 @@ import com.racketmatch.domain.model.User
 import com.racketmatch.presentation.viewmodel.PlayersEvent
 import com.racketmatch.presentation.viewmodel.PlayersState
 import com.racketmatch.presentation.viewmodel.PlayersViewModel
-import org.koin.compose.koinInject
+import org.koin.androidx.compose.koinViewModel
 
 object PlayersScreen : Screen {
     @Composable
     override fun Content() {
-        val viewModel: PlayersViewModel = koinInject()
+        val viewModel: PlayersViewModel = koinViewModel()
         PlayersScreenContent(viewModel)
     }
 }
@@ -66,7 +66,8 @@ fun PlayerCard(player: User, onClick: () -> Unit) {
                 Text(player.city, style = MaterialTheme.typography.bodySmall)
             }
             if (player.isMaster) {
-                Text("⭐ Mistrz", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                Text("Mistrz", color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium)
             }
         }
     }

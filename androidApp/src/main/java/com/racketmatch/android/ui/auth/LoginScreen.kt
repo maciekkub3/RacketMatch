@@ -16,12 +16,12 @@ import com.racketmatch.presentation.viewmodel.LoginEffect
 import com.racketmatch.presentation.viewmodel.LoginEvent
 import com.racketmatch.presentation.viewmodel.LoginState
 import com.racketmatch.presentation.viewmodel.LoginViewModel
-import org.koin.compose.koinInject
+import org.koin.androidx.compose.koinViewModel
 
 class LoginScreen : Screen {
     @Composable
     override fun Content() {
-        val viewModel: LoginViewModel = koinInject()
+        val viewModel: LoginViewModel = koinViewModel()
         LoginScreenContent(viewModel)
     }
 }
@@ -37,7 +37,7 @@ fun LoginScreenContent(viewModel: LoginViewModel) {
         viewModel.effectFlow.collect { effect ->
             when (effect) {
                 is LoginEffect.NavigateToHome -> navigator.replace(MainScreen)
-                is LoginEffect.ShowError -> { /* Snackbar — Task 13 */ }
+                is LoginEffect.ShowError -> { /* Snackbar */ }
             }
         }
     }
