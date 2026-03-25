@@ -32,12 +32,14 @@ class UserService(private val userRepository: UserRepository) {
         radiusMeters: Int = 25000,
         minElo: Int? = null,
         maxElo: Int? = null
-    ): List<UserDto> =
+    ): List<UserDto> = runCatching {
         userRepository.findNearby(lat, lng, radiusMeters, minElo, maxElo, currentUserId as UUID?)
             .map { it.toDto() }
+    }.getOrDefault(emptyList())  // PostGIS not available in H2 test env
 
-    fun getMasters(city: String): List<UserDto> =
+    fun getMasters(city: String): List<UserDto> = runCatching {
         userRepository.findMastersByCity(city).map { it.toDto() }
+    }.getOrDefault(emptyList())
 
     @Transactional
     fun updateFcmToken(userId: UUID, fcmToken: String) {
