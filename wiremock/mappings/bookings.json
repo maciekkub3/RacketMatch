@@ -1,0 +1,25 @@
+{
+  "mappings": [
+    {
+      "request": { "method": "POST", "url": "/api/bookings" },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "id": "booking-new",
+          "coachId": "coach-1",
+          "playerId": "user-1",
+          "status": "PENDING"
+        }
+      }
+    },
+    {
+      "request": { "method": "GET", "url": "/api/bookings/me" },
+      "response": {
+        "status": 200,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": []
+      }
+    }
+  ]
+}

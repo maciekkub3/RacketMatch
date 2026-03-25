@@ -25,6 +25,7 @@ import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.PaymentRepository
 import com.racketmatch.domain.repository.PlayerRepository
 import com.racketmatch.domain.repository.ProfileRepository
+import com.racketmatch.presentation.viewmodel.ChatViewModel
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
 import com.racketmatch.presentation.viewmodel.CoachesViewModel
 import com.racketmatch.presentation.viewmodel.LoginViewModel
@@ -63,6 +64,7 @@ val repositoryModule = module {
 }
 
 val viewModelModule = module {
+    factory { (matchId: String) -> ChatViewModel(get(), matchId) }
     factory { LoginViewModel(get()) }
     factory { RegisterViewModel(get()) }
     factory { PlayersViewModel(get()) }

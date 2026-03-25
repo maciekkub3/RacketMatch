@@ -16,7 +16,7 @@ import com.racketmatch.presentation.viewmodel.PlayersState
 import com.racketmatch.presentation.viewmodel.PlayersViewModel
 import org.koin.compose.koinInject
 
-class PlayersScreen : Screen {
+object PlayersScreen : Screen {
     @Composable
     override fun Content() {
         val viewModel: PlayersViewModel = koinInject()
