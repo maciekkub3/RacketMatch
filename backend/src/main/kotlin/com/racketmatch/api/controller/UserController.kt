@@ -1,8 +1,10 @@
 package com.racketmatch.api.controller
 
+import com.racketmatch.api.dto.UpdateProfileRequest
 import com.racketmatch.api.dto.UserDto
 import com.racketmatch.api.dto.UserStatsDto
 import com.racketmatch.service.UserService
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -15,6 +17,12 @@ class UserController(private val userService: UserService) {
     @GetMapping("/me")
     fun getMyProfile(authentication: Authentication): UserDto =
         userService.getProfile(UUID.fromString(authentication.name))
+
+    @PatchMapping("/me")
+    fun updateMyProfile(
+        authentication: Authentication,
+        @Valid @RequestBody request: UpdateProfileRequest
+    ): UserDto = userService.updateProfile(UUID.fromString(authentication.name), request)
 
     @GetMapping("/me/stats")
     fun getMyStats(authentication: Authentication): UserStatsDto =

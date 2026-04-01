@@ -13,7 +13,11 @@ data class UserDto(
     val eloRating: Int,
     val isMaster: Boolean,
     val masterFee: Int?,
-    val subscriptionActive: Boolean
+    val subscriptionActive: Boolean,
+    val sports: List<String> = emptyList(),
+    val bio: String? = null,
+    val wins: Int = 0,
+    val losses: Int = 0
 )
 
 fun UserEntity.toDto() = UserDto(
@@ -26,5 +30,9 @@ fun UserEntity.toDto() = UserDto(
     eloRating = eloRating,
     isMaster = isMaster,
     masterFee = masterFee,
-    subscriptionActive = subscriptionActive
+    subscriptionActive = subscriptionActive,
+    sports = if (sports.isBlank()) emptyList() else sports.split(","),
+    bio = bio,
+    wins = wins,
+    losses = losses
 )

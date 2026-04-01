@@ -9,7 +9,8 @@ data class RegisterRequest(
     @field:Size(min = 8) val password: String,
     @field:NotBlank val displayName: String,
     @field:NotBlank val city: String,
-    val isCoach: Boolean = false
+    val isCoach: Boolean = false,
+    val sports: List<String> = emptyList()
 )
 
 data class LoginRequest(
@@ -25,4 +26,12 @@ data class AuthResponse(
     val accessToken: String,
     val refreshToken: String,
     val user: UserDto
+)
+
+data class UpdateProfileRequest(
+    @field:NotBlank val displayName: String,
+    @field:NotBlank val city: String,
+    val bio: String? = null,
+    val sports: List<String> = emptyList(),
+    val password: String? = null
 )

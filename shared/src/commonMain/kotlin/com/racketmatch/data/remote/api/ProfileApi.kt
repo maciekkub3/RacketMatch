@@ -6,6 +6,18 @@ import com.racketmatch.data.remote.dto.UserStatsDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.patch
+import io.ktor.client.request.setBody
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class UpdateProfileRequest(
+    val displayName: String,
+    val city: String,
+    val bio: String?,
+    val sports: List<String>,
+    val password: String?
+)
 
 class ProfileApi(private val client: HttpClient) {
 
@@ -17,4 +29,9 @@ class ProfileApi(private val client: HttpClient) {
 
     suspend fun getMyRecentMatches(): List<MatchDto> =
         client.get("api/matches/me").body()
+
+    suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<String>, password: String?): UserDto =
+        client.patch("api/users/me") {
+            setBody(UpdateProfileRequest(displayName, city, bio, sports, password))
+        }.body()
 }

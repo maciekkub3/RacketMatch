@@ -1,10 +1,77 @@
-*.iml
-.gradle
-.idea
-.DS_Store
-build
-captures
-.externalNativeBuild
-.cxx
+# ----------------------------
+# Gradle
+# ----------------------------
+.gradle/
+build/
+**/build/
+
+# Kotlin
+.kotlin/
+.konan/
+
+# ----------------------------
+# Local configuration
+# ----------------------------
 local.properties
-xcuserdata
+
+# ----------------------------
+# IntelliJ / Android Studio
+# ----------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# ----------------------------
+# VS Code (optional)
+# ----------------------------
+.vscode/
+
+# ----------------------------
+# OS files
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# Logs
+# ----------------------------
+*.log
+
+# ----------------------------
+# Android
+# ----------------------------
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore (IMPORTANT)
+*.jks
+*.keystore
+
+# ----------------------------
+# iOS / Xcode (KMP)
+# ----------------------------
+*.xcworkspace
+*.xcuserdata/
+*.xcuserstate
+DerivedData/
+Pods/
+
+# ----------------------------
+# Environment / secrets
+# ----------------------------
+.env
+.env.*
+
+# ----------------------------
+# Claude / AI tools
+# ----------------------------
+.claude/
+
+# ----------------------------
+# Temporary files
+# ----------------------------
+*.tmp
+*.swp
+*.swo

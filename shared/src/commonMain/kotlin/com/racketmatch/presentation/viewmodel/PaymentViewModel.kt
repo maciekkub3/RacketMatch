@@ -58,7 +58,7 @@ class PaymentViewModel(
                 _effects.emit(PaymentEffect.LaunchPayment(intent.clientSecret))
             } catch (e: Exception) {
                 _state.value = PaymentState.Idle
-                _effects.emit(PaymentEffect.ShowError(e.message ?: "Unknown error"))
+                _effects.emit(PaymentEffect.ShowError(e.toUserMessage()))
             }
         }
     }
@@ -72,7 +72,7 @@ class PaymentViewModel(
                 _effects.emit(PaymentEffect.LaunchPayment(intent.clientSecret))
             } catch (e: Exception) {
                 _state.value = PaymentState.Idle
-                _effects.emit(PaymentEffect.ShowError(e.message ?: "Unknown error"))
+                _effects.emit(PaymentEffect.ShowError(e.toUserMessage()))
             }
         }
     }

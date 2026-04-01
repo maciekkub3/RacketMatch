@@ -74,7 +74,7 @@ class CoachDetailViewModel(
                 coachRepository.bookSlot(coachId, startsAt, endsAt)
                 _effects.emit(CoachDetailEffect.BookingConfirmed)
             } catch (e: Exception) {
-                _effects.emit(CoachDetailEffect.ShowError(e.message ?: "Unknown error"))
+                _effects.emit(CoachDetailEffect.ShowError(e.toUserMessage()))
             }
         }
     }

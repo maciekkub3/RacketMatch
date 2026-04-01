@@ -4,6 +4,7 @@ import com.racketmatch.data.remote.api.ProfileApi
 import com.racketmatch.data.remote.dto.toDomain
 import com.racketmatch.domain.model.EloPoint
 import com.racketmatch.domain.model.Match
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.domain.repository.ProfileRepository
 
@@ -17,4 +18,7 @@ class ProfileRepositoryImpl(private val profileApi: ProfileApi) : ProfileReposit
 
     override suspend fun getEloHistory(): List<EloPoint> =
         profileApi.getMyStats().eloHistory.map { it.toDomain() }
+
+    override suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<Sport>, password: String?): User =
+        profileApi.updateProfile(displayName, city, bio, sports.map { it.name }, password).toDomain()
 }

@@ -29,10 +29,16 @@ class MatchEntity(
     val sport: String = "TENNIS",
 
     @Column(name = "scheduled_at")
-    val scheduledAt: Instant? = null,
+    var scheduledAt: Instant? = null,
 
     @Column(name = "location_name")
-    val locationName: String? = null,
+    var locationName: String? = null,
+
+    @Column(name = "details_proposed_by")
+    var detailsProposedBy: UUID? = null,
+
+    @Column(name = "reserved_by")
+    var reservedBy: UUID? = null,
 
     @Column(name = "score_challenger")
     var scoreChallenger: Int? = null,
@@ -45,6 +51,15 @@ class MatchEntity(
 
     @Column(name = "elo_change_challenged")
     var eloChangeChallenged: Int? = null,
+
+    @Column(name = "proposed_score_challenger")
+    var proposedScoreChallenger: Int? = null,
+
+    @Column(name = "proposed_score_challenged")
+    var proposedScoreChallenged: Int? = null,
+
+    @Column(name = "proposed_by")
+    var proposedBy: UUID? = null,
 
     @Column(name = "payment_id")
     var paymentId: String? = null,

@@ -29,8 +29,12 @@ class SecurityConfig(private val jwtAuthFilter: JwtAuthFilter) {
                 auth
                     .requestMatchers(
                         "/api/auth/**",
-                        "/actuator/health",
+                        "/api/payments/webhook",
+                        "/ws/**",
+                        "/actuator/**",
                         "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/webjars/**",
                         "/v3/api-docs/**"
                     ).permitAll()
                     .anyRequest().authenticated()

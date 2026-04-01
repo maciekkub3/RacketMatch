@@ -1,6 +1,7 @@
 package com.racketmatch.data.remote.dto
 
 import com.racketmatch.domain.model.AuthResult
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import kotlinx.serialization.Serializable
 
@@ -15,7 +16,11 @@ data class UserDto(
     val eloRating: Int = 1200,
     val isMaster: Boolean = false,
     val masterFee: Int? = null,
-    val subscriptionActive: Boolean = false
+    val subscriptionActive: Boolean = false,
+    val sports: List<String> = emptyList(),
+    val bio: String? = null,
+    val wins: Int = 0,
+    val losses: Int = 0
 )
 
 @Serializable
@@ -34,7 +39,8 @@ data class RegisterRequestDto(
     val password: String,
     val displayName: String,
     val city: String,
-    val isCoach: Boolean = false
+    val isCoach: Boolean = false,
+    val sports: List<String> = emptyList()
 )
 
 fun UserDto.toDomain() = User(
@@ -47,7 +53,11 @@ fun UserDto.toDomain() = User(
     eloRating = eloRating,
     isMaster = isMaster,
     masterFee = masterFee,
-    subscriptionActive = subscriptionActive
+    subscriptionActive = subscriptionActive,
+    sports = sports.mapNotNull { runCatching { Sport.valueOf(it.uppercase()) }.getOrNull() },
+    bio = bio,
+    wins = wins,
+    losses = losses
 )
 
 fun AuthResponseDto.toDomain() = AuthResult(

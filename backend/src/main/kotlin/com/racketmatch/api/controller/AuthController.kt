@@ -27,7 +27,8 @@ class AuthController(
             password = request.password,
             displayName = request.displayName,
             city = request.city,
-            isCoach = request.isCoach
+            isCoach = request.isCoach,
+            sports = request.sports
         )
 
     @PostMapping("/login")

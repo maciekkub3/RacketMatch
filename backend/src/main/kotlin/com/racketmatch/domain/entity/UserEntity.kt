@@ -45,6 +45,21 @@ class UserEntity(
     @Column(name = "matches_played")
     var matchesPlayed: Int = 0,
 
+    @Column(name = "fcm_token")
+    var fcmToken: String? = null,
+
+    @Column(name = "sports", nullable = false)
+    var sports: String = "",
+
+    @Column(name = "bio", columnDefinition = "TEXT")
+    var bio: String? = null,
+
+    @Column(name = "wins")
+    var wins: Int = 0,
+
+    @Column(name = "losses")
+    var losses: Int = 0,
+
     @Column(name = "created_at", updatable = false)
     val createdAt: Instant = Instant.now()
 ) {
@@ -54,7 +69,8 @@ class UserEntity(
             displayName = displayName, avatarUrl = avatarUrl, isCoach = isCoach,
             city = city, eloRating = eloRating, isMaster = isMaster,
             masterFee = masterFee, subscriptionActive = subscriptionActive,
-            matchesPlayed = matchesPlayed, createdAt = createdAt
+            matchesPlayed = matchesPlayed, fcmToken = fcmToken,
+            bio = bio, wins = wins, losses = losses, createdAt = createdAt
         )
     }
 }

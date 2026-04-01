@@ -36,4 +36,6 @@ class JwtService(private val jwtConfig: JwtConfig) {
 
     fun extractUserId(token: String): UUID? =
         validateToken(token)?.subject?.let { UUID.fromString(it) }
+
+    fun isTokenValid(token: String): Boolean = validateToken(token) != null
 }

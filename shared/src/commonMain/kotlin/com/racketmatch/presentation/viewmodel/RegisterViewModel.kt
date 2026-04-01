@@ -22,7 +22,8 @@ sealed class RegisterEvent {
         val password: String,
         val displayName: String,
         val city: String,
-        val isCoach: Boolean
+        val isCoach: Boolean,
+        val sports: List<com.racketmatch.domain.model.Sport> = emptyList()
     ) : RegisterEvent()
 }
 
@@ -44,19 +45,19 @@ class RegisterViewModel(
 
     fun onEvent(event: RegisterEvent) {
         when (event) {
-            is RegisterEvent.Submit -> register(event.email, event.password, event.displayName, event.city, event.isCoach)
+            is RegisterEvent.Submit -> register(event.email, event.password, event.displayName, event.city, event.isCoach, event.sports)
         }
     }
 
-    private fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean) {
+    private fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, sports: List<com.racketmatch.domain.model.Sport> = emptyList()) {
         viewModelScope.launch(dispatcher) {
             _state.value = RegisterState.Loading
             try {
-                authRepository.register(email, password, displayName, city, isCoach)
+                authRepository.register(email, password, displayName, city, isCoach, sports)
                 _effects.emit(RegisterEffect.NavigateToHome)
             } catch (e: Exception) {
                 _state.value = RegisterState.Idle
-                _effects.emit(RegisterEffect.ShowError(e.message ?: "Unknown error"))
+                _effects.emit(RegisterEffect.ShowError(e.toUserMessage()))
             }
         }
     }

@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.sqldelight)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
 }
 
 kotlin {
@@ -25,8 +27,30 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(libs.lifecycle.viewmodel)
+            // Compose Multiplatform UI
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material3)
+            implementation(compose.ui)
+            implementation(compose.components.resources)
+            implementation(compose.materialIconsExtended)
+
+            // Navigation
+            implementation(libs.voyager.navigator)
+            implementation(libs.voyager.tab.navigator)
+            implementation(libs.voyager.transitions)
+
+            // DI
             implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
+
+            // Image loading
+            implementation(libs.coil.compose)
+            implementation(libs.coil.ktor)
+
+            // Networking & serialization
+            implementation(libs.lifecycle.viewmodel)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
@@ -39,14 +63,24 @@ kotlin {
             implementation(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines.extensions)
         }
+
         androidMain.dependencies {
+            // Google Fonts for Lexend on Android
+            implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
+            // OSMDroid dark map
+            implementation("org.osmdroid:osmdroid-android:6.1.18")
+            // Stripe payments (Android actual for SubscriptionScreen)
+            implementation("com.stripe:stripe-android:20.50.0")
+            // Platform networking & DB
             implementation(libs.ktor.client.android)
             implementation(libs.sqldelight.android.driver)
         }
+
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
             implementation(libs.sqldelight.native.driver)
         }
+
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.junit5.api)

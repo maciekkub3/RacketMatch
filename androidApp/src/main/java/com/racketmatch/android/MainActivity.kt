@@ -4,8 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import cafe.adriel.voyager.navigator.Navigator
-import cafe.adriel.voyager.transitions.SlideTransition
-import com.racketmatch.android.ui.navigation.SplashScreen
+import com.racketmatch.ui.navigation.SplashScreen
+import com.racketmatch.ui.theme.AppTheme
 import com.racketmatch.di.apiModule
 import com.racketmatch.di.networkModule
 import com.racketmatch.di.repositoryModule
@@ -25,10 +25,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MyApplicationTheme {
-                Navigator(screen = SplashScreen) { navigator ->
-                    SlideTransition(navigator)
-                }
+            AppTheme {
+                Navigator(screen = SplashScreen)
             }
         }
     }

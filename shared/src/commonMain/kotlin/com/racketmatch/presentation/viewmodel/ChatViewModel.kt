@@ -100,7 +100,7 @@ class ChatViewModel(
                         messages = afterFail.messages.filter { it.id != optimistic.id }
                     )
                 }
-                _effects.emit(ChatEffect.ShowError(e.message ?: "Unknown error"))
+                _effects.emit(ChatEffect.ShowError(e.toUserMessage()))
             }
         }
     }

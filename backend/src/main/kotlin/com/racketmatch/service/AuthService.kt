@@ -31,7 +31,8 @@ class AuthService(
         password: String,
         displayName: String,
         city: String,
-        isCoach: Boolean
+        isCoach: Boolean,
+        sports: List<String> = emptyList()
     ): AuthResponse {
         if (userRepository.existsByEmail(email)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Email already in use")
@@ -42,7 +43,8 @@ class AuthService(
                 passwordHash = passwordEncoder.encode(password),
                 displayName = displayName,
                 city = city,
-                isCoach = isCoach
+                isCoach = isCoach,
+                sports = sports.joinToString(",")
             )
         )
         return buildAuthResponse(user)
