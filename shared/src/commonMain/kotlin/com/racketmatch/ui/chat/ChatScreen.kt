@@ -1,70 +1,143 @@
 package com.racketmatch.ui.chat
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.ChatMessage
 import com.racketmatch.presentation.viewmodel.ChatEffect
 import com.racketmatch.presentation.viewmodel.ChatEvent
 import com.racketmatch.presentation.viewmodel.ChatState
 import com.racketmatch.presentation.viewmodel.ChatViewModel
+import com.racketmatch.ui.theme.AppBodyFontFamily
+import com.racketmatch.ui.theme.AppFontFamily
+import com.racketmatch.ui.theme.ProCircuit
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-data class ChatScreen(val matchId: String, val currentUserId: String) : Screen {
+data class ChatScreen(
+    val matchId: String,
+    val currentUserId: String,
+    val otherUserName: String,
+    val otherUserAvatarUrl: String? = null
+) : Screen {
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val viewModel: ChatViewModel = koinViewModel { parametersOf(matchId) }
         val state by viewModel.stateFlow.collectAsState()
+        val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
-                    is ChatEffect.ShowError -> scope.launch { snackbarHostState.showSnackbar(effect.msg) }
+                    is ChatEffect.ShowError -> scope.launch {
+                        snackbarHostState.showSnackbar(effect.msg)
+                    }
                 }
             }
         }
 
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
-            topBar = { TopAppBar(title = { Text("Match Chat") }) }
+            containerColor = ProCircuit.Bg
         ) { padding ->
-            when (val s = state) {
-                ChatState.Loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                MatchChatHeader(name = otherUserName, onBack = { navigator.pop() })
+                HorizontalDivider(color = ProCircuit.SurfaceLow, thickness = 1.dp)
+
+                when (val s = state) {
+                    ChatState.Loading -> Box(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator(color = ProCircuit.Lime) }
+
+                    ChatState.Error -> Box(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Błąd ładowania", color = ProCircuit.OnSurface) }
+
+                    is ChatState.Content -> MatchChatContent(
+                        messages = s.messages,
+                        currentUserId = currentUserId,
+                        onSend = { viewModel.onEvent(ChatEvent.SendMessage(it)) },
+                        otherUserName = otherUserName,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-                ChatState.Error -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("Failed to load chat")
-                }
-                is ChatState.Content -> ChatContent(
-                    messages = s.messages,
-                    currentUserId = currentUserId,
-                    onSend = { viewModel.onEvent(ChatEvent.SendMessage(it)) },
-                    modifier = Modifier.padding(padding)
-                )
             }
         }
     }
 }
 
 @Composable
-private fun ChatContent(messages: List<ChatMessage>, currentUserId: String, onSend: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun MatchChatHeader(name: String, onBack: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxWidth().background(ProCircuit.Bg)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        TextButton(
+            onClick = onBack,
+            modifier = Modifier.align(Alignment.CenterStart),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text(
+                "← BACK", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.Lime
+            )
+        }
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier.size(48.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    name.take(1).uppercase(), fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black, fontSize = 20.sp, color = ProCircuit.Lime
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                name, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                fontSize = 14.sp, color = ProCircuit.OnBg
+            )
+        }
+    }
+}
+
+@Composable
+private fun MatchChatContent(
+    messages: List<ChatMessage>,
+    currentUserId: String,
+    onSend: (String) -> Unit,
+    otherUserName: String,
+    modifier: Modifier = Modifier
+) {
     val listState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
 
@@ -72,58 +145,126 @@ private fun ChatContent(messages: List<ChatMessage>, currentUserId: String, onSe
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            items(messages) { message ->
-                ChatBubble(message = message, isOwn = message.senderId == currentUserId)
+            messages.forEachIndexed { index, message ->
+                val isOwn = message.senderId == currentUserId
+                val prev = messages.getOrNull(index - 1)
+                val next = messages.getOrNull(index + 1)
+                val isGrouped = prev?.senderId == message.senderId &&
+                        (message.timestamp - (prev?.timestamp ?: 0)) < 120_000
+                val isLastInGroup = next?.senderId != message.senderId ||
+                        ((next?.timestamp ?: Long.MAX_VALUE) - message.timestamp) >= 120_000
+
+                if (prev != null && (message.timestamp - prev.timestamp) > 1_800_000) {
+                    item("ts_$index") {
+                        Box(
+                            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                                fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
+                            )
+                        }
+                    }
+                }
+
+                item(message.id) {
+                    val tailCorner = if (isLastInGroup) 4.dp else 6.dp
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (isOwn) Arrangement.End else Arrangement.Start,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        if (!isOwn) {
+                            if (!isGrouped) {
+                                Box(
+                                    modifier = Modifier.size(32.dp).clip(CircleShape)
+                                        .background(ProCircuit.SurfaceHigh),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        otherUserName.take(1).uppercase(),
+                                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                                        fontSize = 13.sp, color = ProCircuit.Lime
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.width(32.dp))
+                            }
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.72f)
+                                .wrapContentWidth(if (isOwn) Alignment.End else Alignment.Start)
+                                .clip(
+                                    RoundedCornerShape(
+                                        topStart = 18.dp, topEnd = 18.dp,
+                                        bottomStart = if (isOwn) 18.dp else tailCorner,
+                                        bottomEnd = if (isOwn) tailCorner else 18.dp
+                                    )
+                                )
+                                .background(if (isOwn) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                message.text, fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+                                color = if (isOwn) ProCircuit.Bg else ProCircuit.OnBg
+                            )
+                        }
+                    }
+                }
             }
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(ProCircuit.SurfaceLow)
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedTextField(
                 value = inputText,
                 onValueChange = { inputText = it },
-                placeholder = { Text("Type a message...") },
+                placeholder = {
+                    Text(
+                        "Wiadomość...", fontFamily = AppBodyFontFamily,
+                        fontSize = 14.sp, color = ProCircuit.OnSurface
+                    )
+                },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(24.dp),
-                maxLines = 4
-            )
-            IconButton(onClick = {
-                if (inputText.isNotBlank()) {
-                    onSend(inputText.trim())
-                    inputText = ""
-                }
-            }) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChatBubble(message: ChatMessage, isOwn: Boolean) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (isOwn) Arrangement.End else Arrangement.Start) {
-        Box(
-            modifier = Modifier
-                .background(
-                    color = if (isOwn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(
-                        topStart = 16.dp, topEnd = 16.dp,
-                        bottomStart = if (isOwn) 16.dp else 4.dp,
-                        bottomEnd = if (isOwn) 4.dp else 16.dp
-                    )
+                maxLines = 4,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = ProCircuit.SurfaceHigh,
+                    unfocusedBorderColor = ProCircuit.SurfaceHigh,
+                    focusedTextColor = ProCircuit.OnBg,
+                    unfocusedTextColor = ProCircuit.OnBg,
+                    cursorColor = ProCircuit.Lime
                 )
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        ) {
-            Text(text = message.text, color = if (isOwn) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+            AnimatedVisibility(visible = inputText.isNotBlank()) {
+                IconButton(
+                    onClick = { onSend(inputText.trim()); inputText = "" },
+                    modifier = Modifier.size(44.dp).clip(CircleShape).background(ProCircuit.Lime)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Wyślij",
+                        tint = ProCircuit.Bg
+                    )
+                }
+            }
         }
     }
 }
