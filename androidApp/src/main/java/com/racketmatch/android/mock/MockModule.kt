@@ -26,8 +26,11 @@ import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.OpenSessionRepository
 import com.racketmatch.domain.repository.PaymentRepository
 import com.racketmatch.domain.repository.PlayerRepository
+import com.racketmatch.domain.model.Conversation
+import com.racketmatch.domain.model.DirectMessage
 import com.racketmatch.domain.model.FeedEvent
 import com.racketmatch.domain.model.FeedEventType
+import com.racketmatch.domain.repository.DmRepository
 import com.racketmatch.domain.repository.FeedRepository
 import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.ProfileRepository
@@ -184,6 +187,8 @@ private val MOCK_SESSIONS = mutableListOf(
 
 private var sessionIdCounter = 10
 private var matchIdCounter = 10
+
+private val MOCK_DM_MESSAGES = mutableMapOf<String, MutableList<DirectMessage>>()
 
 val mockRepositoryModule = module {
 
@@ -504,6 +509,40 @@ val mockRepositoryModule = module {
     single<FeedRepository> {
         object : FeedRepository {
             override suspend fun getFeed(before: Long?) = MOCK_FEED
+        }
+    }
+
+    single<DmRepository> {
+        object : DmRepository {
+            override suspend fun getConversations(): List<Conversation> =
+                MOCK_FRIENDS.map { friend ->
+                    val convId = minOf(MY_ID, friend.id) + "_" + maxOf(MY_ID, friend.id)
+                    val msgs = MOCK_DM_MESSAGES[convId] ?: emptyList()
+                    Conversation(
+                        id = convId,
+                        otherUserId = friend.id,
+                        otherUserName = friend.displayName,
+                        otherUserAvatarUrl = null,
+                        lastMessage = msgs.lastOrNull()?.text ?: "",
+                        lastMessageAt = msgs.lastOrNull()?.sentAt ?: 0L,
+                        unreadCount = 0
+                    )
+                }
+            override suspend fun getMessages(conversationId: String): List<DirectMessage> =
+                MOCK_DM_MESSAGES.getOrPut(conversationId) { mutableListOf() }.toList()
+            override suspend fun sendMessage(conversationId: String, text: String): DirectMessage {
+                val msg = DirectMessage(
+                    id = "dm_${System.currentTimeMillis()}",
+                    conversationId = conversationId,
+                    senderId = MY_ID,
+                    text = text,
+                    sentAt = System.currentTimeMillis()
+                )
+                MOCK_DM_MESSAGES.getOrPut(conversationId) { mutableListOf() }.add(msg)
+                return msg
+            }
+            override suspend fun markRead(conversationId: String) {}
+            override fun observeMessages(conversationId: String) = emptyFlow<DirectMessage>()
         }
     }
 }

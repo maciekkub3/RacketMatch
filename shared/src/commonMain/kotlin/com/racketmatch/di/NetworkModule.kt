@@ -11,6 +11,7 @@ import com.racketmatch.data.remote.api.MatchApi
 import com.racketmatch.data.remote.api.OpenSessionApi
 import com.racketmatch.data.remote.api.PaymentApi
 import com.racketmatch.data.remote.api.PlayerApi
+import com.racketmatch.data.remote.api.DmApi
 import com.racketmatch.data.remote.api.FeedApi
 import com.racketmatch.data.remote.api.FriendApi
 import com.racketmatch.data.remote.api.ProfileApi
@@ -23,6 +24,7 @@ import com.racketmatch.data.repository.MatchRepositoryImpl
 import com.racketmatch.data.repository.OpenSessionRepositoryImpl
 import com.racketmatch.data.repository.PaymentRepositoryImpl
 import com.racketmatch.data.repository.PlayerRepositoryImpl
+import com.racketmatch.data.repository.DmRepositoryImpl
 import com.racketmatch.data.repository.FeedRepositoryImpl
 import com.racketmatch.data.repository.FriendRepositoryImpl
 import com.racketmatch.data.repository.ProfileRepositoryImpl
@@ -34,6 +36,7 @@ import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.OpenSessionRepository
 import com.racketmatch.domain.repository.PaymentRepository
 import com.racketmatch.domain.repository.PlayerRepository
+import com.racketmatch.domain.repository.DmRepository
 import com.racketmatch.domain.repository.FeedRepository
 import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.ProfileRepository
@@ -73,6 +76,7 @@ val apiModule = module {
     single { OpenSessionApi(get()) }
     single { FriendApi(get()) }
     single { FeedApi(get()) }
+    single { DmApi(get()) }
 }
 
 val repositoryModule = module {
@@ -87,6 +91,7 @@ val repositoryModule = module {
     single<OpenSessionRepository> { OpenSessionRepositoryImpl(get(), get()) }
     single<FriendRepository> { FriendRepositoryImpl(get()) }
     single<FeedRepository> { FeedRepositoryImpl(get()) }
+    single<DmRepository> { DmRepositoryImpl(get()) }
 }
 
 val viewModelModule = module {
