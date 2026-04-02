@@ -277,9 +277,7 @@ object FriendsTab : Tab {
         @Composable get() = TabOptions(index = 5u, title = "Znajomi", icon = rememberVectorPainter(Icons.Default.Person))
     @Composable
     override fun Content() {
-        Box(Modifier.fillMaxSize().background(ProCircuit.Bg), contentAlignment = Alignment.Center) {
-            Text("Znajomi — coming soon", color = ProCircuit.OnSurface)
-        }
+        Navigator(com.racketmatch.ui.friends.FriendsScreen) { CurrentScreen() }
     }
 }
 

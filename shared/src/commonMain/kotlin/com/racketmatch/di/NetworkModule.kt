@@ -45,6 +45,7 @@ import com.racketmatch.presentation.viewmodel.PlayersViewModel
 import com.racketmatch.presentation.viewmodel.ProfileSetupViewModel
 import com.racketmatch.presentation.viewmodel.RegisterViewModel
 import com.racketmatch.presentation.viewmodel.ProfileViewModel
+import com.racketmatch.presentation.viewmodel.FriendsViewModel
 import com.racketmatch.presentation.viewmodel.RankingsViewModel
 import com.racketmatch.presentation.viewmodel.SettingsViewModel
 import com.racketmatch.presentation.viewmodel.SplashViewModel
@@ -97,4 +98,5 @@ val viewModelModule = module {
     factory { ProfileViewModel(get(), get(), get()) }
     factory { SettingsViewModel(get(), get()) }
     factory { RankingsViewModel(get(), get(), get()) }
+    factory { FriendsViewModel(get()) }
 }
