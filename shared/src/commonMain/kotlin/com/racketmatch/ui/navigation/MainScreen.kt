@@ -286,9 +286,7 @@ object MessagesTab : Tab {
         @Composable get() = TabOptions(index = 6u, title = "Wiadomości", icon = rememberVectorPainter(Icons.Default.Person))
     @Composable
     override fun Content() {
-        Box(Modifier.fillMaxSize().background(ProCircuit.Bg), contentAlignment = Alignment.Center) {
-            Text("Wiadomości — coming soon", color = ProCircuit.OnSurface)
-        }
+        Navigator(com.racketmatch.ui.messages.MessagesScreen) { CurrentScreen() }
     }
 }
 
