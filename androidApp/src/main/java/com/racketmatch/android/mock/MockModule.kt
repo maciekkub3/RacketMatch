@@ -26,6 +26,9 @@ import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.OpenSessionRepository
 import com.racketmatch.domain.repository.PaymentRepository
 import com.racketmatch.domain.repository.PlayerRepository
+import com.racketmatch.domain.model.FeedEvent
+import com.racketmatch.domain.model.FeedEventType
+import com.racketmatch.domain.repository.FeedRepository
 import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.flow.Flow
@@ -60,6 +63,27 @@ private val MOCK_PLAYERS = listOf(
     User("p3", "maria@test.pl", "Maria Kowalczyk",  null, false, "Kraków",   1610, true,  null, true,  listOf(Sport.TENNIS, Sport.PADEL), mapOf("TENNIS" to 1610, "PADEL" to 1540), bio = "Finalistka Mistrzostw Małopolski. Trenuję 5x w tygodniu.", wins = 52, losses = 18),
     User("p4", "adam@test.pl",  "Adam Zając",       null, false, "Warszawa", 1290, false, null, false, listOf(Sport.PADEL),  mapOf("PADEL" to 1290),  bio = null, wins = 4, losses = 9),
     User("p5", "ewa@test.pl",   "Ewa Dąbrowska",    null, true,  "Wrocław",  1700, true,  null, true,  listOf(Sport.TENNIS), mapOf("TENNIS" to 1700), bio = "Profesjonalna zawodniczka. Coaching dostępny po wcześniejszym kontakcie.", wins = 71, losses = 22),
+)
+
+private val MOCK_FEED = listOf(
+    FeedEvent(
+        id = "fe1", type = FeedEventType.MATCH_WON,
+        actorId = "p1", actorName = "Anna Nowak", actorAvatarUrl = null,
+        payload = mapOf("opponentName" to "Piotr W.", "score" to "6:3", "sport" to "Tennis"),
+        createdAt = System.currentTimeMillis() - 3_600_000
+    ),
+    FeedEvent(
+        id = "fe2", type = FeedEventType.ELO_MILESTONE,
+        actorId = "p3", actorName = "Maria Kowalczyk", actorAvatarUrl = null,
+        payload = mapOf("threshold" to "1600", "sport" to "Tennis"),
+        createdAt = System.currentTimeMillis() - 7_200_000
+    ),
+    FeedEvent(
+        id = "fe3", type = FeedEventType.MATCH_LOST,
+        actorId = "p1", actorName = "Anna Nowak", actorAvatarUrl = null,
+        payload = mapOf("opponentName" to "Maria K.", "score" to "4:6", "sport" to "Padel"),
+        createdAt = System.currentTimeMillis() - 86_400_000
+    )
 )
 
 private val MOCK_FRIENDS = mutableListOf<User>()
@@ -474,6 +498,12 @@ val mockRepositoryModule = module {
             override suspend fun getReceivedRequests(): List<FriendRequest> = MOCK_RECEIVED_REQUESTS.toList()
             override suspend fun getSentRequests(): List<FriendRequest> = MOCK_SENT_REQUESTS.toList()
             override suspend fun removeFriend(userId: String) { MOCK_FRIENDS.removeAll { it.id == userId } }
+        }
+    }
+
+    single<FeedRepository> {
+        object : FeedRepository {
+            override suspend fun getFeed(before: Long?) = MOCK_FEED
         }
     }
 }
