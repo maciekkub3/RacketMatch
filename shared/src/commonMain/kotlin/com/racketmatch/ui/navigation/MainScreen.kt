@@ -296,11 +296,7 @@ object FeedTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 7u, title = "Aktywność", icon = rememberVectorPainter(Icons.Default.Star))
     @Composable
-    override fun Content() {
-        Box(Modifier.fillMaxSize().background(ProCircuit.Bg), contentAlignment = Alignment.Center) {
-            Text("Aktywność — coming soon", color = ProCircuit.OnSurface)
-        }
-    }
+    override fun Content() = com.racketmatch.ui.feed.FeedScreen.Content()
 }
 
 object SettingsTab : Tab {
