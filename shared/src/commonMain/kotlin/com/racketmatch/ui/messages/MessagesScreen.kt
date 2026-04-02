@@ -25,6 +25,7 @@ import com.racketmatch.presentation.viewmodel.MessagesState
 import com.racketmatch.presentation.viewmodel.MessagesViewModel
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
+import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.theme.ProCircuit
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -40,8 +41,14 @@ object MessagesScreen : Screen {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is MessagesEffect.OpenConversation -> {
-                        // DmChatScreen will be wired in Task 10
-                        // navigator.push(DmChatScreen(...))
+                        navigator.push(
+                            DmChatScreen(
+                                conversationId = effect.conversation.id,
+                                currentUserId = "me",
+                                otherUserName = effect.conversation.otherUserName,
+                                otherUserAvatarUrl = effect.conversation.otherUserAvatarUrl
+                            )
+                        )
                     }
                 }
             }

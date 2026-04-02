@@ -24,6 +24,7 @@ import com.racketmatch.presentation.viewmodel.FriendsEffect
 import com.racketmatch.presentation.viewmodel.FriendsEvent
 import com.racketmatch.presentation.viewmodel.FriendsState
 import com.racketmatch.presentation.viewmodel.FriendsViewModel
+import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.players.PlayerProfileScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
@@ -42,7 +43,16 @@ object FriendsScreen : Screen {
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
-                    is FriendsEffect.NavigateToDm -> { /* DmChatScreen added in Task 10 */ }
+                    is FriendsEffect.NavigateToDm -> {
+                        navigator.push(
+                            DmChatScreen(
+                                conversationId = minOf("me", effect.friend.id) + "_" + maxOf("me", effect.friend.id),
+                                currentUserId = "me",
+                                otherUserName = effect.friend.displayName,
+                                otherUserAvatarUrl = effect.friend.avatarUrl
+                            )
+                        )
+                    }
                     is FriendsEffect.ShowError -> { /* snackbar future improvement */ }
                 }
             }
