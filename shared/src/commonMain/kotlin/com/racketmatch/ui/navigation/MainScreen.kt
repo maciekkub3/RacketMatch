@@ -26,6 +26,7 @@ import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.presentation.viewmodel.MoreViewModel
 import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.matches.MatchListScreen
 import com.racketmatch.ui.onboarding.OnboardingAnchor
@@ -38,6 +39,7 @@ import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 object MainScreen : Screen {
 
@@ -45,6 +47,8 @@ object MainScreen : Screen {
     @Composable
     override fun Content() {
         val tokenStorage: TokenStorage = koinInject()
+        val moreViewModel: MoreViewModel = koinViewModel()
+        val badges by moreViewModel.badges.collectAsState()
         var onboardingComplete by remember { mutableStateOf(tokenStorage.isOnboardingComplete) }
         var showMoreSheet by remember { mutableStateOf(false) }
 
@@ -70,7 +74,7 @@ object MainScreen : Screen {
                         ProCircuitNavBar(
                             current = tabNavigator.current,
                             onTabSelect = { tabNavigator.current = it },
-                            onMoreTap = { showMoreSheet = true }
+                            onMoreTap = { moreViewModel.refresh(); showMoreSheet = true }
                         )
                     }
                 ) { paddingValues ->
@@ -88,8 +92,8 @@ object MainScreen : Screen {
                         onFeed = { showMoreSheet = false; tabNavigator.current = FeedTab },
                         onCoaches = { showMoreSheet = false; tabNavigator.current = CoachesTab },
                         onSettings = { showMoreSheet = false; tabNavigator.current = SettingsTab },
-                        pendingFriends = 0,
-                        unreadMessages = 0
+                        pendingFriends = badges.pendingFriends,
+                        unreadMessages = badges.unreadMessages
                     )
                 }
             }

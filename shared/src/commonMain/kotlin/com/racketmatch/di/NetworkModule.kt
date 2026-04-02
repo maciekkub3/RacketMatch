@@ -55,6 +55,7 @@ import com.racketmatch.presentation.viewmodel.ProfileViewModel
 import com.racketmatch.presentation.viewmodel.FeedViewModel
 import com.racketmatch.presentation.viewmodel.FriendsViewModel
 import com.racketmatch.presentation.viewmodel.MessagesViewModel
+import com.racketmatch.presentation.viewmodel.MoreViewModel
 import com.racketmatch.presentation.viewmodel.RankingsViewModel
 import com.racketmatch.presentation.viewmodel.SettingsViewModel
 import com.racketmatch.presentation.viewmodel.SplashViewModel
@@ -115,4 +116,5 @@ val viewModelModule = module {
     factory { FriendsViewModel(get()) }
     factory { FeedViewModel(get()) }
     factory { MessagesViewModel(get()) }
+    factory { MoreViewModel(get(), get()) }
 }
