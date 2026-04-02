@@ -20,10 +20,13 @@ sealed class SettingsState {
         val displayName: String,
         val city: String,
         val bio: String,
+        val dateOfBirth: String,
+        val avatarUrl: String,
         val sports: Set<Sport>,
         val isMaster: Boolean,
         val isCoach: Boolean,
         val masterFee: String,
+        val statusText: String = "",
         val isSaving: Boolean = false
     ) : SettingsState()
     object Error : SettingsState()
@@ -33,9 +36,12 @@ sealed class SettingsEvent {
     data class DisplayNameChanged(val value: String) : SettingsEvent()
     data class CityChanged(val value: String) : SettingsEvent()
     data class BioChanged(val value: String) : SettingsEvent()
+    data class DateOfBirthChanged(val value: String) : SettingsEvent()
     data class SportToggled(val sport: Sport) : SettingsEvent()
     data class MasterFeeChanged(val value: String) : SettingsEvent()
     data class PasswordChanged(val value: String) : SettingsEvent()
+    data class AvatarUrlChanged(val value: String) : SettingsEvent()
+    data class StatusTextChanged(val text: String) : SettingsEvent()
     object Save : SettingsEvent()
 }
 
@@ -66,6 +72,8 @@ class SettingsViewModel(
                     displayName = user.displayName,
                     city = user.city,
                     bio = user.bio ?: "",
+                    dateOfBirth = user.dateOfBirth ?: "",
+                    avatarUrl = user.avatarUrl ?: "",
                     sports = user.sports.toSet(),
                     isMaster = user.isMaster,
                     isCoach = user.isCoach,
@@ -83,8 +91,11 @@ class SettingsViewModel(
             is SettingsEvent.DisplayNameChanged -> _state.value = content.copy(displayName = event.value)
             is SettingsEvent.CityChanged        -> _state.value = content.copy(city = event.value)
             is SettingsEvent.BioChanged         -> _state.value = content.copy(bio = event.value)
+            is SettingsEvent.DateOfBirthChanged -> _state.value = content.copy(dateOfBirth = event.value)
             is SettingsEvent.MasterFeeChanged   -> _state.value = content.copy(masterFee = event.value)
             is SettingsEvent.PasswordChanged    -> pendingPassword = event.value.ifBlank { null }
+            is SettingsEvent.AvatarUrlChanged   -> _state.value = content.copy(avatarUrl = event.value)
+            is SettingsEvent.StatusTextChanged  -> _state.value = content.copy(statusText = event.text)
             is SettingsEvent.SportToggled       -> {
                 val updated = if (event.sport in content.sports)
                     content.sports - event.sport else content.sports + event.sport
@@ -111,7 +122,9 @@ class SettingsViewModel(
                     city = content.city.trim(),
                     bio = content.bio.trim().ifBlank { null },
                     sports = content.sports.toList(),
-                    password = pendingPassword
+                    password = pendingPassword,
+                    dateOfBirth = content.dateOfBirth.trim().ifBlank { null },
+                    avatarUrl = content.avatarUrl.trim().ifBlank { null }
                 )
                 pendingPassword = null
                 tokenStorage.incrementMatchesVersion()

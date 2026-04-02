@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -14,12 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -31,6 +34,7 @@ import com.racketmatch.presentation.viewmodel.SettingsViewModel
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import com.racketmatch.ui.theme.ThemeState
 import org.koin.compose.viewmodel.koinViewModel
 
 object SettingsScreen : Screen {
@@ -92,6 +96,14 @@ private fun SettingsContent(
             fontSize = 28.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
         Spacer(Modifier.height(28.dp))
 
+        // Avatar preview + URL field
+        AvatarSection(
+            displayName = state.displayName,
+            avatarUrl = state.avatarUrl,
+            onAvatarUrlChange = { viewModel.onEvent(SettingsEvent.AvatarUrlChanged(it)) }
+        )
+
+        Spacer(Modifier.height(28.dp))
         SettingsSectionLabel("PROFILE")
         Spacer(Modifier.height(12.dp))
 
@@ -106,6 +118,11 @@ private fun SettingsContent(
         SettingsField("Bio", state.bio, maxLines = 3, singleLine = false) {
             viewModel.onEvent(SettingsEvent.BioChanged(it))
         }
+        Spacer(Modifier.height(12.dp))
+        SettingsField(
+            label = "Status (maks. 60 znaków)",
+            value = state.statusText
+        ) { if (it.length <= 60) viewModel.onEvent(SettingsEvent.StatusTextChanged(it)) }
 
         Spacer(Modifier.height(24.dp))
         SettingsSectionLabel("SPORTS")
@@ -177,6 +194,33 @@ private fun SettingsContent(
             }
         }
 
+        Spacer(Modifier.height(24.dp))
+        SettingsSectionLabel("APPEARANCE")
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(ProCircuit.SurfaceLow)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("Tryb ciemny", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp, color = ProCircuit.OnBg)
+                Text("Zmienia wygląd całej aplikacji", fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp, color = ProCircuit.OnSurface)
+            }
+            Switch(
+                checked = ThemeState.isDark,
+                onCheckedChange = { ThemeState.isDark = it },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = ProCircuit.Bg, checkedTrackColor = ProCircuit.Lime,
+                    uncheckedThumbColor = ProCircuit.OnSurface, uncheckedTrackColor = ProCircuit.SurfaceHigh
+                )
+            )
+        }
+
         Spacer(Modifier.height(32.dp))
 
         Button(
@@ -199,6 +243,79 @@ private fun SettingsContent(
             }
         }
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun AvatarSection(
+    displayName: String,
+    avatarUrl: String,
+    onAvatarUrlChange: (String) -> Unit
+) {
+    var showUrlField by remember { mutableStateOf(avatarUrl.isNotBlank()) }
+    val letter = displayName.firstOrNull()?.uppercase() ?: "?"
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+        // Avatar circle
+        Box(
+            modifier = Modifier
+                .size(88.dp)
+                .clip(CircleShape)
+                .background(ProCircuit.SurfaceHigh),
+            contentAlignment = Alignment.Center
+        ) {
+            if (avatarUrl.isNotBlank()) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = "Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = letter,
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 36.sp, color = ProCircuit.Lime
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = { showUrlField = !showUrlField }) {
+            Text(
+                if (showUrlField) "Ukryj" else "Zmień avatar (URL)",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                fontSize = 12.sp, color = ProCircuit.Lime
+            )
+        }
+        if (showUrlField) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = avatarUrl,
+                onValueChange = onAvatarUrlChange,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                placeholder = {
+                    Text("https://...", fontFamily = AppBodyFontFamily, fontSize = 13.sp,
+                        color = ProCircuit.OnSurface.copy(alpha = 0.5f))
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor      = ProCircuit.Lime,
+                    unfocusedBorderColor    = Color(0xFF464849),
+                    focusedTextColor        = ProCircuit.OnBg,
+                    unfocusedTextColor      = ProCircuit.OnBg,
+                    cursorColor             = ProCircuit.Lime,
+                    focusedContainerColor   = ProCircuit.SurfaceLow,
+                    unfocusedContainerColor = ProCircuit.SurfaceLow
+                )
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Wklej link do zdjęcia. Zmiany będą widoczne po zapisaniu.",
+                fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
+            )
+        }
     }
 }
 
