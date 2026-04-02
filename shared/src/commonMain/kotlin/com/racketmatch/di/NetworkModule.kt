@@ -11,6 +11,7 @@ import com.racketmatch.data.remote.api.MatchApi
 import com.racketmatch.data.remote.api.OpenSessionApi
 import com.racketmatch.data.remote.api.PaymentApi
 import com.racketmatch.data.remote.api.PlayerApi
+import com.racketmatch.data.remote.api.FriendApi
 import com.racketmatch.data.remote.api.ProfileApi
 import com.racketmatch.data.remote.api.UserApi
 import com.racketmatch.data.repository.AuthRepositoryImpl
@@ -21,6 +22,7 @@ import com.racketmatch.data.repository.MatchRepositoryImpl
 import com.racketmatch.data.repository.OpenSessionRepositoryImpl
 import com.racketmatch.data.repository.PaymentRepositoryImpl
 import com.racketmatch.data.repository.PlayerRepositoryImpl
+import com.racketmatch.data.repository.FriendRepositoryImpl
 import com.racketmatch.data.repository.ProfileRepositoryImpl
 import com.racketmatch.domain.repository.AuthRepository
 import com.racketmatch.domain.repository.ChatRepository
@@ -30,6 +32,7 @@ import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.OpenSessionRepository
 import com.racketmatch.domain.repository.PaymentRepository
 import com.racketmatch.domain.repository.PlayerRepository
+import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import com.racketmatch.presentation.viewmodel.ChatViewModel
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
@@ -39,6 +42,7 @@ import com.racketmatch.presentation.viewmodel.LoginViewModel
 import com.racketmatch.presentation.viewmodel.MatchViewModel
 import com.racketmatch.presentation.viewmodel.PaymentViewModel
 import com.racketmatch.presentation.viewmodel.PlayersViewModel
+import com.racketmatch.presentation.viewmodel.ProfileSetupViewModel
 import com.racketmatch.presentation.viewmodel.RegisterViewModel
 import com.racketmatch.presentation.viewmodel.ProfileViewModel
 import com.racketmatch.presentation.viewmodel.RankingsViewModel
@@ -62,6 +66,7 @@ val apiModule = module {
     single { ProfileApi(get()) }
     single { CourtApi(get()) }
     single { OpenSessionApi(get()) }
+    single { FriendApi(get()) }
 }
 
 val repositoryModule = module {
@@ -74,12 +79,14 @@ val repositoryModule = module {
     single<ProfileRepository> { ProfileRepositoryImpl(get()) }
     single<CourtRepository> { CourtRepositoryImpl(get()) }
     single<OpenSessionRepository> { OpenSessionRepositoryImpl(get(), get()) }
+    single<FriendRepository> { FriendRepositoryImpl(get()) }
 }
 
 val viewModelModule = module {
     factory { (matchId: String) -> ChatViewModel(get(), matchId) }
     factory { LoginViewModel(get()) }
-    factory { RegisterViewModel(get()) }
+    factory { RegisterViewModel(get(), get()) }
+    factory { ProfileSetupViewModel(get(), get()) }
     factory { PlayersViewModel(get(), get(), get(), get()) }
     factory { ExploreViewModel(get(), get(), get(), get(), get(), get()) }
     factory { MatchViewModel(get(), get()) }
