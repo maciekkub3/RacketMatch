@@ -10,6 +10,8 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
 
+data class FcmTokenRequest(val fcmToken: String)
+
 @RestController
 @RequestMapping("/api/users")
 class UserController(private val userService: UserService) {
@@ -54,10 +56,9 @@ class UserController(private val userService: UserService) {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun updateFcmToken(
         authentication: Authentication,
-        @RequestBody body: Map<String, String>
+        @RequestBody request: FcmTokenRequest
     ) {
-        val token = body["token"] ?: return
-        userService.updateFcmToken(UUID.fromString(authentication.name), token)
+        userService.updateFcmToken(UUID.fromString(authentication.name), request.fcmToken)
     }
 
     @DeleteMapping("/me")
