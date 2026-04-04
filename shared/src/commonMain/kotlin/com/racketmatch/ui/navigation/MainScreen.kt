@@ -90,7 +90,7 @@ object MainScreen : Screen {
                         MainTopBar(
                             avatarLetter = avatarLetter,
                             unreadCount = notifState.unreadCount,
-                            onAvatarClick = { tabNavigator.current = ProfileTab },
+                            onAvatarClick = { outerNavigator.push(ProfileScreen) },
                             onBellClick = { outerNavigator.push(NotificationsScreen) }
                         )
                     },
@@ -118,12 +118,11 @@ object MainScreen : Screen {
                 if (showMoreSheet) {
                     MoreBottomSheet(
                         onDismiss = { showMoreSheet = false },
-                        onProfile = { showMoreSheet = false; tabNavigator.current = ProfileTab },
+                        onProfile = { showMoreSheet = false; outerNavigator.push(ProfileScreen) },
                         onFriends = { showMoreSheet = false; tabNavigator.current = FriendsTab },
                         onMessages = { showMoreSheet = false; tabNavigator.current = MessagesTab },
                         onFeed = { showMoreSheet = false; tabNavigator.current = FeedTab },
                         onCoaches = { showMoreSheet = false; tabNavigator.current = CoachesTab },
-                        onSettings = { showMoreSheet = false; tabNavigator.current = SettingsTab },
                         pendingFriends = badges.pendingFriends,
                         unreadMessages = badges.unreadMessages
                     )
@@ -189,7 +188,6 @@ private fun MoreBottomSheet(
     onMessages: () -> Unit,
     onFeed: () -> Unit,
     onCoaches: () -> Unit,
-    onSettings: () -> Unit,
     pendingFriends: Int,
     unreadMessages: Int
 ) {
@@ -204,7 +202,6 @@ private fun MoreBottomSheet(
             MoreRow(emoji = "💬", label = "Wiadomości", badge = unreadMessages, onClick = onMessages)
             MoreRow(emoji = "📰", label = "Aktywność", badge = 0, onClick = onFeed)
             MoreRow(emoji = "🎾", label = "Trenerzy", badge = 0, onClick = onCoaches)
-            MoreRow(emoji = "⚙️", label = "Ustawienia", badge = 0, onClick = onSettings)
         }
     }
 }
