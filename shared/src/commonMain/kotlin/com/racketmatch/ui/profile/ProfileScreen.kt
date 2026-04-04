@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +39,7 @@ import com.racketmatch.presentation.viewmodel.ProfileViewModel
 import com.racketmatch.ui.auth.LoginScreen
 import org.koin.compose.viewmodel.koinViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 object ProfileScreen : Screen {
 
     @Composable
@@ -56,20 +60,60 @@ object ProfileScreen : Screen {
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            when (val s = state) {
-                ProfileState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ProCircuit.Lime)
-                }
-                ProfileState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nie udało się załadować profilu", color = ProCircuit.OnSurface)
-                }
-                is ProfileState.Content -> ProfileContent(
-                    state = s,
-                    onSubscribeClick = { navigator.push(SubscriptionScreen) },
-                    onSettingsClick = { navigator.push(SettingsScreen) },
-                    onLogout = { viewModel.logout() }
+        val displayName = (state as? ProfileState.Content)?.user?.displayName ?: ""
+
+        Scaffold(
+            containerColor = ProCircuit.Bg,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            displayName,
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp,
+                            color = ProCircuit.OnBg
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Wstecz",
+                                tint = ProCircuit.OnBg
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { navigator.push(SettingsScreen) }) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Ustawienia",
+                                tint = ProCircuit.OnBg
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = ProCircuit.SurfaceLow
+                    )
                 )
+            }
+        ) { padding ->
+            Box(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).background(ProCircuit.Bg)) {
+                when (val s = state) {
+                    ProfileState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = ProCircuit.Lime)
+                    }
+                    ProfileState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Nie udało się załadować profilu", color = ProCircuit.OnSurface)
+                    }
+                    is ProfileState.Content -> ProfileContent(
+                        state = s,
+                        onSubscribeClick = { navigator.push(SubscriptionScreen) },
+                        onSettingsClick = { navigator.push(SettingsScreen) },
+                        onLogout = { viewModel.logout() }
+                    )
+                }
             }
         }
     }
