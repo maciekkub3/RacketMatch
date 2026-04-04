@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
+enum class SessionTimeFilter { ANY, TODAY, THIS_WEEK }
+
 data class PostSessionDialogState(
     val selectedCourtId: String = "",
     val selectedSport: Sport = Sport.TENNIS,
@@ -41,10 +43,16 @@ data class ExploreState(
     val pendingChallengeIds: Set<String> = emptySet(),
     val myElo: Int = 1200,
     val myUserId: String = "",
+    val myName: String = "",
     val mySports: List<Sport> = emptyList(),
     val challengeDialog: ChallengeDialogState? = null,
     val postSessionDialog: PostSessionDialogState? = null,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    // Filters (applied to sessions in list view)
+    val matchTypeFilter: MatchType? = null,
+    val sessionTimeFilter: SessionTimeFilter = SessionTimeFilter.ANY,
+    val eloFilterEnabled: Boolean = false,
+    val showFilterSheet: Boolean = false
 ) {
     val selectedCourt: Court? get() = courts.find { it.id == selectedCourtId }
     val sessionsForSelectedCourt: List<OpenSession>
@@ -64,6 +72,7 @@ sealed class ExploreEvent {
     object ToggleView : ExploreEvent()
     // Open Play
     object ShowPostSessionDialog : ExploreEvent()
+    data class WantToPlayAtCourt(val courtId: String) : ExploreEvent()
     object DismissPostSessionDialog : ExploreEvent()
     data class PostSessionCourtSelected(val courtId: String) : ExploreEvent()
     data class PostSessionSportSelected(val sport: Sport) : ExploreEvent()
@@ -81,10 +90,17 @@ sealed class ExploreEvent {
     data class ChallengeTimeSelected(val millis: Long?) : ExploreEvent()
     object ConfirmChallenge : ExploreEvent()
     object LoadSessions : ExploreEvent()
+    object ResetToMap : ExploreEvent()
+    // Filter sheet
+    object ShowFilterSheet : ExploreEvent()
+    object DismissFilterSheet : ExploreEvent()
+    data class SetMatchTypeFilter(val type: MatchType?) : ExploreEvent()
+    data class SetSessionTimeFilter(val filter: SessionTimeFilter) : ExploreEvent()
+    data class SetEloFilter(val enabled: Boolean) : ExploreEvent()
 }
 
 sealed class ExploreEffect {
-    data class SessionJoined(val matchId: String) : ExploreEffect()
+    data class SessionJoined(val matchId: String, val opponentName: String, val courtName: String) : ExploreEffect()
     data class OpenChat(val matchId: String) : ExploreEffect()
     data class ChallengeSent(val name: String) : ExploreEffect()
     data class ShowError(val msg: String) : ExploreEffect()
@@ -119,6 +135,12 @@ class ExploreViewModel(
     fun onEvent(event: ExploreEvent) {
         when (event) {
             is ExploreEvent.LoadSessions -> loadSessions()
+            is ExploreEvent.ResetToMap -> _state.value = _state.value.copy(isMapView = true)
+            is ExploreEvent.ShowFilterSheet -> _state.value = _state.value.copy(showFilterSheet = true)
+            is ExploreEvent.DismissFilterSheet -> _state.value = _state.value.copy(showFilterSheet = false)
+            is ExploreEvent.SetMatchTypeFilter -> _state.value = _state.value.copy(matchTypeFilter = event.type)
+            is ExploreEvent.SetSessionTimeFilter -> _state.value = _state.value.copy(sessionTimeFilter = event.filter)
+            is ExploreEvent.SetEloFilter -> _state.value = _state.value.copy(eloFilterEnabled = event.enabled)
             is ExploreEvent.SelectCourt -> _state.value = _state.value.copy(selectedCourtId = event.courtId)
             is ExploreEvent.DismissCourt -> _state.value = _state.value.copy(selectedCourtId = null)
             is ExploreEvent.SetSportFilter -> _state.value = _state.value.copy(sportFilter = event.sport)
@@ -132,6 +154,10 @@ class ExploreViewModel(
                 )
             }
             is ExploreEvent.DismissPostSessionDialog -> _state.value = _state.value.copy(postSessionDialog = null)
+            is ExploreEvent.WantToPlayAtCourt -> _state.value = _state.value.copy(
+                selectedCourtId = null,
+                postSessionDialog = PostSessionDialogState(selectedCourtId = event.courtId)
+            )
             is ExploreEvent.PostSessionCourtSelected -> {
                 val d = _state.value.postSessionDialog ?: return
                 _state.value = _state.value.copy(postSessionDialog = d.copy(selectedCourtId = event.courtId))
@@ -179,6 +205,7 @@ class ExploreViewModel(
             val myId = tokenStorage.currentUserId ?: ""
             val myProfile = runCatching { profileRepository.getMyProfile() }.getOrNull()
             val myElo = myProfile?.eloRating ?: 1200
+            val myName = myProfile?.displayName ?: ""
             val mySports = myProfile?.sports ?: emptyList()
             val courts = runCatching { courtRepository.getCourts("Warszawa") }.getOrDefault(emptyList())
             val sessions = runCatching { sessionRepository.getSessions("Warszawa") }.getOrDefault(emptyList())
@@ -196,6 +223,7 @@ class ExploreViewModel(
                 pendingChallengeIds = pendingIds,
                 myElo = myElo,
                 myUserId = myId,
+                myName = myName,
                 mySports = mySports,
                 isLoading = false
             )
@@ -222,9 +250,17 @@ class ExploreViewModel(
     }
 
     private fun joinSession(sessionId: String) {
+        val session = _state.value.sessions.find { it.id == sessionId }
         viewModelScope.launch(dispatcher) {
             runCatching { sessionRepository.joinSession(sessionId) }
-                .onSuccess { matchId -> _effects.emit(ExploreEffect.SessionJoined(matchId)) }
+                .onSuccess { matchId ->
+                    _effects.emit(ExploreEffect.SessionJoined(
+                        matchId = matchId,
+                        opponentName = session?.userName ?: "",
+                        courtName = session?.courtName ?: ""
+                    ))
+                    loadSessions()
+                }
                 .onFailure { _effects.emit(ExploreEffect.ShowError(it.message ?: "Error")) }
         }
     }

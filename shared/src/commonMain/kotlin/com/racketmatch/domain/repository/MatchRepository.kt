@@ -17,4 +17,6 @@ interface MatchRepository {
     suspend fun disputeResult(matchId: String): Match
     suspend fun cancelChallenge(matchId: String): Match
     suspend fun claimReservation(matchId: String): Match
+    suspend fun acceptDetails(matchId: String): Match
+    suspend fun discardDetails(matchId: String): Match
 }

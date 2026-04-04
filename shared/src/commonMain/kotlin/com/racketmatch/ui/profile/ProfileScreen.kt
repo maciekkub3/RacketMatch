@@ -150,28 +150,58 @@ private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> 
 
 @Composable
 private fun ProfileHeader(user: User, onSettingsClick: () -> Unit) {
+    val winRate = if (user.wins + user.losses > 0)
+        "${(user.wins.toFloat() / (user.wins + user.losses) * 100).toInt()}%" else "—"
+    val totalMatches = user.wins + user.losses
+
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 24.dp, bottom = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                Box(
-                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(ProCircuit.SurfaceHigh),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = user.displayName.take(1).uppercase(), fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 28.sp, color = ProCircuit.Lime)
-                }
-                if (user.isMaster) {
-                    Box(modifier = Modifier.align(Alignment.BottomEnd).clip(CircleShape).background(ProCircuit.Tertiary).padding(4.dp)) {
-                        Text("★", fontSize = 10.sp, color = ProCircuit.Bg)
-                    }
-                }
+        Row(verticalAlignment = Alignment.Top) {
+            // Dark green avatar block
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(ProCircuit.Lime),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = user.displayName.take(2).uppercase(),
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 26.sp,
+                    color = ProCircuit.SurfaceLow
+                )
             }
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
+                // RANKED badge
                 if (user.isMaster) {
-                    Text(text = "MISTRZ", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.Tertiary)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(ProCircuit.Tertiary)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("★ RANKED", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.SurfaceLow)
+                    }
+                    Spacer(Modifier.height(4.dp))
                 }
-                Text(text = user.displayName, fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
-                Text(text = user.city.uppercase(), fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
+                Text(
+                    text = user.displayName,
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 22.sp,
+                    letterSpacing = (-0.5).sp,
+                    color = ProCircuit.OnBg
+                )
+                Text(
+                    text = user.city.uppercase(),
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp,
+                    letterSpacing = 2.sp,
+                    color = ProCircuit.OnSurface
+                )
             }
             Box(
                 modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
@@ -182,20 +212,21 @@ private fun ProfileHeader(user: User, onSettingsClick: () -> Unit) {
                 Text("⚙", fontSize = 18.sp)
             }
         }
+
         Spacer(Modifier.height(20.dp))
-        val winRate = if (user.wins + user.losses > 0)
-            "${(user.wins.toFloat() / (user.wins + user.losses) * 100).toInt()}%" else "%"
+
         Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(ProCircuit.SurfaceLow).padding(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(ProCircuit.SurfaceLow)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             StatItem("ELO", "${user.eloRating}")
             StatDivider()
-            StatItem("W", "${user.wins}", color = ProCircuit.Lime)
+            StatItem("WIN%", winRate, color = if (totalMatches > 0 && user.wins * 100 / totalMatches >= 50) ProCircuit.Lime else ProCircuit.OnSurface)
             StatDivider()
-            StatItem("L", "${user.losses}", color = ProCircuit.Error)
-            StatDivider()
-            StatItem("WIN%", winRate, color = if (user.wins + user.losses > 0 && user.wins * 100 / (user.wins + user.losses) >= 50) ProCircuit.Lime else ProCircuit.OnSurface)
+            StatItem("MATCHES", "$totalMatches")
         }
     }
 }

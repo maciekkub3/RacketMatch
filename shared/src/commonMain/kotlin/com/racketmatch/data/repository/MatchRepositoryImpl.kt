@@ -62,4 +62,12 @@ class MatchRepositoryImpl(
     override suspend fun claimReservation(matchId: String): Match =
         matchApi.claimReservation(matchId).toDomain()
             .also { tokenStorage.incrementMatchesVersion() }
+
+    override suspend fun acceptDetails(matchId: String): Match =
+        matchApi.acceptDetails(matchId).toDomain()
+            .also { tokenStorage.incrementMatchesVersion() }
+
+    override suspend fun discardDetails(matchId: String): Match =
+        matchApi.discardDetails(matchId).toDomain()
+            .also { tokenStorage.incrementMatchesVersion() }
 }

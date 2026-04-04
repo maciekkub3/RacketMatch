@@ -14,6 +14,7 @@ data class User(
     val sports: List<Sport> = emptyList(),
     val eloPerSport: Map<String, Int> = emptyMap(),
     val bio: String? = null,
+    val dateOfBirth: String? = null,
     val wins: Int = 0,
     val losses: Int = 0
 )

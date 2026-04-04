@@ -80,7 +80,7 @@ class OpenSessionController(
                 challenger = joiner,
                 challenged = session.user,
                 type = session.matchType,
-                status = "PENDING",
+                status = "SCHEDULED",
                 sport = session.sport,
                 scheduledAt = session.startsAt,
                 locationName = session.court.name

@@ -42,13 +42,12 @@ object CoachesScreen : Screen {
         Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                 item {
-                    Spacer(Modifier.height(24.dp))
-                    Text("COACHES", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
-                        modifier = Modifier.padding(horizontal = 24.dp))
-                    Text("Find your trainer", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 26.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                        modifier = Modifier.padding(horizontal = 24.dp))
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 4.dp)) {
+                        Text("Coaches", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
+                        Text("Master the court with a world-class trainer.",
+                            fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface)
+                    }
                     Spacer(Modifier.height(16.dp))
                     // City search
                     Row(

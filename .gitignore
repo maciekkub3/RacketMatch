@@ -63,6 +63,7 @@ Pods/
 # ----------------------------
 .env
 .env.*
+backend/src/main/resources/firebase-service-account.json
 
 # ----------------------------
 # Claude / AI tools

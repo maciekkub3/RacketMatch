@@ -16,7 +16,9 @@ data class UpdateProfileRequest(
     val city: String,
     val bio: String?,
     val sports: List<String>,
-    val password: String?
+    val password: String?,
+    val dateOfBirth: String? = null,
+    val avatarUrl: String? = null
 )
 
 class ProfileApi(private val client: HttpClient) {
@@ -30,8 +32,8 @@ class ProfileApi(private val client: HttpClient) {
     suspend fun getMyRecentMatches(): List<MatchDto> =
         client.get("api/matches/me").body()
 
-    suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<String>, password: String?): UserDto =
+    suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<String>, password: String?, dateOfBirth: String? = null, avatarUrl: String? = null): UserDto =
         client.patch("api/users/me") {
-            setBody(UpdateProfileRequest(displayName, city, bio, sports, password))
+            setBody(UpdateProfileRequest(displayName, city, bio, sports, password, dateOfBirth, avatarUrl))
         }.body()
 }

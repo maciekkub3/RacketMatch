@@ -13,7 +13,7 @@ kotlin {
     androidTarget {
         compilations.all {
             compileTaskProvider.configure {
-                compilerOptions { jvmTarget.set(JvmTarget.JVM_1_8) }
+                compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
             }
         }
     }
@@ -62,18 +62,23 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines.extensions)
+            implementation("dev.gitlive:firebase-firestore:2.1.0")
         }
 
         androidMain.dependencies {
             // Google Fonts for Lexend on Android
             implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
-            // OSMDroid dark map
-            implementation("org.osmdroid:osmdroid-android:6.1.18")
+            // Google Maps Compose
+            implementation("com.google.maps.android:maps-compose:4.3.3")
+            implementation("com.google.maps.android:maps-compose-utils:4.3.3")
+            implementation("com.google.maps.android:android-maps-utils:3.4.0")
+            implementation("com.google.android.gms:play-services-maps:18.2.0")
             // Stripe payments (Android actual for SubscriptionScreen)
             implementation("com.stripe:stripe-android:20.50.0")
             // Platform networking & DB
             implementation(libs.ktor.client.android)
             implementation(libs.sqldelight.android.driver)
+            implementation("com.google.firebase:firebase-firestore:25.0.0")
         }
 
         iosMain.dependencies {
@@ -105,7 +110,12 @@ android {
     compileSdk = 35
     defaultConfig { minSdk = 26 }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    testOptions {
+        unitTests.all {
+            it.jvmArgs("-Xmx2g", "-XX:+EnableDynamicAgentLoading")
+        }
     }
 }

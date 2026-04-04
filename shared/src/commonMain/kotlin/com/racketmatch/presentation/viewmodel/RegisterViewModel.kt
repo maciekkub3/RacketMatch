@@ -2,6 +2,8 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.repository.AuthRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -23,17 +25,18 @@ sealed class RegisterEvent {
         val displayName: String,
         val city: String,
         val isCoach: Boolean,
-        val sports: List<com.racketmatch.domain.model.Sport> = emptyList()
+        val sports: List<Sport> = emptyList()
     ) : RegisterEvent()
 }
 
 sealed class RegisterEffect {
-    object NavigateToHome : RegisterEffect()
+    object NavigateToProfileSetup : RegisterEffect()
     data class ShowError(val msg: String) : RegisterEffect()
 }
 
 class RegisterViewModel(
     private val authRepository: AuthRepository,
+    private val tokenStorage: TokenStorage,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
@@ -49,15 +52,16 @@ class RegisterViewModel(
         }
     }
 
-    private fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, sports: List<com.racketmatch.domain.model.Sport> = emptyList()) {
+    private fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, sports: List<Sport>) {
         viewModelScope.launch(dispatcher) {
             _state.value = RegisterState.Loading
             try {
                 authRepository.register(email, password, displayName, city, isCoach, sports)
-                _effects.emit(RegisterEffect.NavigateToHome)
+                tokenStorage.isNewUser = true
+                _effects.emit(RegisterEffect.NavigateToProfileSetup)
             } catch (e: Exception) {
                 _state.value = RegisterState.Idle
-                _effects.emit(RegisterEffect.ShowError(e.toUserMessage()))
+                _effects.emit(RegisterEffect.ShowError(e.toRegistrationMessage()))
             }
         }
     }

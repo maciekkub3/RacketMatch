@@ -34,21 +34,23 @@ import com.racketmatch.ui.theme.ProCircuit
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-data class PlayerProfileScreen(val player: User) : Screen {
+data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = false) : Screen {
 
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val friendRepo: FriendRepository = koinInject()
-        var isFriend by remember { mutableStateOf(false) }
+        var isFriend by remember { mutableStateOf(initialIsFriend) }
         var requestSent by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
         LaunchedEffect(player.id) {
-            try {
-                val friends = friendRepo.getFriends()
-                isFriend = friends.any { it.id == player.id }
-            } catch (_: Exception) {}
+            if (!initialIsFriend) {
+                try {
+                    val friends = friendRepo.getFriends()
+                    isFriend = friends.any { it.id == player.id }
+                } catch (_: Exception) {}
+            }
         }
 
         val total = player.wins + player.losses

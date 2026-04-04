@@ -9,6 +9,7 @@ import com.racketmatch.domain.entity.MatchEntity
 import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.UserRepository
 import com.racketmatch.service.EloService
+import com.racketmatch.service.NotificationService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -22,7 +23,8 @@ import java.util.UUID
 class MatchController(
     private val matchRepository: MatchRepository,
     private val userRepository: UserRepository,
-    private val eloService: EloService
+    private val eloService: EloService,
+    private val notificationService: NotificationService
 ) {
 
     @GetMapping("/me")
@@ -40,7 +42,7 @@ class MatchController(
         val challenged = userRepository.findById(request.challengedId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Challenged player not found") }
         val hasDetails = request.locationName != null || request.scheduledAt != null
-        return matchRepository.save(
+        val savedMatch = matchRepository.save(
             MatchEntity(
                 challenger = challenger,
                 challenged = challenged,
@@ -51,7 +53,15 @@ class MatchController(
                 locationName = request.locationName,
                 detailsProposedBy = if (hasDetails) challengerId else null
             )
-        ).toDto()
+        )
+        notificationService.send(
+            recipientId = challenged.id!!,
+            type = "CHALLENGE_RECEIVED",
+            title = "${challenger.displayName} wyzwał Cię na mecz",
+            body = "${request.sport} • ${request.type}",
+            data = mapOf("matchId" to savedMatch.id.toString())
+        )
+        return savedMatch.toDto()
     }
 
     @GetMapping("/{id}")
@@ -68,7 +78,15 @@ class MatchController(
         if (match.status != "PENDING") throw ResponseStatusException(HttpStatus.CONFLICT, "Match is not pending")
         match.status = "SCHEDULED"
         match.detailsProposedBy = null
-        return matchRepository.save(match).toDto()
+        matchRepository.save(match)
+        notificationService.send(
+            recipientId = match.challenger.id!!,
+            type = "CHALLENGE_ACCEPTED",
+            title = "${match.challenged.displayName} zaakceptował Twoje wyzwanie",
+            body = "${match.sport} • ${match.type}",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
     }
 
     @PutMapping("/{id}/decline")
@@ -78,7 +96,15 @@ class MatchController(
         val match = findMatchForParticipant(id, userId)
         if (match.status != "PENDING") throw ResponseStatusException(HttpStatus.CONFLICT, "Match is not pending")
         match.status = "CANCELLED"
-        return matchRepository.save(match).toDto()
+        matchRepository.save(match)
+        notificationService.send(
+            recipientId = match.challenger.id!!,
+            type = "CHALLENGE_DECLINED",
+            title = "${match.challenged.displayName} odrzucił Twoje wyzwanie",
+            body = "${match.sport} • ${match.type}",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
     }
 
     @PutMapping("/{id}/propose-details")
@@ -94,7 +120,16 @@ class MatchController(
         match.locationName = request.locationName
         match.scheduledAt = request.scheduledAt
         match.detailsProposedBy = userId
-        return matchRepository.save(match).toDto()
+        matchRepository.save(match)
+        val recipient = if (match.challenger.id == userId) match.challenged.id!! else match.challenger.id!!
+        notificationService.send(
+            recipientId = recipient,
+            type = "DETAILS_PROPOSED",
+            title = "Zaproponowano szczegóły meczu",
+            body = request.locationName ?: "Lokalizacja do ustalenia",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
     }
 
     @PutMapping("/{id}/result")
@@ -138,7 +173,16 @@ class MatchController(
         match.proposedScoreChallenged = request.scoreChallenged
         match.proposedBy = userId
         match.status = "RESULT_PROPOSED"
-        return matchRepository.save(match).toDto()
+        matchRepository.save(match)
+        val recipient = if (match.challenger.id == userId) match.challenged.id!! else match.challenger.id!!
+        notificationService.send(
+            recipientId = recipient,
+            type = "RESULT_PROPOSED",
+            title = "Zaproponowano wynik meczu",
+            body = "${match.proposedScoreChallenger}:${match.proposedScoreChallenged}",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
     }
 
     @PutMapping("/{id}/confirm-result")
@@ -154,6 +198,7 @@ class MatchController(
         if (match.proposedBy == userId)
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot confirm your own result proposal")
 
+        val proposerId = match.proposedBy!!
         match.scoreChallenger = match.proposedScoreChallenger
         match.scoreChallenged = match.proposedScoreChallenged
         match.proposedScoreChallenger = null
@@ -161,7 +206,15 @@ class MatchController(
         match.proposedBy = null
         match.status = "COMPLETED"
         applyEloIfRanked(match)
-        return matchRepository.save(match).toDto()
+        matchRepository.save(match)
+        notificationService.send(
+            recipientId = proposerId,
+            type = "RESULT_CONFIRMED",
+            title = "Wynik meczu potwierdzony",
+            body = "${match.scoreChallenger}:${match.scoreChallenged}",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
     }
 
     @PutMapping("/{id}/dispute-result")
@@ -177,11 +230,20 @@ class MatchController(
         if (match.proposedBy == userId)
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot dispute your own result proposal")
 
+        val proposerId = match.proposedBy!!
         match.proposedScoreChallenger = null
         match.proposedScoreChallenged = null
         match.proposedBy = null
         match.status = "SCHEDULED"
-        return matchRepository.save(match).toDto()
+        matchRepository.save(match)
+        notificationService.send(
+            recipientId = proposerId,
+            type = "RESULT_DISPUTED",
+            title = "Wynik meczu zakwestionowany",
+            body = "Mecz wraca do statusu zaplanowanego",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
     }
 
     @PutMapping("/{id}/claim-reservation")
@@ -205,7 +267,16 @@ class MatchController(
         if (match.status == "COMPLETED")
             throw ResponseStatusException(HttpStatus.CONFLICT, "Completed match cannot be cancelled")
         match.status = "CANCELLED"
-        return matchRepository.save(match).toDto()
+        matchRepository.save(match)
+        val recipient = if (match.challenger.id == userId) match.challenged.id!! else match.challenger.id!!
+        notificationService.send(
+            recipientId = recipient,
+            type = "MATCH_CANCELLED",
+            title = "Mecz został anulowany",
+            body = "${match.sport} • ${match.type}",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
     }
 
     private fun applyEloIfRanked(match: MatchEntity) {

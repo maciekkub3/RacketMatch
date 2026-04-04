@@ -97,6 +97,7 @@ private val MOCK_RECEIVED_REQUESTS = mutableListOf(
         toUserId = MY_ID,
         fromName = "Maria Kowalczyk",
         fromAvatarUrl = null,
+        toName = "Jan Kowalski",
         status = FriendRequestStatus.PENDING
     )
 )
@@ -436,8 +437,28 @@ val mockRepositoryModule = module {
 
             override suspend fun joinSession(sessionId: String): String {
                 val idx = MOCK_SESSIONS.indexOfFirst { it.id == sessionId }
+                val session = MOCK_SESSIONS.getOrNull(idx)
                 if (idx >= 0) MOCK_SESSIONS[idx] = MOCK_SESSIONS[idx].copy(status = OpenSessionStatus.FILLED)
                 val matchId = "m${matchIdCounter++}"
+                if (session != null) {
+                    val scheduledAtIso = kotlinx.datetime.Instant.fromEpochMilliseconds(session.startsAt).toString()
+                    MOCK_MATCHES.add(
+                        Match(
+                            id = matchId,
+                            challengerId = session.userId,
+                            challengedId = MY_ID,
+                            challengerName = session.userName,
+                            challengerElo = session.userElo,
+                            challengedName = MOCK_USER.displayName,
+                            challengedElo = MOCK_USER.eloRating,
+                            type = session.matchType,
+                            sport = session.sport,
+                            status = MatchStatus.SCHEDULED,
+                            locationName = session.courtName,
+                            scheduledAt = scheduledAtIso
+                        )
+                    )
+                }
                 tokenStorage.incrementMatchesVersion()
                 return matchId
             }
@@ -479,6 +500,7 @@ val mockRepositoryModule = module {
                     toUserId = userId,
                     fromName = MOCK_USER.displayName,
                     fromAvatarUrl = null,
+                    toName = MOCK_PLAYERS.find { it.id == userId }?.displayName ?: userId,
                     status = FriendRequestStatus.PENDING
                 )
                 MOCK_SENT_REQUESTS.add(req)

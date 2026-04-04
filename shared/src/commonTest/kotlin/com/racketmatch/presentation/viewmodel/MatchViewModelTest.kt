@@ -5,6 +5,7 @@ import com.racketmatch.domain.model.Match
 import com.racketmatch.domain.model.MatchStatus
 import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.repository.MatchRepository
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
@@ -18,6 +19,7 @@ import kotlin.test.Test
 class MatchViewModelTest {
 
     @MockK private lateinit var matchRepository: MatchRepository
+    @MockK private lateinit var tokenStorage: TokenStorage
     private val dispatcher = StandardTestDispatcher()
     private lateinit var viewModel: MatchViewModel
 
@@ -35,7 +37,7 @@ class MatchViewModelTest {
     @Test
     fun `sends challenge and emits ChallengeSent effect`() = runTest {
         coEvery { matchRepository.sendChallenge(any(), any(), any()) } returns pendingMatch
-        viewModel = MatchViewModel(matchRepository, dispatcher)
+        viewModel = MatchViewModel(matchRepository, tokenStorage, dispatcher)
         dispatcher.scheduler.advanceUntilIdle() // finish init load
 
         viewModel.effectFlow.test {
@@ -47,7 +49,7 @@ class MatchViewModelTest {
 
     @Test
     fun `loads matches on init`() = runTest {
-        viewModel = MatchViewModel(matchRepository, dispatcher)
+        viewModel = MatchViewModel(matchRepository, tokenStorage, dispatcher)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe MatchListState.Loading
@@ -60,7 +62,7 @@ class MatchViewModelTest {
     @Test
     fun `send challenge failure emits ShowError`() = runTest {
         coEvery { matchRepository.sendChallenge(any(), any(), any()) } throws Exception("Network error")
-        viewModel = MatchViewModel(matchRepository, dispatcher)
+        viewModel = MatchViewModel(matchRepository, tokenStorage, dispatcher)
         dispatcher.scheduler.advanceUntilIdle()
 
         viewModel.effectFlow.test {

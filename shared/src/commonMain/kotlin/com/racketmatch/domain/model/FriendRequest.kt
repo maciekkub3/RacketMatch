@@ -6,6 +6,7 @@ data class FriendRequest(
     val toUserId: String,
     val fromName: String,
     val fromAvatarUrl: String?,
+    val toName: String,
     val status: FriendRequestStatus
 )
 

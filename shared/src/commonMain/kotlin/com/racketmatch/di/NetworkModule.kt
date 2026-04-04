@@ -26,6 +26,7 @@ import com.racketmatch.data.repository.PaymentRepositoryImpl
 import com.racketmatch.data.repository.PlayerRepositoryImpl
 import com.racketmatch.data.repository.DmRepositoryImpl
 import com.racketmatch.data.repository.FeedRepositoryImpl
+import com.racketmatch.data.repository.FirestoreNotificationRepositoryImpl
 import com.racketmatch.data.repository.FriendRepositoryImpl
 import com.racketmatch.data.repository.ProfileRepositoryImpl
 import com.racketmatch.domain.repository.AuthRepository
@@ -39,6 +40,7 @@ import com.racketmatch.domain.repository.PlayerRepository
 import com.racketmatch.domain.repository.DmRepository
 import com.racketmatch.domain.repository.FeedRepository
 import com.racketmatch.domain.repository.FriendRepository
+import com.racketmatch.domain.repository.NotificationRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import com.racketmatch.presentation.viewmodel.ChatViewModel
 import com.racketmatch.presentation.viewmodel.DmChatViewModel
@@ -56,14 +58,15 @@ import com.racketmatch.presentation.viewmodel.FeedViewModel
 import com.racketmatch.presentation.viewmodel.FriendsViewModel
 import com.racketmatch.presentation.viewmodel.MessagesViewModel
 import com.racketmatch.presentation.viewmodel.MoreViewModel
+import com.racketmatch.presentation.viewmodel.NotificationViewModel
 import com.racketmatch.presentation.viewmodel.RankingsViewModel
 import com.racketmatch.presentation.viewmodel.SettingsViewModel
 import com.racketmatch.presentation.viewmodel.SplashViewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val networkModule = module {
-    single<TokenStorage> { InMemoryTokenStorage() }
-    single { HttpClientFactory.create(get()) }
+    single { HttpClientFactory.create(get(), get(named("baseUrl"))) }
 }
 
 val apiModule = module {
@@ -95,6 +98,7 @@ val repositoryModule = module {
     single<FriendRepository> { FriendRepositoryImpl(get()) }
     single<FeedRepository> { FeedRepositoryImpl(get()) }
     single<DmRepository> { DmRepositoryImpl(get()) }
+    single<NotificationRepository> { FirestoreNotificationRepositoryImpl() }
 }
 
 val viewModelModule = module {
@@ -117,4 +121,5 @@ val viewModelModule = module {
     factory { FeedViewModel(get()) }
     factory { MessagesViewModel(get()) }
     factory { MoreViewModel(get(), get()) }
+    factory { (userId: String) -> NotificationViewModel(get(), userId) }
 }

@@ -6,6 +6,8 @@ interface TokenStorage {
     var accessToken: String?
     var refreshToken: String?
     var currentUserId: String?
+    var isNewUser: Boolean
+    var isOnboardingComplete: Boolean
     val loginVersionFlow: StateFlow<Int>
     val matchesVersionFlow: StateFlow<Int>
     fun saveTokens(access: String, refresh: String)
@@ -13,10 +15,12 @@ interface TokenStorage {
     fun clear()
 }
 
-class InMemoryTokenStorage : TokenStorage {
+open class InMemoryTokenStorage : TokenStorage {
     @Volatile override var accessToken: String? = null
     @Volatile override var refreshToken: String? = null
     @Volatile override var currentUserId: String? = null
+    @Volatile override var isNewUser: Boolean = false
+    @Volatile override var isOnboardingComplete: Boolean = false
 
     private val _loginVersionFlow = kotlinx.coroutines.flow.MutableStateFlow(0)
     override val loginVersionFlow: StateFlow<Int> = _loginVersionFlow

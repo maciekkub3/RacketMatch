@@ -1,22 +1,22 @@
 {
   "planPath": "docs/plans/2026-04-04-notifications-implementation.md",
   "tasks": [
-    {"id": 7,  "subject": "Task 1: V12 Flyway migration for fcm_token", "status": "pending"},
-    {"id": 8,  "subject": "Task 2: Firebase Admin SDK + FirebaseConfig", "status": "pending", "blockedBy": [7]},
-    {"id": 9,  "subject": "Task 3: NotificationService (Firestore write + FCM push)", "status": "pending", "blockedBy": [8]},
-    {"id": 10, "subject": "Task 4: PUT /api/users/me/fcm-token endpoint", "status": "pending", "blockedBy": [7]},
-    {"id": 11, "subject": "Task 5: Hook NotificationService into MatchController", "status": "pending", "blockedBy": [9]},
-    {"id": 12, "subject": "Task 6: Hook NotificationService into FriendController + DmController", "status": "pending", "blockedBy": [9]},
-    {"id": 13, "subject": "Task 7: AppNotification model + NotificationType enum", "status": "pending"},
-    {"id": 14, "subject": "Task 8: NotificationRepository + FirestoreImpl + GitLive dependency", "status": "pending", "blockedBy": [13]},
-    {"id": 15, "subject": "Task 9: MockNotificationRepository", "status": "pending", "blockedBy": [13]},
-    {"id": 16, "subject": "Task 10: NotificationViewModel + tests (TDD)", "status": "pending", "blockedBy": [14, 15]},
-    {"id": 17, "subject": "Task 11: Koin DI wiring", "status": "pending", "blockedBy": [16]},
-    {"id": 18, "subject": "Task 12: google-services plugin + FCM Service class", "status": "pending"},
-    {"id": 19, "subject": "Task 13: FCM token registration + POST_NOTIFICATIONS permission", "status": "pending", "blockedBy": [18]},
-    {"id": 20, "subject": "Task 14: NotificationsScreen UI", "status": "pending", "blockedBy": [16]},
-    {"id": 21, "subject": "Task 15: Bell icon with badge in TopBar", "status": "pending", "blockedBy": [20]},
-    {"id": 22, "subject": "Task 16: Tab badges from NotificationViewModel", "status": "pending", "blockedBy": [16]}
+    {"id": 7,  "subject": "Task 1: V12 Flyway migration for fcm_token", "status": "completed"},
+    {"id": 8,  "subject": "Task 2: Firebase Admin SDK + FirebaseConfig", "status": "completed", "blockedBy": [7]},
+    {"id": 9,  "subject": "Task 3: NotificationService (Firestore write + FCM push)", "status": "completed", "blockedBy": [8]},
+    {"id": 10, "subject": "Task 4: PUT /api/users/me/fcm-token endpoint", "status": "completed", "blockedBy": [7]},
+    {"id": 11, "subject": "Task 5: Hook NotificationService into MatchController", "status": "completed", "blockedBy": [9]},
+    {"id": 12, "subject": "Task 6: Hook NotificationService into FriendController + DmController", "status": "completed", "blockedBy": [9]},
+    {"id": 13, "subject": "Task 7: AppNotification model + NotificationType enum", "status": "completed"},
+    {"id": 14, "subject": "Task 8: NotificationRepository + FirestoreImpl + GitLive dependency", "status": "completed", "blockedBy": [13]},
+    {"id": 15, "subject": "Task 9: MockNotificationRepository", "status": "completed", "blockedBy": [13]},
+    {"id": 16, "subject": "Task 10: NotificationViewModel + tests (TDD)", "status": "completed", "blockedBy": [14, 15]},
+    {"id": 17, "subject": "Task 11: Koin DI wiring", "status": "completed", "blockedBy": [16]},
+    {"id": 18, "subject": "Task 12: google-services plugin + FCM Service class", "status": "completed"},
+    {"id": 19, "subject": "Task 13: FCM token registration + POST_NOTIFICATIONS permission", "status": "completed", "blockedBy": [18]},
+    {"id": 20, "subject": "Task 14: NotificationsScreen UI", "status": "completed", "blockedBy": [16]},
+    {"id": 21, "subject": "Task 15: Bell icon with badge in TopBar", "status": "completed", "blockedBy": [20]},
+    {"id": 22, "subject": "Task 16: Tab badges from NotificationViewModel", "status": "completed", "blockedBy": [16]}
   ],
-  "lastUpdated": "2026-04-04"
+  "lastUpdated": "2026-04-05T00:00:00Z"
 }
