@@ -6,6 +6,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +38,7 @@ import org.koin.compose.koinInject
 
 data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = false) : Screen {
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -57,8 +60,27 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
         val winRateStr = if (total > 0) "${(player.wins.toFloat() / total * 100).toInt()}%" else "%"
         val winRateColor = if (total > 0 && player.wins * 100 / total >= 50) ProCircuit.Lime else ProCircuit.OnSurface
 
+        Scaffold(
+            containerColor = ProCircuit.Bg,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(player.displayName, fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black, fontSize = 16.sp, color = ProCircuit.OnBg)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz",
+                                tint = ProCircuit.OnBg)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ProCircuit.SurfaceLow)
+                )
+            }
+        ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)
+                .padding(top = padding.calculateTopPadding())
                 .verticalScroll(rememberScrollState())
         ) {
             // Header
@@ -69,14 +91,6 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                     .padding(horizontal = 24.dp, vertical = 32.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    // Back button top-left
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                        TextButton(onClick = { navigator.pop() }, contentPadding = PaddingValues(0.dp)) {
-                            Text("← BACK", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.Lime)
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
 
                     // Avatar
                     Box {
@@ -223,6 +237,7 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
 
             Spacer(Modifier.height(32.dp))
         }
+        } // end Scaffold
     }
 }
 
