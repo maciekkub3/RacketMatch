@@ -55,6 +55,12 @@ object MessagesScreen : Screen {
         }
 
         Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+            Text(
+                "Wiadomości",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
+            )
             when (val s = state) {
                 MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ProCircuit.Lime)
