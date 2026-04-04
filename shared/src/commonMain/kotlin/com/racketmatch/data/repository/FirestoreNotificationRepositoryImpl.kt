@@ -36,10 +36,9 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
                             }.getOrDefault(NotificationType.UNKNOWN),
                             title = doc.get("title") as? String ?: "",
                             body = doc.get("body") as? String ?: "",
-                            data = (doc.get("data") as? Map<*, *>)
-                                ?.entries
-                                ?.associate { it.key.toString() to it.value.toString() }
-                                ?: emptyMap(),
+                            data = runCatching {
+                                doc.get<Map<String, String>>("data")
+                            }.getOrDefault(emptyMap()),
                             read = doc.get("read") as? Boolean ?: false,
                             createdAt = runCatching {
                                 val ts = doc.get<Timestamp>("createdAt")
