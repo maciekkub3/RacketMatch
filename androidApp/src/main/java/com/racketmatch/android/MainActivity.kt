@@ -13,6 +13,7 @@ import com.racketmatch.di.networkModule
 import com.racketmatch.di.repositoryModule
 import com.racketmatch.di.viewModelModule
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.getKoin
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.core.qualifier.named
@@ -54,7 +55,7 @@ class MainActivity : ComponentActivity() {
             .addOnSuccessListener { token ->
                 lifecycleScope.launch {
                     try {
-                        org.koin.android.ext.android.getKoin().get<com.racketmatch.data.remote.api.UserApi>()
+                        getKoin().get<com.racketmatch.data.remote.api.UserApi>()
                             .updateFcmToken(token)
                     } catch (_: Exception) {}
                 }
