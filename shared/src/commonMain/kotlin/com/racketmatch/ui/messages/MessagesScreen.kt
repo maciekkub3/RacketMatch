@@ -31,6 +31,7 @@ import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.theme.ProCircuit
 import org.koin.compose.viewmodel.koinViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 object MessagesScreen : Screen {
 
     @Composable
@@ -56,50 +57,63 @@ object MessagesScreen : Screen {
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(ProCircuit.SurfaceLow)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { navigator.pop() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz",
-                        tint = ProCircuit.OnBg)
-                }
-                Text(
-                    "Wiadomości",
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 20.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-            }
-
-            when (val s = state) {
-                MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ProCircuit.Lime)
-                }
-                MessagesState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Błąd ładowania", color = ProCircuit.OnSurface)
-                }
-                is MessagesState.Content -> {
-                    if (s.conversations.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                "Brak wiadomości. Napisz do znajomego!",
-                                fontFamily = AppBodyFontFamily, fontSize = 14.sp,
-                                color = ProCircuit.OnSurface
+        Scaffold(
+            containerColor = ProCircuit.Bg,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Wiadomości",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp,
+                            color = ProCircuit.OnBg
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Wstecz",
+                                tint = ProCircuit.OnBg
                             )
                         }
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            items(s.conversations) { conv ->
-                                ConversationRow(conv, onClick = { viewModel.openConversation(conv) })
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = ProCircuit.SurfaceLow
+                    )
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = padding.calculateTopPadding())
+            ) {
+                when (val s = state) {
+                    MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = ProCircuit.Lime)
+                    }
+                    MessagesState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Błąd ładowania", color = ProCircuit.OnSurface)
+                    }
+                    is MessagesState.Content -> {
+                        if (s.conversations.isEmpty()) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    "Brak wiadomości. Napisz do znajomego!",
+                                    fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+                                    color = ProCircuit.OnSurface
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(s.conversations) { conv ->
+                                    ConversationRow(conv, onClick = { viewModel.openConversation(conv) })
+                                }
                             }
                         }
                     }

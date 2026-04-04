@@ -44,7 +44,6 @@ import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.players.PlayersScreen
 import com.racketmatch.ui.profile.ProfileScreen
 import com.racketmatch.ui.rankings.RankingsScreen
-import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import org.koin.compose.koinInject
@@ -369,13 +368,6 @@ object CoachesTab : Tab {
     override fun Content() { Navigator(CoachesScreen) { CurrentScreen() } }
 }
 
-object ProfileTab : Tab {
-    override val options: TabOptions
-        @Composable get() = TabOptions(index = 4u, title = "Profile", icon = rememberVectorPainter(Icons.Default.Person))
-    @Composable
-    override fun Content() { Navigator(ProfileScreen) { CurrentScreen() } }
-}
-
 // ─── New Social Tabs (stubs — filled in later tasks) ─────────────────────────
 
 object FriendsTab : Tab {
@@ -387,15 +379,6 @@ object FriendsTab : Tab {
     }
 }
 
-object MessagesTab : Tab {
-    override val options: TabOptions
-        @Composable get() = TabOptions(index = 6u, title = "Wiadomości", icon = rememberVectorPainter(Icons.Default.Person))
-    @Composable
-    override fun Content() {
-        Navigator(com.racketmatch.ui.messages.MessagesScreen) { CurrentScreen() }
-    }
-}
-
 object FeedTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 7u, title = "Aktywność", icon = rememberVectorPainter(Icons.Default.Star))
@@ -403,11 +386,3 @@ object FeedTab : Tab {
     override fun Content() = com.racketmatch.ui.feed.FeedScreen.Content()
 }
 
-object SettingsTab : Tab {
-    override val options: TabOptions
-        @Composable get() = TabOptions(index = 8u, title = "Ustawienia", icon = rememberVectorPainter(Icons.Default.Person))
-    @Composable
-    override fun Content() {
-        Navigator(SettingsScreen) { CurrentScreen() }
-    }
-}
