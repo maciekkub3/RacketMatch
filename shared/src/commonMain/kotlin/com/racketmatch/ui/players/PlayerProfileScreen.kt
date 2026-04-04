@@ -8,9 +8,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -20,15 +27,30 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
+import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 data class PlayerProfileScreen(val player: User) : Screen {
 
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
+        val friendRepo: FriendRepository = koinInject()
+        var isFriend by remember { mutableStateOf(false) }
+        var requestSent by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+
+        LaunchedEffect(player.id) {
+            try {
+                val friends = friendRepo.getFriends()
+                isFriend = friends.any { it.id == player.id }
+            } catch (_: Exception) {}
+        }
+
         val total = player.wins + player.losses
         val winRateStr = if (total > 0) "${(player.wins.toFloat() / total * 100).toInt()}%" else "%"
         val winRateColor = if (total > 0 && player.wins * 100 / total >= 50) ProCircuit.Lime else ProCircuit.OnSurface
@@ -83,6 +105,39 @@ data class PlayerProfileScreen(val player: User) : Screen {
                         fontSize = 26.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
                     Text(player.city.uppercase(), fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
+                    Spacer(Modifier.height(16.dp))
+                    when {
+                        isFriend -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(ProCircuit.SurfaceLow)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text("Znajomy ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp, color = ProCircuit.Lime)
+                            }
+                        }
+                        requestSent -> Box(
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                .background(ProCircuit.SurfaceLow)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text("Zaproszenie wysłane ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp, color = ProCircuit.OnSurface)
+                        }
+                        else -> Button(
+                            onClick = {
+                                scope.launch {
+                                    try { friendRepo.sendRequest(player.id); requestSent = true }
+                                    catch (_: Exception) {}
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime)
+                        ) {
+                            Text("+ Dodaj do znajomych", fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = ProCircuit.Bg)
+                        }
+                    }
                 }
             }
 

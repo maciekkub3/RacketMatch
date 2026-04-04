@@ -2,6 +2,8 @@ package com.racketmatch.android.mock
 
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.AuthResult
+import com.racketmatch.domain.model.FriendRequest
+import com.racketmatch.domain.model.FriendRequestStatus
 import com.racketmatch.domain.model.BookingSlot
 import com.racketmatch.domain.model.ChatMessage
 import com.racketmatch.domain.model.CoachProfile
@@ -24,6 +26,13 @@ import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.OpenSessionRepository
 import com.racketmatch.domain.repository.PaymentRepository
 import com.racketmatch.domain.repository.PlayerRepository
+import com.racketmatch.domain.model.Conversation
+import com.racketmatch.domain.model.DirectMessage
+import com.racketmatch.domain.model.FeedEvent
+import com.racketmatch.domain.model.FeedEventType
+import com.racketmatch.domain.repository.DmRepository
+import com.racketmatch.domain.repository.FeedRepository
+import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -58,6 +67,40 @@ private val MOCK_PLAYERS = listOf(
     User("p4", "adam@test.pl",  "Adam Zając",       null, false, "Warszawa", 1290, false, null, false, listOf(Sport.PADEL),  mapOf("PADEL" to 1290),  bio = null, wins = 4, losses = 9),
     User("p5", "ewa@test.pl",   "Ewa Dąbrowska",    null, true,  "Wrocław",  1700, true,  null, true,  listOf(Sport.TENNIS), mapOf("TENNIS" to 1700), bio = "Profesjonalna zawodniczka. Coaching dostępny po wcześniejszym kontakcie.", wins = 71, losses = 22),
 )
+
+private val MOCK_FEED = listOf(
+    FeedEvent(
+        id = "fe1", type = FeedEventType.MATCH_WON,
+        actorId = "p1", actorName = "Anna Nowak", actorAvatarUrl = null,
+        payload = mapOf("opponentName" to "Piotr W.", "score" to "6:3", "sport" to "Tennis"),
+        createdAt = System.currentTimeMillis() - 3_600_000
+    ),
+    FeedEvent(
+        id = "fe2", type = FeedEventType.ELO_MILESTONE,
+        actorId = "p3", actorName = "Maria Kowalczyk", actorAvatarUrl = null,
+        payload = mapOf("threshold" to "1600", "sport" to "Tennis"),
+        createdAt = System.currentTimeMillis() - 7_200_000
+    ),
+    FeedEvent(
+        id = "fe3", type = FeedEventType.MATCH_LOST,
+        actorId = "p1", actorName = "Anna Nowak", actorAvatarUrl = null,
+        payload = mapOf("opponentName" to "Maria K.", "score" to "4:6", "sport" to "Padel"),
+        createdAt = System.currentTimeMillis() - 86_400_000
+    )
+)
+
+private val MOCK_FRIENDS = mutableListOf<User>()
+private val MOCK_RECEIVED_REQUESTS = mutableListOf(
+    FriendRequest(
+        id = "fr1",
+        fromUserId = "p3",
+        toUserId = MY_ID,
+        fromName = "Maria Kowalczyk",
+        fromAvatarUrl = null,
+        status = FriendRequestStatus.PENDING
+    )
+)
+private val MOCK_SENT_REQUESTS = mutableListOf<FriendRequest>()
 
 private val MOCK_MATCHES = mutableListOf(
     Match(
@@ -137,13 +180,15 @@ private val MOCK_COURTS = listOf(
 
 private val now = Clock.System.now().toEpochMilliseconds()
 private val MOCK_SESSIONS = mutableListOf(
-    OpenSession("s1", "court-1", "Warsaw Padel Club", "p1", "Anna Nowak",       1520, null, now + 3 * 3600_000L,  Sport.PADEL,  OpenSessionStatus.OPEN),
-    OpenSession("s2", "court-3", "Kort Bema",         "p2", "Piotr Wiśniewski", 1380, null, now + 5 * 3600_000L,  Sport.TENNIS, OpenSessionStatus.OPEN),
-    OpenSession("s3", "court-3", "Kort Bema",         "p3", "Maria Kowalczyk",  1610, null, now + 26 * 3600_000L, Sport.PADEL,  OpenSessionStatus.OPEN),
+    OpenSession("s1", "court-1", "Warsaw Padel Club", "p1", "Anna Nowak",       1520, null, now + 3 * 3600_000L,  Sport.PADEL,  OpenSessionStatus.OPEN, MatchType.RANKED),
+    OpenSession("s2", "court-3", "Kort Bema",         "p2", "Piotr Wiśniewski", 1380, null, now + 5 * 3600_000L,  Sport.TENNIS, OpenSessionStatus.OPEN, MatchType.CASUAL),
+    OpenSession("s3", "court-3", "Kort Bema",         "p3", "Maria Kowalczyk",  1610, null, now + 26 * 3600_000L, Sport.PADEL,  OpenSessionStatus.OPEN, MatchType.RANKED),
 )
 
 private var sessionIdCounter = 10
 private var matchIdCounter = 10
+
+private val MOCK_DM_MESSAGES = mutableMapOf<String, MutableList<DirectMessage>>()
 
 val mockRepositoryModule = module {
 
@@ -311,6 +356,26 @@ val mockRepositoryModule = module {
                 tokenStorage.incrementMatchesVersion()
                 return updated
             }
+
+            override suspend fun acceptDetails(matchId: String): Match {
+                val idx = MOCK_MATCHES.indexOfFirst { it.id == matchId }
+                val updated = MOCK_MATCHES[idx].copy(detailsProposedBy = null)
+                MOCK_MATCHES[idx] = updated
+                tokenStorage.incrementMatchesVersion()
+                return updated
+            }
+
+            override suspend fun discardDetails(matchId: String): Match {
+                val idx = MOCK_MATCHES.indexOfFirst { it.id == matchId }
+                val updated = MOCK_MATCHES[idx].copy(
+                    detailsProposedBy = null,
+                    locationName = null,
+                    scheduledAt = null
+                )
+                MOCK_MATCHES[idx] = updated
+                tokenStorage.incrementMatchesVersion()
+                return updated
+            }
         }
     }
 
@@ -349,7 +414,7 @@ val mockRepositoryModule = module {
         object : OpenSessionRepository {
             override suspend fun getSessions(city: String) = MOCK_SESSIONS.filter { it.status == OpenSessionStatus.OPEN }
 
-            override suspend fun postSession(courtId: String, sport: String, startsAtMillis: Long): OpenSession {
+            override suspend fun postSession(courtId: String, sport: String, startsAtMillis: Long, matchType: String): OpenSession {
                 val court = MOCK_COURTS.find { it.id == courtId }
                 val session = OpenSession(
                     id = "s${sessionIdCounter++}",
@@ -361,7 +426,8 @@ val mockRepositoryModule = module {
                     userAvatarUrl = null,
                     startsAt = startsAtMillis,
                     sport = runCatching { Sport.valueOf(sport) }.getOrDefault(Sport.TENNIS),
-                    status = OpenSessionStatus.OPEN
+                    status = OpenSessionStatus.OPEN,
+                    matchType = runCatching { MatchType.valueOf(matchType) }.getOrDefault(MatchType.CASUAL)
                 )
                 MOCK_SESSIONS.add(session)
                 tokenStorage.incrementMatchesVersion()
@@ -389,16 +455,94 @@ val mockRepositoryModule = module {
             override suspend fun getMyProfile()     = currentProfile
             override suspend fun getRecentMatches() = MOCK_MATCHES.toList()
             override suspend fun getEloHistory()    = MOCK_ELO_HISTORY
-            override suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<Sport>, password: String?): User {
+            override suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<Sport>, password: String?, dateOfBirth: String?, avatarUrl: String?): User {
                 currentProfile = currentProfile.copy(
                     displayName = displayName,
                     city = city,
                     bio = bio,
+                    dateOfBirth = dateOfBirth ?: currentProfile.dateOfBirth,
+                    avatarUrl = avatarUrl ?: currentProfile.avatarUrl,
                     sports = sports,
                     eloPerSport = sports.associate { it.name to (currentProfile.eloPerSport[it.name] ?: 1200) }
                 )
                 return currentProfile
             }
+        }
+    }
+
+    single<FriendRepository> {
+        object : FriendRepository {
+            override suspend fun sendRequest(userId: String): FriendRequest {
+                val req = FriendRequest(
+                    id = "fr_${System.currentTimeMillis()}",
+                    fromUserId = MY_ID,
+                    toUserId = userId,
+                    fromName = MOCK_USER.displayName,
+                    fromAvatarUrl = null,
+                    status = FriendRequestStatus.PENDING
+                )
+                MOCK_SENT_REQUESTS.add(req)
+                return req
+            }
+            override suspend fun acceptRequest(id: String): FriendRequest {
+                val req = MOCK_RECEIVED_REQUESTS.first { it.id == id }
+                MOCK_RECEIVED_REQUESTS.removeAll { it.id == id }
+                val player = MOCK_PLAYERS.first { it.id == req.fromUserId }
+                MOCK_FRIENDS.add(player)
+                return req.copy(status = FriendRequestStatus.ACCEPTED)
+            }
+            override suspend fun declineRequest(id: String): FriendRequest {
+                val req = MOCK_RECEIVED_REQUESTS.first { it.id == id }
+                MOCK_RECEIVED_REQUESTS.removeAll { it.id == id }
+                return req.copy(status = FriendRequestStatus.DECLINED)
+            }
+            override suspend fun cancelRequest(id: String) {
+                MOCK_SENT_REQUESTS.removeAll { it.id == id }
+            }
+            override suspend fun getFriends(): List<User> = MOCK_FRIENDS.toList()
+            override suspend fun getReceivedRequests(): List<FriendRequest> = MOCK_RECEIVED_REQUESTS.toList()
+            override suspend fun getSentRequests(): List<FriendRequest> = MOCK_SENT_REQUESTS.toList()
+            override suspend fun removeFriend(userId: String) { MOCK_FRIENDS.removeAll { it.id == userId } }
+        }
+    }
+
+    single<FeedRepository> {
+        object : FeedRepository {
+            override suspend fun getFeed(before: Long?) = MOCK_FEED
+        }
+    }
+
+    single<DmRepository> {
+        object : DmRepository {
+            override suspend fun getConversations(): List<Conversation> =
+                MOCK_FRIENDS.map { friend ->
+                    val convId = minOf(MY_ID, friend.id) + "_" + maxOf(MY_ID, friend.id)
+                    val msgs = MOCK_DM_MESSAGES[convId] ?: emptyList()
+                    Conversation(
+                        id = convId,
+                        otherUserId = friend.id,
+                        otherUserName = friend.displayName,
+                        otherUserAvatarUrl = null,
+                        lastMessage = msgs.lastOrNull()?.text ?: "",
+                        lastMessageAt = msgs.lastOrNull()?.sentAt ?: 0L,
+                        unreadCount = 0
+                    )
+                }
+            override suspend fun getMessages(conversationId: String): List<DirectMessage> =
+                MOCK_DM_MESSAGES.getOrPut(conversationId) { mutableListOf() }.toList()
+            override suspend fun sendMessage(conversationId: String, text: String): DirectMessage {
+                val msg = DirectMessage(
+                    id = "dm_${System.currentTimeMillis()}",
+                    conversationId = conversationId,
+                    senderId = MY_ID,
+                    text = text,
+                    sentAt = System.currentTimeMillis()
+                )
+                MOCK_DM_MESSAGES.getOrPut(conversationId) { mutableListOf() }.add(msg)
+                return msg
+            }
+            override suspend fun markRead(conversationId: String) {}
+            override fun observeMessages(conversationId: String) = emptyFlow<DirectMessage>()
         }
     }
 }

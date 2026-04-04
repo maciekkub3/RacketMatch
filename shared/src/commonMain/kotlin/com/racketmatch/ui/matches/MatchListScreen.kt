@@ -20,6 +20,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
+import com.racketmatch.ui.common.DateTimePickerRow
+import com.racketmatch.ui.common.monthPl
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -54,7 +56,7 @@ object MatchListScreen : Screen {
             viewModel.onEvent(MatchEvent.LoadMatches)
             viewModel.effectFlow.collect { effect ->
                 if (effect is MatchEffect.OpenMatchChat) {
-                    navigator.push(ChatScreen(effect.matchId, effect.currentUserId))
+                    navigator.push(ChatScreen(effect.matchId, effect.currentUserId, effect.otherUserName))
                 }
             }
         }
@@ -86,25 +88,28 @@ object MatchListScreen : Screen {
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
                         item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 8.dp)) {
                                 Text(
-                                    text = "MATCHES",
+                                    text = "Your Matches",
                                     fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                    fontSize = 28.sp, letterSpacing = (-1).sp, color = ProCircuit.OnBg
+                                    fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
+                                )
+                                Text(
+                                    text = "Manage upcoming challenges and review your match history.",
+                                    fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Normal,
+                                    fontSize = 13.sp, color = ProCircuit.OnSurface, lineHeight = 19.sp
                                 )
                                 if (incomingPending.isNotEmpty()) {
+                                    Spacer(Modifier.height(12.dp))
                                     Box(
-                                        modifier = Modifier.clip(CircleShape).background(ProCircuit.Lime)
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        modifier = Modifier.clip(RoundedCornerShape(20.dp))
+                                            .background(ProCircuit.Tertiary)
+                                            .padding(horizontal = 14.dp, vertical = 6.dp)
                                     ) {
                                         Text(
-                                            text = "${incomingPending.size} NEW",
+                                            text = "${incomingPending.size} NEW CHALLENGE${if (incomingPending.size > 1) "S" else ""}",
                                             fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                            fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.Bg
+                                            fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.SurfaceLow
                                         )
                                     }
                                 }
@@ -154,8 +159,50 @@ object MatchListScreen : Screen {
 
                         if (history.isNotEmpty()) {
                             item { SectionLabel("MATCH HISTORY", null) }
-                            items(history) { match ->
+                            items(history.take(5)) { match ->
                                 HistoryMatchCard(match = match, myId = myId)
+                            }
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(ProCircuit.SurfaceLow)
+                                        .clickable { navigator.push(MatchArchiveScreen(history, myId)) }
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            "VIEW ALL ARCHIVE",
+                                            fontFamily = AppFontFamily,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 11.sp,
+                                            letterSpacing = 1.5.sp,
+                                            color = ProCircuit.Lime
+                                        )
+                                        if (history.size > 5) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(ProCircuit.Lime.copy(alpha = 0.12f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    "${history.size}",
+                                                    fontFamily = AppFontFamily,
+                                                    fontWeight = FontWeight.Black,
+                                                    fontSize = 10.sp,
+                                                    color = ProCircuit.Lime
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -195,10 +242,10 @@ private fun SectionLabel(label: String, count: Int?) {
         )
         if (count != null) {
             Box(
-                modifier = Modifier.size(20.dp).clip(CircleShape).background(ProCircuit.Lime),
+                modifier = Modifier.size(20.dp).clip(CircleShape).background(ProCircuit.Tertiary),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "$count", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 10.sp, color = ProCircuit.Bg)
+                Text(text = "$count", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 10.sp, color = ProCircuit.SurfaceLow)
             }
         }
     }
@@ -208,6 +255,34 @@ private fun SectionLabel(label: String, count: Int?) {
 @Composable
 private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel) {
     var showProposeDialog by remember { mutableStateOf(false) }
+    var showAcceptConfirm by remember { mutableStateOf(false) }
+
+    if (showAcceptConfirm) {
+        AlertDialog(
+            onDismissRequest = { showAcceptConfirm = false },
+            containerColor = ProCircuit.SurfaceLow,
+            title = {
+                Text("Brak miejsca i czasu", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 16.sp, color = ProCircuit.OnBg)
+            },
+            text = {
+                Text("Akceptujesz wyzwanie bez ustalonego miejsca i czasu. Czy na pewno?",
+                    fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface, lineHeight = 19.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showAcceptConfirm = false; viewModel.onEvent(MatchEvent.AcceptMatch(match.id)) },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+                ) { Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAcceptConfirm = false }) {
+                    Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = ProCircuit.OnSurface)
+                }
+            }
+        )
+    }
 
     if (showProposeDialog) {
         ProposeDetailsDialog(
@@ -317,7 +392,10 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
             // They proposed (or no details yet) — I can accept / counter / decline
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { viewModel.onEvent(MatchEvent.AcceptMatch(match.id)) },
+                    onClick = {
+                        if (!hasDetails) showAcceptConfirm = true
+                        else viewModel.onEvent(MatchEvent.AcceptMatch(match.id))
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
@@ -332,7 +410,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
                     border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
                 ) {
-                    Text(if (theyProposed) "KONTROFERTA" else "ZAPROPONUJ",
+                    Text(if (theyProposed) "KONTRA" else "ZAPROPONUJ",
                         fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 10.sp, letterSpacing = 1.sp)
                 }
@@ -490,15 +568,27 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 }
             }
         } else {
-            OutlinedButton(
-                onClick = { viewModel.onEvent(MatchEvent.CancelChallenge(match.id)) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
-            ) {
-                Text("ANULUJ WYZWANIE", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp, letterSpacing = 1.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { showProposeDialog = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
+                ) {
+                    Text("EDYTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp, letterSpacing = 1.sp)
+                }
+                OutlinedButton(
+                    onClick = { viewModel.onEvent(MatchEvent.CancelChallenge(match.id)) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
+                ) {
+                    Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp, letterSpacing = 1.sp)
+                }
             }
         }
     }
@@ -509,7 +599,57 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewModel, onSetResult: () -> Unit) {
     val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
     val opponentElo  = if (match.challengerId == myId) match.challengedElo  else match.challengerElo
-    val hasDetails = !match.locationName.isNullOrBlank() || !match.scheduledAt.isNullOrBlank()
+    val hasLocation = !match.locationName.isNullOrBlank()
+    val hasTime = !match.scheduledAt.isNullOrBlank()
+    val hasDetails = hasLocation || hasTime
+    var showDetailsDialog by remember { mutableStateOf(false) }
+    var showCancelConfirm by remember { mutableStateOf(false) }
+
+    if (showDetailsDialog) {
+        ProposeDetailsDialog(
+            prefillLocation = match.locationName,
+            prefillMillis = match.scheduledAt?.let { parseScheduledAt(it) },
+            onConfirm = { locationName, scheduledAt ->
+                showDetailsDialog = false
+                viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
+            },
+            onDismiss = { showDetailsDialog = false }
+        )
+    }
+
+    if (showCancelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            containerColor = ProCircuit.SurfaceLow,
+            title = {
+                Text("Anulować mecz?", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 16.sp, color = ProCircuit.OnBg)
+            },
+            text = {
+                Text("Mecz z $opponentName zostanie anulowany. Tej akcji nie można cofnąć.",
+                    fontFamily = AppBodyFontFamily, fontSize = 13.sp,
+                    color = ProCircuit.OnSurface, lineHeight = 19.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCancelConfirm = false
+                        viewModel.onEvent(MatchEvent.CancelChallenge(match.id))
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Error, contentColor = ProCircuit.OnBg)
+                ) {
+                    Text("ANULUJ MECZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) {
+                    Text("WRÓĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = ProCircuit.OnSurface)
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
@@ -556,7 +696,20 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                     )
                 }
             }
+            Spacer(Modifier.width(8.dp))
             MatchTypeBadge(match.type)
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(ProCircuit.Error.copy(alpha = 0.12f))
+                    .clickable { showCancelConfirm = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("✕", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 13.sp, color = ProCircuit.Error)
+            }
         }
 
         if (hasDetails) {
@@ -647,13 +800,87 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
         }
 
         Spacer(Modifier.height(14.dp))
-        Button(
-            onClick = onSetResult,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.Lime)
-        ) {
-            Text("SET RESULT", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.5.sp)
+
+        val theyProposedDetails = match.detailsProposedBy != null && match.detailsProposedBy != myId
+
+        val detailsLabel = when {
+            !hasLocation && !hasTime -> "SET DETAILS"
+            !hasLocation             -> "SET COURT"
+            !hasTime                 -> "SET TIME"
+            else                     -> "EDIT DETAILS"
+        }
+
+        if (theyProposedDetails) {
+            // Notice banner
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(ProCircuit.Lime.copy(alpha = 0.08f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("🔄", fontSize = 14.sp)
+                Text(
+                    "$opponentName zaproponował zmianę szczegółów",
+                    fontFamily = AppBodyFontFamily, fontSize = 12.sp,
+                    color = ProCircuit.Lime
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { viewModel.onEvent(MatchEvent.AcceptDetails(match.id)) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+                ) {
+                    Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 10.sp, letterSpacing = 1.sp)
+                }
+                OutlinedButton(
+                    onClick = { viewModel.onEvent(MatchEvent.DiscardDetails(match.id)) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
+                ) {
+                    Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp, letterSpacing = 1.sp)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onSetResult,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.Lime)
+            ) {
+                Text("SET RESULT", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 10.sp, letterSpacing = 1.sp)
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { showDetailsDialog = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
+                ) {
+                    Text(detailsLabel, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp, letterSpacing = 1.sp)
+                }
+                Button(
+                    onClick = onSetResult,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.Lime)
+                ) {
+                    Text("SET RESULT", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 10.sp, letterSpacing = 1.sp)
+                }
+            }
         }
     }
 }
@@ -665,6 +892,21 @@ private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewM
     val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
     val sc = match.proposedScoreChallenger ?: 0
     val sd = match.proposedScoreChallenged ?: 0
+    var showDisputeDialog by remember { mutableStateOf(false) }
+
+    if (showDisputeDialog) {
+        ProposeResultDialog(
+            match = match,
+            myId = myId,
+            prefillScoreChallenger = sc,
+            prefillScoreChallenged = sd,
+            onConfirm = { newSc, newSd ->
+                showDisputeDialog = false
+                viewModel.onEvent(MatchEvent.ProposeResult(match.id, newSc, newSd))
+            },
+            onDismiss = { showDisputeDialog = false }
+        )
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
@@ -756,7 +998,7 @@ private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewM
                     Text("CONFIRM", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
                 }
                 OutlinedButton(
-                    onClick = { viewModel.onEvent(MatchEvent.DisputeResult(match.id)) },
+                    onClick = { showDisputeDialog = true },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
@@ -771,7 +1013,7 @@ private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewM
 
 // Completed/cancelled history row
 @Composable
-private fun HistoryMatchCard(match: Match, myId: String) {
+internal fun HistoryMatchCard(match: Match, myId: String) {
     val iAmChallenger = match.challengerId == myId
     val opponentName  = if (iAmChallenger) match.challengedName else match.challengerName
     val myEloChange   = match.eloChanges?.get(myId)
@@ -880,11 +1122,23 @@ private fun ProposeResultDialog(
     match: Match,
     myId: String,
     onConfirm: (Int, Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    prefillScoreChallenger: Int? = null,
+    prefillScoreChallenged: Int? = null
 ) {
     val iAmChallenger = match.challengerId == myId
-    var myScoreText by remember { mutableStateOf("") }
-    var theirScoreText by remember { mutableStateOf("") }
+    var myScoreText by remember {
+        mutableStateOf(
+            if (iAmChallenger) prefillScoreChallenger?.toString() ?: ""
+            else prefillScoreChallenged?.toString() ?: ""
+        )
+    }
+    var theirScoreText by remember {
+        mutableStateOf(
+            if (iAmChallenger) prefillScoreChallenged?.toString() ?: ""
+            else prefillScoreChallenger?.toString() ?: ""
+        )
+    }
 
     val myName = if (iAmChallenger) match.challengerName else match.challengedName
     val opponentName = if (iAmChallenger) match.challengedName else match.challengerName
@@ -1035,7 +1289,6 @@ private fun ProposeDetailsDialog(
 ) {
     var courtName by remember { mutableStateOf(prefillLocation ?: "") }
     var selectedMillis by remember { mutableStateOf<Long?>(prefillMillis) }
-    val timeSlots = remember { generateMatchTimeSlots() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1064,58 +1317,23 @@ private fun ProposeDetailsDialog(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        Box(
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                                .background(ProCircuit.SurfaceHigh)
-                                .clickable { selectedMillis = null }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text("Brak", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp, color = if (selectedMillis == null) ProCircuit.Lime else ProCircuit.OnSurface)
-                        }
-                    }
-                    items(timeSlots) { (label, millis) ->
-                        val sel = selectedMillis == millis
-                        Box(
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                                .background(if (sel) ProCircuit.Lime else ProCircuit.SurfaceHigh)
-                                .clickable { selectedMillis = millis }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp, color = if (sel) ProCircuit.Bg else ProCircuit.OnSurface)
-                        }
-                    }
+                DateTimePickerRow(
+                    selectedMillis = selectedMillis,
+                    onMillisSelected = { selectedMillis = it }
+                )
+                Button(
+                    onClick = { onConfirm(courtName.takeIf { it.isNotBlank() }, selectedMillis) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+                ) {
+                    Text("WYŚLIJ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 12.sp, letterSpacing = 2.sp)
                 }
             }
         },
-        confirmButton = {
-            Box(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ProCircuit.Lime)
-                    .clickable { onConfirm(courtName.takeIf { it.isNotBlank() }, selectedMillis) }
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("WYŚLIJ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 12.sp, letterSpacing = 2.sp, color = ProCircuit.Bg)
-            }
-        }
+        confirmButton = {}
     )
-}
-
-private fun generateMatchTimeSlots(): List<Pair<String, Long>> {
-    val now = Clock.System.now().toEpochMilliseconds()
-    val msPerHour = 3_600_000L
-    val nextHour = ((now / msPerHour) + 1) * msPerHour
-    return (0 until 8).map { i ->
-        val millis = nextHour + i * msPerHour
-        val local = Instant.fromEpochMilliseconds(millis)
-            .toLocalDateTime(TimeZone.currentSystemDefault())
-        val label = "${local.dayOfMonth} ${monthPl(local.monthNumber)} ${local.hour.toString().padStart(2,'0')}:00"
-        Pair(label, millis)
-    }
 }
 
 private fun parseScheduledAt(s: String): Long? = runCatching {
@@ -1128,4 +1346,3 @@ private fun parseScheduledAt(s: String): Long? = runCatching {
     }
 }.getOrNull()
 
-private fun monthPl(m: Int) = listOf("","sty","lut","mar","kwi","maj","cze","lip","sie","wrz","paź","lis","gru")[m]

@@ -20,11 +20,11 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.racketmatch.domain.model.ChatMessage
-import com.racketmatch.presentation.viewmodel.ChatEffect
-import com.racketmatch.presentation.viewmodel.ChatEvent
-import com.racketmatch.presentation.viewmodel.ChatState
-import com.racketmatch.presentation.viewmodel.ChatViewModel
+import com.racketmatch.domain.model.DirectMessage
+import com.racketmatch.presentation.viewmodel.DmChatEffect
+import com.racketmatch.presentation.viewmodel.DmChatEvent
+import com.racketmatch.presentation.viewmodel.DmChatState
+import com.racketmatch.presentation.viewmodel.DmChatViewModel
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -35,8 +35,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-data class ChatScreen(
-    val matchId: String,
+data class DmChatScreen(
+    val conversationId: String,
     val currentUserId: String,
     val otherUserName: String,
     val otherUserAvatarUrl: String? = null
@@ -44,7 +44,7 @@ data class ChatScreen(
 
     @Composable
     override fun Content() {
-        val viewModel: ChatViewModel = koinViewModel { parametersOf(matchId) }
+        val viewModel: DmChatViewModel = koinViewModel { parametersOf(conversationId) }
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
@@ -53,7 +53,7 @@ data class ChatScreen(
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
-                    is ChatEffect.ShowError -> scope.launch {
+                    is DmChatEffect.ShowError -> scope.launch {
                         snackbarHostState.showSnackbar(effect.msg)
                     }
                 }
@@ -65,24 +65,24 @@ data class ChatScreen(
             containerColor = ProCircuit.Bg
         ) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                MatchChatHeader(name = otherUserName, onBack = { navigator.pop() })
+                DmChatHeader(name = otherUserName, onBack = { navigator.pop() })
                 HorizontalDivider(color = ProCircuit.SurfaceLow, thickness = 1.dp)
 
                 when (val s = state) {
-                    ChatState.Loading -> Box(
+                    DmChatState.Loading -> Box(
                         Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) { CircularProgressIndicator(color = ProCircuit.Lime) }
 
-                    ChatState.Error -> Box(
+                    DmChatState.Error -> Box(
                         Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) { Text("Błąd ładowania", color = ProCircuit.OnSurface) }
 
-                    is ChatState.Content -> MatchChatContent(
+                    is DmChatState.Content -> DmMessageList(
                         messages = s.messages,
                         currentUserId = currentUserId,
-                        onSend = { viewModel.onEvent(ChatEvent.SendMessage(it)) },
+                        onSend = { viewModel.onEvent(DmChatEvent.Send(it)) },
                         otherUserName = otherUserName,
                         modifier = Modifier.weight(1f)
                     )
@@ -93,7 +93,7 @@ data class ChatScreen(
 }
 
 @Composable
-private fun MatchChatHeader(name: String, onBack: () -> Unit) {
+private fun DmChatHeader(name: String, onBack: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxWidth().background(ProCircuit.Bg)
             .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -131,8 +131,8 @@ private fun MatchChatHeader(name: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MatchChatContent(
-    messages: List<ChatMessage>,
+private fun DmMessageList(
+    messages: List<DirectMessage>,
     currentUserId: String,
     onSend: (String) -> Unit,
     otherUserName: String,
@@ -157,18 +157,18 @@ private fun MatchChatContent(
                 val prev = messages.getOrNull(index - 1)
                 val next = messages.getOrNull(index + 1)
                 val isGrouped = prev?.senderId == message.senderId &&
-                        (message.timestamp - (prev?.timestamp ?: 0)) < 120_000
+                        (message.sentAt - (prev?.sentAt ?: 0)) < 120_000
                 val isLastInGroup = next?.senderId != message.senderId ||
-                        ((next?.timestamp ?: Long.MAX_VALUE) - message.timestamp) >= 120_000
+                        ((next?.sentAt ?: Long.MAX_VALUE) - message.sentAt) >= 120_000
 
-                if (prev != null && (message.timestamp - prev.timestamp) > 1_800_000) {
+                if (prev != null && (message.sentAt - prev.sentAt) > 1_800_000) {
                     item("ts_$index") {
                         Box(
                             Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.sentAt)),
                                 fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
                             )
                         }
@@ -176,50 +176,13 @@ private fun MatchChatContent(
                 }
 
                 item(message.id) {
-                    val tailCorner = if (isLastInGroup) 4.dp else 6.dp
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (isOwn) Arrangement.End else Arrangement.Start,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        if (!isOwn) {
-                            if (!isGrouped) {
-                                Box(
-                                    modifier = Modifier.size(32.dp).clip(CircleShape)
-                                        .background(ProCircuit.SurfaceHigh),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        otherUserName.take(1).uppercase(),
-                                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                        fontSize = 13.sp, color = ProCircuit.Lime
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.width(32.dp))
-                            }
-                            Spacer(Modifier.width(6.dp))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.72f)
-                                .wrapContentWidth(if (isOwn) Alignment.End else Alignment.Start)
-                                .clip(
-                                    RoundedCornerShape(
-                                        topStart = 18.dp, topEnd = 18.dp,
-                                        bottomStart = if (isOwn) 18.dp else tailCorner,
-                                        bottomEnd = if (isOwn) tailCorner else 18.dp
-                                    )
-                                )
-                                .background(if (isOwn) ProCircuit.Lime else ProCircuit.SurfaceLow)
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                message.text, fontFamily = AppBodyFontFamily, fontSize = 14.sp,
-                                color = if (isOwn) ProCircuit.Bg else ProCircuit.OnBg
-                            )
-                        }
-                    }
+                    DmBubble(
+                        message = message,
+                        isOwn = isOwn,
+                        isGrouped = isGrouped,
+                        isLastInGroup = isLastInGroup,
+                        otherInitial = otherUserName.take(1).uppercase()
+                    )
                 }
             }
         }
@@ -265,6 +228,59 @@ private fun MatchChatContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DmBubble(
+    message: DirectMessage,
+    isOwn: Boolean,
+    isGrouped: Boolean,
+    isLastInGroup: Boolean,
+    otherInitial: String
+) {
+    val tailCorner = if (isLastInGroup) 4.dp else 6.dp
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isOwn) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        if (!isOwn) {
+            if (!isGrouped) {
+                Box(
+                    modifier = Modifier.size(32.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        otherInitial, fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black, fontSize = 13.sp, color = ProCircuit.Lime
+                    )
+                }
+            } else {
+                Spacer(Modifier.width(32.dp))
+            }
+            Spacer(Modifier.width(6.dp))
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.72f)
+                .wrapContentWidth(if (isOwn) Alignment.End else Alignment.Start)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 18.dp, topEnd = 18.dp,
+                        bottomStart = if (isOwn) 18.dp else tailCorner,
+                        bottomEnd = if (isOwn) tailCorner else 18.dp
+                    )
+                )
+                .background(if (isOwn) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Text(
+                message.text, fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+                color = if (isOwn) ProCircuit.Bg else ProCircuit.OnBg
+            )
         }
     }
 }
