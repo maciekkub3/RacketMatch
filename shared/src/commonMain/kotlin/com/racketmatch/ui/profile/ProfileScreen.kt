@@ -2,7 +2,6 @@ package com.racketmatch.ui.profile
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -110,7 +109,6 @@ object ProfileScreen : Screen {
                     is ProfileState.Content -> ProfileContent(
                         state = s,
                         onSubscribeClick = { navigator.push(SubscriptionScreen) },
-                        onSettingsClick = { navigator.push(SettingsScreen) },
                         onLogout = { viewModel.logout() }
                     )
                 }
@@ -120,9 +118,9 @@ object ProfileScreen : Screen {
 }
 
 @Composable
-private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> Unit, onSettingsClick: () -> Unit, onLogout: () -> Unit) {
+private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> Unit, onLogout: () -> Unit) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ProfileHeader(user = state.user, onSettingsClick = onSettingsClick) }
+        item { ProfileHeader(user = state.user) }
 
         if (!state.user.bio.isNullOrBlank()) {
             item {
@@ -193,7 +191,7 @@ private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> 
 }
 
 @Composable
-private fun ProfileHeader(user: User, onSettingsClick: () -> Unit) {
+private fun ProfileHeader(user: User) {
     val winRate = if (user.wins + user.losses > 0)
         "${(user.wins.toFloat() / (user.wins + user.losses) * 100).toInt()}%" else "—"
     val totalMatches = user.wins + user.losses
@@ -246,14 +244,6 @@ private fun ProfileHeader(user: User, onSettingsClick: () -> Unit) {
                     letterSpacing = 2.sp,
                     color = ProCircuit.OnSurface
                 )
-            }
-            Box(
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                    .background(ProCircuit.SurfaceLow)
-                    .clickable(onClick = onSettingsClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("⚙", fontSize = 18.sp)
             }
         }
 
