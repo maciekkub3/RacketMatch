@@ -8,6 +8,8 @@ import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.firestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import dev.gitlive.firebase.firestore.Timestamp
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
 class FirestoreNotificationRepositoryImpl : NotificationRepository {
@@ -37,11 +39,10 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
                                 ?.associate { it.key.toString() to it.value.toString() }
                                 ?: emptyMap(),
                             read = doc.get("read") as? Boolean ?: false,
-                            createdAt = run {
-                                val seconds = doc.get<Long>("createdAt._seconds") ?: 0L
-                                val nanos = doc.get<Int>("createdAt._nanoseconds") ?: 0
-                                Instant.fromEpochSeconds(seconds, nanos)
-                            }
+                            createdAt = runCatching {
+                                val ts = doc.get<Timestamp>("createdAt")
+                                Instant.fromEpochSeconds(ts.seconds, ts.nanoseconds.toLong())
+                            }.getOrDefault(Clock.System.now())
                         )
                     }.getOrNull()
                 }
