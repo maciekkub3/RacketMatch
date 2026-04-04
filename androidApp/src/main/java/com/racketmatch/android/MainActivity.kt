@@ -9,6 +9,7 @@ import com.racketmatch.android.BuildConfig
 import com.racketmatch.ui.navigation.SplashScreen
 import com.racketmatch.ui.theme.AppTheme
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.ui.theme.ThemeState
 import com.racketmatch.di.apiModule
 import com.racketmatch.di.networkModule
 import com.racketmatch.di.repositoryModule
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val tokenStorage = getKoin().get<TokenStorage>()
+        ThemeState.isDark = tokenStorage.isDarkTheme
         lifecycleScope.launch {
             tokenStorage.loginVersionFlow.collect { version ->
                 if (version > 0) registerFcmToken()
