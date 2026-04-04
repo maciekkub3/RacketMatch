@@ -26,7 +26,10 @@ import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.presentation.viewmodel.ExploreEvent
+import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.presentation.viewmodel.MoreViewModel
+import com.racketmatch.presentation.viewmodel.NotificationViewModel
 import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.matches.MatchListScreen
 import com.racketmatch.ui.onboarding.OnboardingAnchor
@@ -40,6 +43,7 @@ import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 object MainScreen : Screen {
 
@@ -48,7 +52,11 @@ object MainScreen : Screen {
     override fun Content() {
         val tokenStorage: TokenStorage = koinInject()
         val moreViewModel: MoreViewModel = koinViewModel()
+        val exploreViewModel: ExploreViewModel = koinViewModel()
         val badges by moreViewModel.badges.collectAsState()
+        val userId = tokenStorage.currentUserId ?: ""
+        val notifVm: NotificationViewModel = koinViewModel { parametersOf(userId) }
+        val notifState by notifVm.state.collectAsState()
         var onboardingComplete by remember { mutableStateOf(tokenStorage.isOnboardingComplete) }
         var showMoreSheet by remember { mutableStateOf(false) }
 
@@ -73,8 +81,13 @@ object MainScreen : Screen {
                     bottomBar = {
                         ProCircuitNavBar(
                             current = tabNavigator.current,
-                            onTabSelect = { tabNavigator.current = it },
-                            onMoreTap = { moreViewModel.refresh(); showMoreSheet = true }
+                            onTabSelect = {
+                                if (it == PlayersTab) exploreViewModel.onEvent(ExploreEvent.ResetToMap)
+                                tabNavigator.current = it
+                            },
+                            onMoreTap = { moreViewModel.refresh(); showMoreSheet = true },
+                            matchBadge = notifState.unreadMatchCount,
+                            moreBadge = notifState.unreadFriendCount + notifState.unreadDmCount
                         )
                     }
                 ) { paddingValues ->
@@ -162,7 +175,13 @@ private fun MoreRow(emoji: String, label: String, badge: Int, onClick: () -> Uni
 }
 
 @Composable
-private fun ProCircuitNavBar(current: Tab, onTabSelect: (Tab) -> Unit, onMoreTap: () -> Unit) {
+private fun ProCircuitNavBar(
+    current: Tab,
+    onTabSelect: (Tab) -> Unit,
+    onMoreTap: () -> Unit,
+    matchBadge: Int = 0,
+    moreBadge: Int = 0
+) {
     val mainTabs = listOf(PlayersTab, MatchesTab, RankingsTab)
 
     Box(
@@ -191,12 +210,22 @@ private fun ProCircuitNavBar(current: Tab, onTabSelect: (Tab) -> Unit, onMoreTap
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Icon(
-                        painter = tab.options.icon!!,
-                        contentDescription = tab.options.title,
-                        tint = if (isSelected) ProCircuit.SurfaceLow else ProCircuit.OnBg,
-                        modifier = Modifier.height(22.dp)
-                    )
+                    val tabMatchBadge = if (tab == MatchesTab) matchBadge else 0
+                    BadgedBox(badge = {
+                        if (tabMatchBadge > 0) {
+                            Badge(
+                                containerColor = ProCircuit.Lime,
+                                contentColor = ProCircuit.Bg
+                            ) { Text(tabMatchBadge.toString()) }
+                        }
+                    }) {
+                        Icon(
+                            painter = tab.options.icon!!,
+                            contentDescription = tab.options.title,
+                            tint = if (isSelected) ProCircuit.SurfaceLow else ProCircuit.OnBg,
+                            modifier = Modifier.height(22.dp)
+                        )
+                    }
                     Text(
                         text = tab.options.title.uppercase(),
                         fontFamily = AppFontFamily,
@@ -218,12 +247,21 @@ private fun ProCircuitNavBar(current: Tab, onTabSelect: (Tab) -> Unit, onMoreTap
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Icon(
-                    painter = rememberVectorPainter(Icons.Default.Person),
-                    contentDescription = "Więcej",
-                    tint = if (moreIsActive) ProCircuit.SurfaceLow else ProCircuit.OnBg,
-                    modifier = Modifier.height(22.dp)
-                )
+                BadgedBox(badge = {
+                    if (moreBadge > 0) {
+                        Badge(
+                            containerColor = ProCircuit.Lime,
+                            contentColor = ProCircuit.Bg
+                        ) { Text(moreBadge.toString()) }
+                    }
+                }) {
+                    Icon(
+                        painter = rememberVectorPainter(Icons.Default.Person),
+                        contentDescription = "Więcej",
+                        tint = if (moreIsActive) ProCircuit.SurfaceLow else ProCircuit.OnBg,
+                        modifier = Modifier.height(22.dp)
+                    )
+                }
                 Text(
                     text = "WIĘCEJ",
                     fontFamily = AppFontFamily,
@@ -250,7 +288,7 @@ object RankingsTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 1u, title = "Rankings", icon = rememberVectorPainter(Icons.Default.Star))
     @Composable
-    override fun Content() = RankingsScreen.Content()
+    override fun Content() { Navigator(RankingsScreen) { CurrentScreen() } }
 }
 
 object MatchesTab : Tab {
