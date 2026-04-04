@@ -36,7 +36,7 @@ private val WimbledonColors = lightColorScheme(
     inverseOnSurface       = Color(0xFFF7F5F0),
     inversePrimary         = Color(0xFF80C89F),
     outline                = Color(0xFFC5C2BC),
-    outlineVariant         = Color(0xFFDDDAD5),
+    outlineVariant         = Color(0xFFDAD7D1),
     error                  = Color(0xFFC0392B),
     onError                = Color(0xFFFFFFFF),
     errorContainer         = Color(0xFFFFDAD6),
@@ -66,7 +66,6 @@ private val WimbledonTypography = Typography(
     labelSmall    = TextStyle(fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Bold,     fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 1.sp),
 )
 
-// Sharper corners throughout
 private val WimbledonShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
     small      = RoundedCornerShape(6.dp),
