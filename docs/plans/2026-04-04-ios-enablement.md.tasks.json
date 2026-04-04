@@ -1,0 +1,12 @@
+{
+  "planPath": "docs/plans/2026-04-04-ios-enablement.md",
+  "tasks": [
+    {"id": 5, "subject": "Task 1: Move AppTheme to commonMain", "status": "pending"},
+    {"id": 6, "subject": "Task 2: Create IosTokenStorage", "status": "pending", "blockedBy": [5]},
+    {"id": 7, "subject": "Task 3: Create MainViewController", "status": "pending", "blockedBy": [5, 6]},
+    {"id": 8, "subject": "Task 4: Update ContentView.swift", "status": "pending", "blockedBy": [7]},
+    {"id": 9, "subject": "Task 5: First build on Mac", "status": "pending", "blockedBy": [8]},
+    {"id": 10, "subject": "Task 6: Feature audit on simulator", "status": "pending", "blockedBy": [9]}
+  ],
+  "lastUpdated": "2026-04-04T00:00:00Z"
+}
