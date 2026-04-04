@@ -35,7 +35,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        registerFcmToken()
+        val tokenStorage = getKoin().get<TokenStorage>()
+        lifecycleScope.launch {
+            tokenStorage.loginVersionFlow.collect { version ->
+                if (version > 0) registerFcmToken()
+            }
+        }
 
         setContent {
             AppTheme {
