@@ -98,7 +98,9 @@ class MatchViewModel(
 
     private fun loadMatches() {
         viewModelScope.launch(dispatcher) {
-            _state.value = MatchListState.Loading
+            if (_state.value !is MatchListState.Content) {
+                _state.value = MatchListState.Loading
+            }
             try {
                 val matches = matchRepository.getMyMatches()
                 _state.value = MatchListState.Content(

@@ -56,4 +56,10 @@ class MatchApi(private val client: HttpClient) {
 
     suspend fun claimReservation(matchId: String): MatchDto =
         client.put("api/matches/$matchId/claim-reservation").body()
+
+    suspend fun acceptDetails(matchId: String): MatchDto =
+        client.put("api/matches/$matchId/accept-details").body()
+
+    suspend fun discardDetails(matchId: String): MatchDto =
+        client.put("api/matches/$matchId/discard-details").body()
 }

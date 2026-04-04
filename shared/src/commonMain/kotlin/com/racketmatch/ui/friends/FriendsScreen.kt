@@ -19,6 +19,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.FriendRequest
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.presentation.viewmodel.FriendsEffect
 import com.racketmatch.presentation.viewmodel.FriendsEvent
@@ -39,6 +40,8 @@ object FriendsScreen : Screen {
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         var selectedTab by remember { mutableIntStateOf(0) }
+
+        LaunchedEffect(Unit) { viewModel.onEvent(FriendsEvent.Load) }
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
@@ -125,7 +128,7 @@ object FriendsScreen : Screen {
                     if (selectedTab == 0) {
                         FriendsList(
                             friends = s.data.friends,
-                            onTap = { navigator.push(PlayerProfileScreen(it)) },
+                            onTap = { navigator.push(PlayerProfileScreen(it, initialIsFriend = true)) },
                             onDm = { viewModel.onEvent(FriendsEvent.OpenDm(it)) }
                         )
                     } else {
@@ -134,7 +137,8 @@ object FriendsScreen : Screen {
                             sent = s.data.sent,
                             onAccept = { viewModel.onEvent(FriendsEvent.AcceptRequest(it)) },
                             onDecline = { viewModel.onEvent(FriendsEvent.DeclineRequest(it)) },
-                            onCancel = { viewModel.onEvent(FriendsEvent.CancelRequest(it)) }
+                            onCancel = { viewModel.onEvent(FriendsEvent.CancelRequest(it)) },
+                            onPlayerClick = { navigator.push(PlayerProfileScreen(it)) }
                         )
                     }
                 }
@@ -198,13 +202,26 @@ private fun FriendsList(friends: List<User>, onTap: (User) -> Unit, onDm: (User)
     }
 }
 
+private fun FriendRequest.fromUser() = User(
+    id = fromUserId, email = "", displayName = fromName, avatarUrl = fromAvatarUrl,
+    isCoach = false, city = "", eloRating = 0, isMaster = false, masterFee = null,
+    subscriptionActive = false, sports = emptyList()
+)
+
+private fun FriendRequest.toUser() = User(
+    id = toUserId, email = "", displayName = toName, avatarUrl = null,
+    isCoach = false, city = "", eloRating = 0, isMaster = false, masterFee = null,
+    subscriptionActive = false, sports = emptyList()
+)
+
 @Composable
 private fun InvitationsList(
     received: List<FriendRequest>,
     sent: List<FriendRequest>,
     onAccept: (String) -> Unit,
     onDecline: (String) -> Unit,
-    onCancel: (String) -> Unit
+    onCancel: (String) -> Unit,
+    onPlayerClick: (User) -> Unit
 ) {
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
@@ -225,6 +242,7 @@ private fun InvitationsList(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(ProCircuit.SurfaceLow)
+                        .clickable { onPlayerClick(req.fromUser()) }
                         .padding(16.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -284,11 +302,12 @@ private fun InvitationsList(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(ProCircuit.SurfaceLow)
+                        .clickable { onPlayerClick(req.toUser()) }
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        req.toUserId,
+                        req.toName,
                         fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 14.sp, color = ProCircuit.OnBg,
                         modifier = Modifier.weight(1f)

@@ -1,8 +1,11 @@
 package com.racketmatch.presentation.viewmodel
 
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.PlayerFilter
 import com.racketmatch.domain.model.User
+import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.PlayerRepository
+import com.racketmatch.domain.repository.ProfileRepository
 import app.cash.turbine.test
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
@@ -17,6 +20,9 @@ import kotlin.test.Test
 class PlayersViewModelTest {
 
     @MockK private lateinit var playerRepository: PlayerRepository
+    @MockK private lateinit var matchRepository: MatchRepository
+    @MockK private lateinit var tokenStorage: TokenStorage
+    @MockK private lateinit var profileRepository: ProfileRepository
     private val dispatcher = StandardTestDispatcher()
     private lateinit var viewModel: PlayersViewModel
 
@@ -30,7 +36,7 @@ class PlayersViewModelTest {
     @Test
     fun `loads players on init`() = runTest {
         coEvery { playerRepository.getNearbyPlayers(any(), any(), any()) } returns listOf(player)
-        viewModel = PlayersViewModel(playerRepository, dispatcher)
+        viewModel = PlayersViewModel(playerRepository, matchRepository, tokenStorage, profileRepository, dispatcher)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe PlayersState.Loading
@@ -43,7 +49,7 @@ class PlayersViewModelTest {
     @Test
     fun `filter change triggers reload with new results`() = runTest {
         coEvery { playerRepository.getNearbyPlayers(any(), any(), any()) } returns listOf(player)
-        viewModel = PlayersViewModel(playerRepository, dispatcher)
+        viewModel = PlayersViewModel(playerRepository, matchRepository, tokenStorage, profileRepository, dispatcher)
 
         // consume initial load
         dispatcher.scheduler.advanceUntilIdle()
@@ -65,7 +71,7 @@ class PlayersViewModelTest {
     @Test
     fun `error state on repository exception`() = runTest {
         coEvery { playerRepository.getNearbyPlayers(any(), any(), any()) } throws Exception("Network error")
-        viewModel = PlayersViewModel(playerRepository, dispatcher)
+        viewModel = PlayersViewModel(playerRepository, matchRepository, tokenStorage, profileRepository, dispatcher)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe PlayersState.Loading

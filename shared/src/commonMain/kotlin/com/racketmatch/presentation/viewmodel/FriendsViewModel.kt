@@ -46,8 +46,6 @@ class FriendsViewModel(private val repo: FriendRepository) : ViewModel() {
     private val _effects = MutableSharedFlow<FriendsEffect>()
     val effectFlow = _effects.asSharedFlow()
 
-    init { load() }
-
     fun onEvent(event: FriendsEvent) {
         when (event) {
             FriendsEvent.Load -> load()

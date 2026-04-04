@@ -19,6 +19,6 @@ class ProfileRepositoryImpl(private val profileApi: ProfileApi) : ProfileReposit
     override suspend fun getEloHistory(): List<EloPoint> =
         profileApi.getMyStats().eloHistory.map { it.toDomain() }
 
-    override suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<Sport>, password: String?): User =
-        profileApi.updateProfile(displayName, city, bio, sports.map { it.name }, password).toDomain()
+    override suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<Sport>, password: String?, dateOfBirth: String?, avatarUrl: String?): User =
+        profileApi.updateProfile(displayName, city, bio, sports.map { it.name }, password, dateOfBirth, avatarUrl).toDomain()
 }

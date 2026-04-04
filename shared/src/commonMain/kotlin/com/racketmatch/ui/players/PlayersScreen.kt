@@ -4,14 +4,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -19,6 +24,8 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.Court
 import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.OpenSession
@@ -29,95 +36,264 @@ import com.racketmatch.presentation.viewmodel.ExploreEffect
 import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreState
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
+import com.racketmatch.presentation.viewmodel.NotificationViewModel
 import com.racketmatch.presentation.viewmodel.PostSessionDialogState
+import com.racketmatch.presentation.viewmodel.SessionTimeFilter
+import com.racketmatch.ui.navigation.MatchesTab
+import com.racketmatch.ui.navigation.ProfileTab
 import com.racketmatch.ui.map.CityMap
+import com.racketmatch.ui.notifications.NotificationsScreen
+import com.racketmatch.ui.onboarding.OnboardingAnchor
+import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.theme.AppBodyFontFamily
+import com.racketmatch.ui.common.DateTimePickerRow
+import com.racketmatch.ui.common.monthPl
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 object PlayersScreen : Screen {
     @Composable
     override fun Content() {
         val viewModel: ExploreViewModel = koinViewModel()
         val state by viewModel.stateFlow.collectAsState()
+        val tabNavigator = LocalTabNavigator.current
+        var joinedSession by remember { mutableStateOf<ExploreEffect.SessionJoined?>(null) }
 
         LaunchedEffect(Unit) {
             viewModel.onEvent(ExploreEvent.LoadSessions)
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
-                    is ExploreEffect.SessionJoined -> { /* navigate to matches tab */ }
-                    is ExploreEffect.OpenChat -> { /* open chat */ }
-                    is ExploreEffect.ChallengeSent -> { /* snackbar */ }
-                    is ExploreEffect.ShowError -> { /* snackbar */ }
+                    is ExploreEffect.SessionJoined -> joinedSession = effect
+                    is ExploreEffect.OpenChat -> { }
+                    is ExploreEffect.ChallengeSent -> { }
+                    is ExploreEffect.ShowError -> { }
                 }
             }
         }
 
         ExploreContent(state = state, onEvent = viewModel::onEvent)
+
+        joinedSession?.let { joined ->
+            SessionJoinedDialog(
+                opponentName = joined.opponentName,
+                courtName = joined.courtName,
+                onGoToMatches = {
+                    joinedSession = null
+                    tabNavigator.current = MatchesTab
+                },
+                onDismiss = { joinedSession = null }
+            )
+        }
     }
+}
+
+@Composable
+private fun SessionJoinedDialog(
+    opponentName: String,
+    courtName: String,
+    onGoToMatches: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ProCircuit.SurfaceLow,
+        title = {
+            Text(
+                "Mecz potwierdzony!",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 20.sp, color = ProCircuit.OnBg
+            )
+        },
+        text = {
+            Text(
+                buildString {
+                    append("Dołączyłeś do sesji")
+                    if (opponentName.isNotBlank()) append(" z $opponentName")
+                    if (courtName.isNotBlank()) append(" na $courtName")
+                    append(".")
+                },
+                fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+                color = ProCircuit.OnSurface, lineHeight = 20.sp
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onGoToMatches,
+                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Zobacz mecze", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("OK", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ProCircuit.OnSurface)
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val courtSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val uriHandler = LocalUriHandler.current
+    val avatarLetter = state.myName.firstOrNull()?.uppercase() ?: "?"
+    val tabNavigator = LocalTabNavigator.current
+    val navigator = LocalNavigator.currentOrThrow
+    val tokenStorage = koinInject<TokenStorage>()
+    val userId = tokenStorage.currentUserId ?: ""
+    val notifVm: NotificationViewModel = koinViewModel { parametersOf(userId) }
+    val notifState by notifVm.state.collectAsState()
+
+    // Count active filters for badge
+    val activeFilterCount = listOfNotNull(
+        state.sportFilter,
+        state.matchTypeFilter,
+        state.sessionTimeFilter.takeIf { it != SessionTimeFilter.ANY },
+        state.eloFilterEnabled.takeIf { it }
+    ).size
 
     Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
 
-        // Full-screen map
+        // Full-screen map (always rendered beneath)
         CityMap(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().onboardingAnchor(OnboardingAnchor.MAP),
             courts = state.filteredCourts,
             sessionCountByCourt = state.sessionCountByCourt,
-            onCourtTap = { court -> onEvent(ExploreEvent.SelectCourt(court.id)) }
+            onCourtTap = { court -> onEvent(ExploreEvent.SelectCourt(court.id)) },
+            isDark = ThemeState.isDark
         )
-
-        // Sport filter chips (top)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(top = 12.dp, start = 12.dp, end = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SportFilterChip(label = "Wszystkie", selected = state.sportFilter == null) {
-                onEvent(ExploreEvent.SetSportFilter(null))
-            }
-            SportFilterChip(label = "🎾 Tenis", selected = state.sportFilter == Sport.TENNIS) {
-                onEvent(ExploreEvent.SetSportFilter(Sport.TENNIS))
-            }
-            SportFilterChip(label = "🏸 Padel", selected = state.sportFilter == Sport.PADEL) {
-                onEvent(ExploreEvent.SetSportFilter(Sport.PADEL))
-            }
-        }
-
-        // Toggle button — circular, bottom center, only on map
-        if (state.isMapView) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 100.dp)
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(ProCircuit.SurfaceHigh.copy(alpha = 0.95f))
-                    .clickable { onEvent(ExploreEvent.ToggleView) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("📋", fontSize = 22.sp)
-            }
-        }
 
         // List view overlay
         if (!state.isMapView) {
             Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg.copy(alpha = 0.97f))) {
                 PlayerListView(state = state, onEvent = onEvent)
+            }
+        }
+
+        // ── Persistent top bar (over map AND list) ───────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopStart)
+                .background(ProCircuit.SurfaceLow)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Avatar → taps to Profile tab
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.Lime.copy(alpha = 0.18f))
+                    .clickable { tabNavigator.current = ProfileTab },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(avatarLetter, fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 15.sp, color = ProCircuit.Lime)
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                "RACKETMATCH",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 13.sp, letterSpacing = 2.sp, color = ProCircuit.OnBg
+            )
+            Spacer(Modifier.weight(1f))
+            // Bell icon with unread badge
+            BadgedBox(
+                badge = {
+                    if (notifState.unreadCount > 0) {
+                        Badge {
+                            Text(
+                                if (notifState.unreadCount > 9) "9+" else notifState.unreadCount.toString()
+                            )
+                        }
+                    }
+                }
+            ) {
+                IconButton(onClick = { navigator.push(NotificationsScreen) }) {
+                    Icon(Icons.Default.Notifications, contentDescription = "Powiadomienia")
+                }
+            }
+        }
+
+        // ── Map-only overlays ────────────────────────────────────────────────
+        if (state.isMapView) {
+            // Right-side FABs: bottom-right, stacked upward: [⚙ filter] → [📍 locate] → [+ add]
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 16.dp, end = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Filter
+                Box(
+                    modifier = Modifier.size(46.dp)
+                        .shadow(8.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(if (activeFilterCount > 0) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                        .clickable { onEvent(ExploreEvent.ShowFilterSheet) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("⚙", fontSize = 20.sp)
+                    if (activeFilterCount > 0) {
+                        Box(
+                            modifier = Modifier.align(Alignment.TopEnd).size(14.dp).clip(CircleShape).background(ProCircuit.Bg),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("$activeFilterCount", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 8.sp, color = ProCircuit.Lime)
+                        }
+                    }
+                }
+                // Navigate / center on me
+                Box(
+                    modifier = Modifier.size(46.dp)
+                        .shadow(8.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(ProCircuit.SurfaceLow)
+                        .clickable { /* TODO: center map on user location */ },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("📍", fontSize = 20.sp)
+                }
+                // Add event
+                Box(
+                    modifier = Modifier.size(52.dp)
+                        .shadow(10.dp, RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(ProCircuit.Tertiary)
+                        .clickable { onEvent(ExploreEvent.ShowPostSessionDialog) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 26.sp, color = ProCircuit.SurfaceLow)
+                }
+            }
+
+            // Bottom-center — Lista toggle
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
+                    .onboardingAnchor(OnboardingAnchor.LISTA_BUTTON)
+                    .shadow(10.dp, RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(ProCircuit.Lime)
+                    .clickable { onEvent(ExploreEvent.ToggleView) }
+                    .padding(horizontal = 22.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("≡", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 16.sp, color = ProCircuit.SurfaceLow)
+                    Text("LISTA", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 1.5.sp, color = ProCircuit.SurfaceLow)
+                }
             }
         }
     }
@@ -128,7 +304,7 @@ private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
         if (court != null) {
             ModalBottomSheet(
                 onDismissRequest = { onEvent(ExploreEvent.DismissCourt) },
-                sheetState = sheetState,
+                sheetState = courtSheetState,
                 containerColor = ProCircuit.SurfaceLow,
                 dragHandle = {
                     Box(modifier = Modifier.padding(vertical = 12.dp).size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(ProCircuit.Outline))
@@ -140,15 +316,30 @@ private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
                     myUserId = state.myUserId,
                     onJoin = { onEvent(ExploreEvent.JoinSession(it)) },
                     onCancelMySession = { onEvent(ExploreEvent.CancelMySession(it)) },
-                    onOpenPlaytomic = { uriHandler.openUri(it) }
+                    onOpenPlaytomic = { uriHandler.openUri(it) },
+                    onWantToPlay = { onEvent(ExploreEvent.WantToPlayAtCourt(court.id)) }
                 )
             }
         }
     }
 
+    // Filter sheet
+    if (state.showFilterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { onEvent(ExploreEvent.DismissFilterSheet) },
+            sheetState = filterSheetState,
+            containerColor = ProCircuit.SurfaceLow,
+            dragHandle = {
+                Box(modifier = Modifier.padding(vertical = 12.dp).size(width = 40.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(ProCircuit.Outline))
+            }
+        ) {
+            FilterSheet(state = state, onEvent = onEvent)
+        }
+    }
+
     // Post session dialog
     if (state.postSessionDialog != null) {
-        PostSessionDialog(dialogState = state.postSessionDialog, courts = state.courts, onEvent = onEvent)
+        PostSessionDialog(dialogState = state.postSessionDialog, courts = state.courts, myElo = state.myElo, onEvent = onEvent)
     }
 
     // Challenge dialog
@@ -157,16 +348,105 @@ private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
     }
 }
 
+// ── Filter Sheet ────────────────────────────────────────────────────────────────
+
 @Composable
-private fun SportFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh.copy(alpha = 0.92f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+private fun FilterSheet(state: ExploreState, onEvent: (ExploreEvent) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+            .padding(horizontal = 24.dp).padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 0.5.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("FILTRUJ SESJE", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.sp, color = ProCircuit.OnBg, modifier = Modifier.weight(1f))
+            // Clear all
+            if (state.sportFilter != null || state.matchTypeFilter != null ||
+                state.sessionTimeFilter != SessionTimeFilter.ANY || state.eloFilterEnabled) {
+                Box(
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(ProCircuit.SurfaceHigh)
+                        .clickable {
+                            onEvent(ExploreEvent.SetSportFilter(null))
+                            onEvent(ExploreEvent.SetMatchTypeFilter(null))
+                            onEvent(ExploreEvent.SetSessionTimeFilter(SessionTimeFilter.ANY))
+                            onEvent(ExploreEvent.SetEloFilter(false))
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("Wyczyść", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 0.5.sp, color = ProCircuit.OnSurface)
+                }
+            }
+        }
+
+        // Sport
+        FilterSection(label = "SPORT") {
+            listOf(null to "Wszystkie", Sport.TENNIS to "🎾 Tenis", Sport.PADEL to "🏸 Padel").forEach { (sport, label) ->
+                val selected = state.sportFilter == sport
+                FilterChip(label = label, selected = selected) { onEvent(ExploreEvent.SetSportFilter(sport)) }
+            }
+        }
+
+        // Match type
+        FilterSection(label = "TYP MECZU") {
+            listOf(null to "Obydwa", MatchType.CASUAL to "CASUAL", MatchType.RANKED to "RANKED").forEach { (type, label) ->
+                val selected = state.matchTypeFilter == type
+                FilterChip(label = label, selected = selected) { onEvent(ExploreEvent.SetMatchTypeFilter(type)) }
+            }
+        }
+
+        // Time
+        FilterSection(label = "CZAS") {
+            listOf(
+                SessionTimeFilter.ANY to "Dowolny",
+                SessionTimeFilter.TODAY to "Dzisiaj",
+                SessionTimeFilter.THIS_WEEK to "Ten tydzień"
+            ).forEach { (filter, label) ->
+                val selected = state.sessionTimeFilter == filter
+                FilterChip(label = label, selected = selected) { onEvent(ExploreEvent.SetSessionTimeFilter(filter)) }
+            }
+        }
+
+        // ELO range (suggested extra filter)
+        FilterSection(label = "POZIOM ELO") {
+            val selected = state.eloFilterEnabled
+            Box(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .background(if (selected) ProCircuit.Lime.copy(alpha = 0.12f) else ProCircuit.SurfaceHigh)
+                    .clickable { onEvent(ExploreEvent.SetEloFilter(!selected)) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("W moim poziomie", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (selected) ProCircuit.Lime else ProCircuit.OnBg)
+                        Text("ELO ${state.myElo - 100} – ${state.myElo + 100}", fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface)
+                    }
+                    if (selected) {
+                        Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(ProCircuit.Lime), contentAlignment = Alignment.Center) {
+                            Text("✓", fontSize = 11.sp, color = ProCircuit.Bg)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterSection(label: String, content: @Composable RowScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.Outline)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+    }
+}
+
+@Composable
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.clip(RoundedCornerShape(10.dp))
+            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 0.5.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
     }
 }
 
@@ -179,7 +459,8 @@ private fun CourtBottomSheet(
     myUserId: String,
     onJoin: (String) -> Unit,
     onCancelMySession: (String) -> Unit,
-    onOpenPlaytomic: (String) -> Unit
+    onOpenPlaytomic: (String) -> Unit,
+    onWantToPlay: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().navigationBarsPadding()
@@ -203,8 +484,19 @@ private fun CourtBottomSheet(
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(ProCircuit.Lime)
+                .clickable { onWantToPlay() }
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("+ Chcę zagrać", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, letterSpacing = 0.3.sp, color = ProCircuit.Bg)
+        }
+
         if (court.playtomicUrl != null) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                     .background(ProCircuit.SurfaceHigh)
@@ -250,11 +542,23 @@ private fun CourtBottomSheet(
 
 @Composable
 private fun SessionCard(session: OpenSession, isMySession: Boolean, onJoin: () -> Unit, onCancel: () -> Unit) {
+    val navigator = LocalNavigator.currentOrThrow
     val timeStr = remember(session.startsAt) { formatMillis(session.startsAt) }
     val sportLabel = when (session.sport) { Sport.TENNIS -> "🎾 Tenis"; Sport.PADEL -> "🏸 Padel"; else -> session.sport.name }
 
+    val sessionUser = remember(session) {
+        User(
+            id = session.userId, email = "", displayName = session.userName,
+            avatarUrl = session.userAvatarUrl, isCoach = false, city = "",
+            eloRating = session.userElo, isMaster = false, masterFee = null,
+            subscriptionActive = false, sports = listOf(session.sport)
+        )
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ProCircuit.SurfaceHigh).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ProCircuit.SurfaceHigh)
+            .clickable(enabled = !isMySession) { navigator.push(PlayerProfileScreen(sessionUser)) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(ProCircuit.Lime.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
@@ -262,7 +566,15 @@ private fun SessionCard(session: OpenSession, isMySession: Boolean, onJoin: () -
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(session.userName, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = ProCircuit.OnBg)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(session.userName, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = ProCircuit.OnBg)
+                val typeColor = if (session.matchType == MatchType.RANKED) ProCircuit.Tertiary else ProCircuit.OnSurface.copy(alpha = 0.6f)
+                Box(
+                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(typeColor.copy(alpha = 0.15f)).padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text(session.matchType.name, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 8.sp, letterSpacing = 0.5.sp, color = typeColor)
+                }
+            }
             Text("$timeStr · $sportLabel · ELO ${session.userElo}", fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface)
         }
         Spacer(Modifier.width(8.dp))
@@ -354,24 +666,14 @@ private fun PostSessionDialog(dialogState: PostSessionDialogState, courts: List<
                         }
                     }
                 }
-                // Time slots
+                // Date + Time picker
                 Column {
                     Text("KIEDY", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.Outline)
                     Spacer(Modifier.height(6.dp))
-                    val slots = remember { generateTimeSlots() }
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        slots.forEach { (label, millis) ->
-                            val selected = dialogState.startsAtMillis == millis
-                            Box(
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                                    .background(if (selected) ProCircuit.Lime.copy(alpha = 0.15f) else ProCircuit.SurfaceHigh)
-                                    .clickable { onEvent(ExploreEvent.PostSessionTimeSelected(millis)) }
-                                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                            ) {
-                                Text(label, fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = if (selected) ProCircuit.Lime else ProCircuit.OnBg)
-                            }
-                        }
-                    }
+                    DateTimePickerRow(
+                        selectedMillis = if (dialogState.startsAtMillis != 0L) dialogState.startsAtMillis else null,
+                        onMillisSelected = { millis -> onEvent(ExploreEvent.PostSessionTimeSelected(millis ?: 0L)) }
+                    )
                 }
             }
         },
@@ -394,7 +696,6 @@ private fun PostSessionDialog(dialogState: PostSessionDialogState, courts: List<
 @Composable
 private fun ChallengeDialog(dialogState: ChallengeDialogState, onEvent: (ExploreEvent) -> Unit) {
     val availableSports = dialogState.availableSports.ifEmpty { listOf(Sport.TENNIS) }
-    val timeSlots = remember { generateTimeSlots() }
 
     AlertDialog(
         onDismissRequest = { onEvent(ExploreEvent.DismissChallengeDialog) },
@@ -449,32 +750,11 @@ private fun ChallengeDialog(dialogState: ChallengeDialogState, onEvent: (Explore
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
-                // Time slots
-                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        Box(
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                                .background(ProCircuit.SurfaceHigh)
-                                .clickable { onEvent(ExploreEvent.ChallengeTimeSelected(null)) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text("Brak", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp, color = if (dialogState.startsAtMillis == null) ProCircuit.Lime else ProCircuit.OnSurface)
-                        }
-                    }
-                    items(timeSlots) { (label, millis) ->
-                        val selected = dialogState.startsAtMillis == millis
-                        Box(
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                                .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
-                                .clickable { onEvent(ExploreEvent.ChallengeTimeSelected(millis)) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
-                        }
-                    }
-                }
+                // Date + Time picker
+                DateTimePickerRow(
+                    selectedMillis = dialogState.startsAtMillis,
+                    onMillisSelected = { onEvent(ExploreEvent.ChallengeTimeSelected(it)) }
+                )
             }
         },
         confirmButton = {
@@ -495,60 +775,194 @@ private fun ChallengeDialog(dialogState: ChallengeDialogState, onEvent: (Explore
 private fun PlayerListView(state: ExploreState, onEvent: (ExploreEvent) -> Unit) {
     val navigator = LocalNavigator.currentOrThrow
     var selectedTab by remember { mutableStateOf(0) }
-    val activeSessions = state.sessions.filter { it.status.name == "OPEN" }
+    val now = remember { Clock.System.now().toEpochMilliseconds() }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("EXPLORE", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
-                if (state.nearbyPlayers.isNotEmpty())
-                    Text("${state.nearbyPlayers.size} GRACZY W POBLIŻU", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.Lime)
-            }
-            Box(
-                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(ProCircuit.SurfaceHigh).clickable { onEvent(ExploreEvent.ToggleView) }.padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text("🗺️ Mapa", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, color = ProCircuit.OnSurface)
-            }
-            Spacer(Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(ProCircuit.Lime)
-                    .clickable { onEvent(ExploreEvent.ShowPostSessionDialog) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text("+ Chcę zagrać", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.Bg)
-            }
-        }
+    // Local filters for list tabs (independent from map filters)
+    var playerSportFilter  by remember { mutableStateOf<Sport?>(null) }
+    var sessionSportFilter by remember { mutableStateOf<Sport?>(null) }
+    var sessionTypeFilter  by remember { mutableStateOf<MatchType?>(null) }
 
-        // Tabs
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(12.dp)).background(ProCircuit.SurfaceHigh),
-        ) {
-            listOf("GRACZE" to state.nearbyPlayers.size, "OPEN PLAY" to activeSessions.size).forEachIndexed { idx, (label, count) ->
-                val selected = selectedTab == idx
-                Box(
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                        .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
-                        .clickable { selectedTab = idx }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
+    val activeSessions = state.sessions.filter { s ->
+        s.status.name == "OPEN" &&
+        (sessionSportFilter == null || s.sport == sessionSportFilter) &&
+        (sessionTypeFilter == null || s.matchType == sessionTypeFilter) &&
+        when (state.sessionTimeFilter) {
+            SessionTimeFilter.ANY -> true
+            SessionTimeFilter.TODAY -> s.startsAt <= now + 24 * 3600_000L
+            SessionTimeFilter.THIS_WEEK -> s.startsAt <= now + 7 * 24 * 3600_000L
+        } &&
+        (!state.eloFilterEnabled || s.userElo in (state.myElo - 100)..(state.myElo + 100))
+    }
+
+    // Players filtered by sport then sorted: closest ELO first, then alphabetical
+    val filteredPlayers = state.nearbyPlayers
+        .filter { playerSportFilter == null || playerSportFilter in it.sports }
+        .sortedWith(compareBy(
+            { kotlin.math.abs(it.eloRating - state.myElo) },
+            { it.displayName.lowercase() }
+        ))
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Space for the persistent top bar rendered above this overlay
+            Spacer(Modifier.statusBarsPadding().height(56.dp))
+
+            // Player count sub-label
+            if (state.nearbyPlayers.isNotEmpty())
+                Text(
+                    "${state.nearbyPlayers.size} GRACZY W POBLIŻU",
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.Lime,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
+
+            // Tabs
+            Row(
+                modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(12.dp)).background(ProCircuit.SurfaceHigh),
+            ) {
+                listOf("GRACZE" to state.nearbyPlayers.size, "OPEN PLAY" to activeSessions.size).forEachIndexed { idx, (label, count) ->
+                    val selected = selectedTab == idx
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+                            .clickable { selectedTab = idx }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                                fontSize = 10.sp, letterSpacing = 1.sp,
+                                color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
+                            if (count > 0) {
+                                Box(
+                                    modifier = Modifier.size(18.dp).clip(CircleShape)
+                                        .background(if (selected) ProCircuit.Bg.copy(alpha = 0.25f) else ProCircuit.Lime),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("$count", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                                        fontSize = 9.sp, color = ProCircuit.Bg)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            if (state.isLoading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = ProCircuit.Lime) }
+                return@Column
+            }
+
+            if (selectedTab == 0) {
+                LazyColumn(
+                    modifier = Modifier.onboardingAnchor(OnboardingAnchor.SESSIONS_LIST),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 10.sp, letterSpacing = 1.sp,
-                            color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
-                        if (count > 0) {
-                            Box(
-                                modifier = Modifier.size(18.dp).clip(CircleShape)
-                                    .background(if (selected) ProCircuit.Bg.copy(alpha = 0.25f) else ProCircuit.Lime),
-                                contentAlignment = Alignment.Center
+                    item {
+                        ListFilterChips(
+                            selectedSport = playerSportFilter,
+                            onSportSelected = { playerSportFilter = it },
+                            types = emptyList(),
+                            selectedType = null,
+                            onTypeSelected = {}
+                        )
+                    }
+                    if (filteredPlayers.isEmpty()) {
+                        item {
+                            Box(Modifier.fillParentMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
+                                Text("Brak graczy dla wybranych filtrów", fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface)
+                            }
+                        }
+                    } else {
+                        items(filteredPlayers) { player ->
+                            PlayerCard(
+                                player = player,
+                                myElo = state.myElo,
+                                isPending = player.id in state.pendingChallengeIds,
+                                onCardClick = { navigator.push(PlayerProfileScreen(player)) },
+                                onChallengeClick = { onEvent(ExploreEvent.ShowChallengeDialog(player.id)) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                val allOpenSessions = state.sessions.filter { it.status.name == "OPEN" }
+                val grouped = activeSessions.groupBy { it.courtName ?: "Inne" }
+                val filtersActive = sessionSportFilter != null || sessionTypeFilter != null
+
+                LazyColumn(
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        ListFilterChips(
+                            selectedSport = sessionSportFilter,
+                            onSportSelected = { sessionSportFilter = it },
+                            types = listOf(MatchType.CASUAL, MatchType.RANKED, MatchType.MASTER),
+                            selectedType = sessionTypeFilter,
+                            onTypeSelected = { sessionTypeFilter = it }
+                        )
+                    }
+
+                    if (grouped.isEmpty()) {
+                        item {
+                            Column(
+                                modifier = Modifier.fillParentMaxWidth().padding(top = 40.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text("$count", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                    fontSize = 9.sp, color = if (selected) ProCircuit.Bg else ProCircuit.Bg)
+                                if (filtersActive) {
+                                    Text("Brak sesji dla wybranych filtrów",
+                                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp, color = ProCircuit.OnBg)
+                                    Box(
+                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                            .background(ProCircuit.SurfaceLow)
+                                            .clickable { sessionSportFilter = null; sessionTypeFilter = null }
+                                            .padding(horizontal = 20.dp, vertical = 10.dp)
+                                    ) {
+                                        Text("Wyczyść filtry", fontFamily = AppFontFamily,
+                                            fontWeight = FontWeight.ExtraBold, fontSize = 11.sp,
+                                            letterSpacing = 0.5.sp, color = ProCircuit.Lime)
+                                    }
+                                } else {
+                                    Text("Brak aktywnych sesji",
+                                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp, color = ProCircuit.OnBg)
+                                    Text("Bądź pierwszy i zaproponuj grę",
+                                        fontFamily = AppBodyFontFamily, fontSize = 13.sp,
+                                        color = ProCircuit.OnSurface)
+                                    Box(
+                                        modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                            .background(ProCircuit.Lime)
+                                            .clickable { onEvent(ExploreEvent.ShowPostSessionDialog) }
+                                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                                    ) {
+                                        Text("+ Chcę zagrać", fontFamily = AppFontFamily,
+                                            fontWeight = FontWeight.Black, fontSize = 13.sp,
+                                            color = ProCircuit.Bg)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        grouped.forEach { (courtName, sessions) ->
+                            item {
+                                Text(courtName.uppercase(), fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.ExtraBold, fontSize = 10.sp,
+                                    letterSpacing = 2.sp, color = ProCircuit.Outline,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                            }
+                            items(sessions) { session ->
+                                SessionCard(
+                                    session = session,
+                                    isMySession = session.userId == state.myUserId,
+                                    onJoin = { onEvent(ExploreEvent.JoinSession(session.id)) },
+                                    onCancel = { onEvent(ExploreEvent.CancelMySession(session.id)) }
+                                )
                             }
                         }
                     }
@@ -556,50 +970,93 @@ private fun PlayerListView(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        if (state.isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = ProCircuit.Lime) }
-            return@Column
+        // Mapa pill — bottom center, mirrors "Lista" on map view
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .shadow(10.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp))
+                .background(ProCircuit.Lime)
+                .clickable { onEvent(ExploreEvent.ToggleView) }
+                .padding(horizontal = 22.dp, vertical = 12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("🗺️", fontSize = 16.sp)
+                Text("MAPA", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 1.5.sp, color = ProCircuit.SurfaceLow)
+            }
         }
 
-        if (selectedTab == 0) {
-            LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(state.nearbyPlayers) { player ->
-                    PlayerCard(
-                        player = player,
-                        myElo = state.myElo,
-                        isPending = player.id in state.pendingChallengeIds,
-                        onCardClick = { navigator.push(PlayerProfileScreen(player)) },
-                        onChallengeClick = { onEvent(ExploreEvent.ShowChallengeDialog(player.id)) }
-                    )
+        // Open Play tab — "+" FAB bottom right
+        if (selectedTab == 1) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 16.dp, end = 14.dp)
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.Lime)
+                    .clickable { onEvent(ExploreEvent.ShowPostSessionDialog) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("+", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 24.sp, color = ProCircuit.Bg)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListFilterChips(
+    selectedSport: Sport?,
+    onSportSelected: (Sport?) -> Unit,
+    types: List<MatchType>,
+    selectedType: MatchType?,
+    onTypeSelected: (MatchType?) -> Unit
+) {
+    val sportOptions = listOf(null to "Wszystkie", Sport.TENNIS to "🎾 Tennis", Sport.PADEL to "🏸 Padel")
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 4.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(sportOptions) { (sport, label) ->
+                val selected = selectedSport == sport
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                        .clickable { onSportSelected(sport) }
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                    Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
                 }
             }
-        } else {
-            val grouped = activeSessions.groupBy { it.courtName ?: "Inne" }
-            if (grouped.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Brak aktywnych sesji", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = ProCircuit.OnBg)
-                        Text("Bądź pierwszy — kliknij \"+ Chcę zagrać\"", fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface)
+        }
+        if (types.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    val selected = selectedType == null
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                            .clickable { onTypeSelected(null) }
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                    ) {
+                        Text("Wszystkie", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
                     }
                 }
-            } else {
-                LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    grouped.forEach { (courtName, sessions) ->
-                        item {
-                            Text(courtName.uppercase(), fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.Outline,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-                        }
-                        items(sessions) { session ->
-                            SessionCard(
-                                session = session,
-                                isMySession = session.userId == state.myUserId,
-                                onJoin = { onEvent(ExploreEvent.JoinSession(session.id)) },
-                                onCancel = { onEvent(ExploreEvent.CancelMySession(session.id)) }
-                            )
-                        }
+                items(types) { type ->
+                    val selected = selectedType == type
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                            .clickable { onTypeSelected(type) }
+                            .padding(horizontal = 14.dp, vertical = 7.dp)
+                    ) {
+                        Text(type.name.lowercase().replaceFirstChar { it.uppercase() },
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
                     }
                 }
             }
@@ -664,13 +1121,3 @@ private fun formatMillis(millis: Long): String {
     }.getOrDefault("?")
 }
 
-private fun monthPl(m: Int) = arrayOf("", "sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru")[m]
-
-private fun generateTimeSlots(): List<Pair<String, Long>> {
-    val oneHour = 3_600_000L
-    val rounded = ((Clock.System.now().toEpochMilliseconds() / oneHour) + 1) * oneHour
-    return (0 until 6).map { i ->
-        val millis = rounded + i * 2 * oneHour
-        Pair(formatMillis(millis), millis)
-    }
-}

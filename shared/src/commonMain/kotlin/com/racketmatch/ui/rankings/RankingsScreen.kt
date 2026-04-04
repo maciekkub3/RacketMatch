@@ -23,10 +23,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
+import com.racketmatch.ui.players.PlayerProfileScreen
 import com.racketmatch.presentation.viewmodel.RankingsState
 import com.racketmatch.presentation.viewmodel.RankingsViewModel
+import com.racketmatch.ui.onboarding.OnboardingAnchor
+import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -42,12 +47,18 @@ object RankingsScreen : Screen {
         var activeTab by remember { mutableStateOf(RankingTab.MASTERS) }
         val viewModel: RankingsViewModel = koinViewModel()
         val rankingsState by viewModel.stateFlow.collectAsState()
+        val navigator = LocalNavigator.currentOrThrow
 
         Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+            LazyColumn(modifier = Modifier.fillMaxSize().onboardingAnchor(OnboardingAnchor.RANKINGS_TABLE), contentPadding = PaddingValues(bottom = 24.dp)) {
 
                 item {
-                    Spacer(Modifier.height(16.dp))
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 12.dp)) {
+                        Text("Rankings", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
+                        Text("Top players in your region.",
+                            fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface)
+                    }
                     val query = (rankingsState as? RankingsState.Content)?.searchQuery ?: ""
                     SearchBar(query = query, onQueryChange = { viewModel.onSearch(it) })
                     Spacer(Modifier.height(16.dp))
@@ -72,7 +83,9 @@ object RankingsScreen : Screen {
                                         modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        s.masters.forEachIndexed { i, master -> MasterCard(master, i) }
+                                        s.masters.forEachIndexed { i, master ->
+                                            MasterCard(master, i, onClick = { navigator.push(PlayerProfileScreen(master)) })
+                                        }
                                     }
                                 }
                             }
@@ -102,7 +115,9 @@ object RankingsScreen : Screen {
                     RankingsState.Error -> item {
                         Text("Nie można załadować rankingu", color = ProCircuit.OnSurface, modifier = Modifier.padding(24.dp))
                     }
-                    is RankingsState.Content -> item { RealRankingTable(s.filteredPlayers, s.myId, s.sportFilter) }
+                    is RankingsState.Content -> item {
+                        RealRankingTable(s.filteredPlayers, s.myId, s.sportFilter, onPlayerClick = { navigator.push(PlayerProfileScreen(it)) })
+                    }
                 }
             }
         }
@@ -179,12 +194,12 @@ private fun SegmentedControl(active: RankingTab, onSelect: (RankingTab) -> Unit)
 private fun SegmentButton(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     Box(
         modifier = modifier.clip(CircleShape)
-            .background(if (selected) ProCircuit.Lime else Color.Transparent)
+            .background(if (selected) ProCircuit.Tertiary else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = label, fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 2.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
+        Text(text = label, fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 2.sp, color = if (selected) ProCircuit.SurfaceLow else ProCircuit.OnSurface)
     }
 }
 
@@ -197,19 +212,20 @@ private fun SectionHeader(label: String, labelColor: Color, title: String) {
 }
 
 private val MASTER_PALETTES = listOf(
-    Pair(ProCircuit.Lime,                listOf(Color(0xFF1A2400), Color(0xFF0C0E0F))),
-    Pair(ProCircuit.Tertiary,            listOf(Color(0xFF221A00), Color(0xFF0C0E0F))),
-    Pair(Color(0xFF9FC8FF),              listOf(Color(0xFF001830), Color(0xFF0C0E0F))),
-    Pair(Color(0xFFFF7351),              listOf(Color(0xFF2A1000), Color(0xFF0C0E0F))),
+    Pair(ProCircuit.Lime,     listOf(Color(0xFF0E2218), Color(0xFF061009))),
+    Pair(ProCircuit.Tertiary, listOf(Color(0xFF1E1030), Color(0xFF0D0818))),
+    Pair(Color(0xFF9FC8FF),   listOf(Color(0xFF0A1828), Color(0xFF050C14))),
+    Pair(Color(0xFFFF9A6C),   listOf(Color(0xFF2A1208), Color(0xFF120804))),
 )
 
 @Composable
-private fun MasterCard(master: com.racketmatch.domain.model.User, index: Int) {
+private fun MasterCard(master: com.racketmatch.domain.model.User, index: Int, onClick: () -> Unit) {
     val (accentColor, bgGradient) = MASTER_PALETTES[index % MASTER_PALETTES.size]
     Box(
         modifier = Modifier.width(260.dp).height(360.dp)
             .clip(RoundedCornerShape(28.dp))
             .background(Brush.verticalGradient(bgGradient))
+            .clickable { onClick() }
     ) {
         Text(
             text = master.displayName.take(1),
@@ -253,7 +269,7 @@ private fun MasterCard(master: com.racketmatch.domain.model.User, index: Int) {
 
 
 @Composable
-private fun RealRankingTable(players: List<User>, myId: String, sportFilter: Sport?) {
+private fun RealRankingTable(players: List<User>, myId: String, sportFilter: Sport?, onPlayerClick: (User) -> Unit) {
     val showWinRate = players.any { it.wins + it.losses > 0 }
     Column(
         modifier = Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(24.dp))
@@ -281,6 +297,7 @@ private fun RealRankingTable(players: List<User>, myId: String, sportFilter: Spo
                         index == 0 -> ProCircuit.SurfaceHigh
                         else       -> Color.Transparent
                     })
+                    .then(if (!isMe) Modifier.clickable { onPlayerClick(player) } else Modifier)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

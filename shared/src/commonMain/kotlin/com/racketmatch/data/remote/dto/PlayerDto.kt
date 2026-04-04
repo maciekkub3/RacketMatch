@@ -16,6 +16,7 @@ data class PlayerDto(
     val subscriptionActive: Boolean = true,
     val sports: List<String> = emptyList(),
     val bio: String? = null,
+    val dateOfBirth: String? = null,
     val wins: Int = 0,
     val losses: Int = 0
 )
@@ -33,6 +34,7 @@ fun PlayerDto.toDomain() = com.racketmatch.domain.model.User(
     subscriptionActive = subscriptionActive,
     sports = sports.mapNotNull { runCatching { Sport.valueOf(it.uppercase()) }.getOrNull() },
     bio = bio,
+    dateOfBirth = dateOfBirth,
     wins = wins,
     losses = losses
 )

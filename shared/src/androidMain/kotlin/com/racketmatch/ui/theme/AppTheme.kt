@@ -4,7 +4,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -12,43 +12,43 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val ProCircuitColors = darkColorScheme(
-    primary                = Color(0xFFF4FFC6),
-    onPrimary              = Color(0xFF546600),
-    primaryContainer       = Color(0xFFD1FC00),
-    onPrimaryContainer     = Color(0xFF4C5D00),
-    secondary              = Color(0xFFE1E3E5),
-    onSecondary            = Color(0xFF4F5254),
-    secondaryContainer     = Color(0xFF444749),
-    onSecondaryContainer   = Color(0xFFCFD0D3),
-    tertiary               = Color(0xFFFFEB9C),
-    onTertiary             = Color(0xFF665600),
-    tertiaryContainer      = Color(0xFFFCDC43),
-    onTertiaryContainer    = Color(0xFF5C4E00),
-    background             = Color(0xFF0C0E0F),
-    onBackground           = Color(0xFFF6F6F7),
-    surface                = Color(0xFF0C0E0F),
-    onSurface              = Color(0xFFF6F6F7),
-    surfaceVariant         = Color(0xFF232628),
-    onSurfaceVariant       = Color(0xFFAAABAC),
-    surfaceTint            = Color(0xFFF4FFC6),
-    inverseSurface         = Color(0xFFF9F9FA),
-    inverseOnSurface       = Color(0xFF545556),
-    inversePrimary         = Color(0xFF546600),
-    outline                = Color(0xFF747577),
-    outlineVariant         = Color(0xFF464849),
-    error                  = Color(0xFFFF7351),
-    onError                = Color(0xFF450900),
-    errorContainer         = Color(0xFFB92902),
-    onErrorContainer       = Color(0xFFFFD2C8),
-    surfaceContainerLowest = Color(0xFF000000),
-    surfaceContainerLow    = Color(0xFF111415),
-    surfaceContainer       = Color(0xFF171A1B),
-    surfaceContainerHigh   = Color(0xFF1D2021),
-    surfaceContainerHighest= Color(0xFF232628),
+private val WimbledonColors = lightColorScheme(
+    primary                = Color(0xFF006633),
+    onPrimary              = Color(0xFFF7F5F0),
+    primaryContainer       = Color(0xFFCCE8D9),
+    onPrimaryContainer     = Color(0xFF003D1F),
+    secondary              = Color(0xFF6B2D82),
+    onSecondary            = Color(0xFFFFFFFF),
+    secondaryContainer     = Color(0xFFE8D5F0),
+    onSecondaryContainer   = Color(0xFF3D1650),
+    tertiary               = Color(0xFFC9A84C),
+    onTertiary             = Color(0xFFFFFFFF),
+    tertiaryContainer      = Color(0xFFF5E6C4),
+    onTertiaryContainer    = Color(0xFF5C4200),
+    background             = Color(0xFFDFDCD6),
+    onBackground           = Color(0xFF1A1918),
+    surface                = Color(0xFFFFFFFF),
+    onSurface              = Color(0xFF1A1918),
+    surfaceVariant         = Color(0xFFE6E3DD),
+    onSurfaceVariant       = Color(0xFF6B6865),
+    surfaceTint            = Color(0xFF006633),
+    inverseSurface         = Color(0xFF1A1918),
+    inverseOnSurface       = Color(0xFFF7F5F0),
+    inversePrimary         = Color(0xFF80C89F),
+    outline                = Color(0xFFC5C2BC),
+    outlineVariant         = Color(0xFFDDDAD5),
+    error                  = Color(0xFFC0392B),
+    onError                = Color(0xFFFFFFFF),
+    errorContainer         = Color(0xFFFFDAD6),
+    onErrorContainer       = Color(0xFF410002),
+    surfaceContainerLowest = Color(0xFFDFDCD6),
+    surfaceContainerLow    = Color(0xFFFFFFFF),
+    surfaceContainer       = Color(0xFFF2EFE9),
+    surfaceContainerHigh   = Color(0xFFE6E3DD),
+    surfaceContainerHighest= Color(0xFFDAD7D1),
 )
 
-private val ProCircuitTypography = Typography(
+private val WimbledonTypography = Typography(
     displayLarge  = TextStyle(fontFamily = AppFontFamily, fontWeight = FontWeight.Black,     fontSize = 57.sp, lineHeight = 64.sp,  letterSpacing = (-0.25).sp),
     displayMedium = TextStyle(fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 45.sp, lineHeight = 52.sp),
     displaySmall  = TextStyle(fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,      fontSize = 36.sp, lineHeight = 44.sp),
@@ -66,20 +66,21 @@ private val ProCircuitTypography = Typography(
     labelSmall    = TextStyle(fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Bold,     fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 1.sp),
 )
 
-private val ProCircuitShapes = Shapes(
+// Sharper corners throughout
+private val WimbledonShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
-    small      = RoundedCornerShape(8.dp),
-    medium     = RoundedCornerShape(12.dp),
-    large      = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    small      = RoundedCornerShape(6.dp),
+    medium     = RoundedCornerShape(8.dp),
+    large      = RoundedCornerShape(12.dp),
+    extraLarge = RoundedCornerShape(16.dp),
 )
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = ProCircuitColors,
-        typography  = ProCircuitTypography,
-        shapes      = ProCircuitShapes,
+        colorScheme = WimbledonColors,
+        typography  = WimbledonTypography,
+        shapes      = WimbledonShapes,
         content     = content
     )
 }

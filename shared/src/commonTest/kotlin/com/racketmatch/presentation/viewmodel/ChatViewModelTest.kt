@@ -87,7 +87,7 @@ class ChatViewModelTest {
         viewModel.effectFlow.test {
             viewModel.onEvent(ChatEvent.SendMessage("test"))
             dispatcher.scheduler.advanceUntilIdle()
-            awaitItem() shouldBe ChatEffect.ShowError("Send failed")
+            awaitItem() shouldBe ChatEffect.ShowError("Coś poszło nie tak. Spróbuj ponownie.")
         }
     }
 }

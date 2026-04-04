@@ -86,7 +86,7 @@ class CoachDetailViewModelTest {
                 CoachDetailEvent.BookSlot(testSlot.startsAt, testSlot.endsAt)
             )
             dispatcher.scheduler.advanceUntilIdle()
-            awaitItem() shouldBe CoachDetailEffect.ShowError("Slot taken")
+            awaitItem() shouldBe CoachDetailEffect.ShowError("Coś poszło nie tak. Spróbuj ponownie.")
         }
     }
 }

@@ -19,11 +19,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
 object HttpClientFactory {
-    // 10.0.2.2 = localhost from Android emulator perspective
-    // Change to your server URL when backend is ready
-    private const val BASE_URL = "http://10.0.2.2:8080/"
-
-    fun create(tokenStorage: TokenStorage): HttpClient {
+    fun create(tokenStorage: TokenStorage, baseUrl: String): HttpClient {
         val client = HttpClient {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
@@ -39,8 +35,9 @@ object HttpClientFactory {
                 }
             }
             install(DefaultRequest) {
-                url(BASE_URL)
+                url(baseUrl)
                 contentType(ContentType.Application.Json)
+                headers.append("ngrok-skip-browser-warning", "true")
             }
         }
         // Inject the current token on every request — reads fresh from storage, no caching.

@@ -1,7 +1,7 @@
 package com.racketmatch.data.remote.api
 
-import com.racketmatch.domain.model.Conversation
-import com.racketmatch.domain.model.DirectMessage
+import com.racketmatch.data.remote.dto.ConversationDto
+import com.racketmatch.data.remote.dto.DirectMessageDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -22,13 +22,13 @@ data class SendDmRequestDto(val text: String)
 
 class DmApi(private val client: HttpClient) {
 
-    suspend fun getConversations(): List<Conversation> =
+    suspend fun getConversations(): List<ConversationDto> =
         client.get("api/dm/conversations").body()
 
-    suspend fun getMessages(conversationId: String): List<DirectMessage> =
+    suspend fun getMessages(conversationId: String): List<DirectMessageDto> =
         client.get("api/dm/$conversationId/messages").body()
 
-    suspend fun sendMessage(conversationId: String, text: String): DirectMessage =
+    suspend fun sendMessage(conversationId: String, text: String): DirectMessageDto =
         client.post("api/dm/$conversationId") {
             setBody(SendDmRequestDto(text))
         }.body()
@@ -37,11 +37,11 @@ class DmApi(private val client: HttpClient) {
         client.put("api/dm/$conversationId/read")
     }
 
-    fun observeMessages(conversationId: String): Flow<DirectMessage> = flow {
+    fun observeMessages(conversationId: String): Flow<DirectMessageDto> = flow {
         val session: WebSocketSession = client.webSocketSession("ws/dm/$conversationId")
         for (frame in session.incoming) {
             if (frame is Frame.Text) {
-                val msg = Json.decodeFromString<DirectMessage>(frame.readText())
+                val msg = Json.decodeFromString<DirectMessageDto>(frame.readText())
                 emit(msg)
             }
         }
