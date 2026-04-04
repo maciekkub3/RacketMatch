@@ -116,9 +116,6 @@ private fun SettingsContent(
             .padding(top = topPadding, start = 24.dp, end = 24.dp)
     ) {
         Spacer(Modifier.height(24.dp))
-        Text("SETTINGS", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-            fontSize = 28.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
-        Spacer(Modifier.height(28.dp))
 
         // Avatar preview + URL field
         AvatarSection(

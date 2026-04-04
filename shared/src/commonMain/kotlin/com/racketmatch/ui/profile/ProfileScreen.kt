@@ -59,15 +59,13 @@ object ProfileScreen : Screen {
             }
         }
 
-        val displayName = (state as? ProfileState.Content)?.user?.displayName ?: ""
-
         Scaffold(
             containerColor = ProCircuit.Bg,
             topBar = {
                 TopAppBar(
                     title = {
                         Text(
-                            displayName,
+                            "Profil",
                             fontFamily = AppFontFamily,
                             fontWeight = FontWeight.Black,
                             fontSize = 16.sp,
