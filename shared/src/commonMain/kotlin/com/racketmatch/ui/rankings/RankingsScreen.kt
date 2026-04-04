@@ -84,7 +84,7 @@ object RankingsScreen : Screen {
                                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
                                         s.masters.forEachIndexed { i, master ->
-                                            MasterCard(master, i, onClick = { navigator.push(PlayerProfileScreen(master)) })
+                                            MasterCard(master, i, onClick = { (navigator.parent ?: navigator).push(PlayerProfileScreen(master)) })
                                         }
                                     }
                                 }
@@ -116,7 +116,7 @@ object RankingsScreen : Screen {
                         Text("Nie można załadować rankingu", color = ProCircuit.OnSurface, modifier = Modifier.padding(24.dp))
                     }
                     is RankingsState.Content -> item {
-                        RealRankingTable(s.filteredPlayers, s.myId, s.sportFilter, onPlayerClick = { navigator.push(PlayerProfileScreen(it)) })
+                        RealRankingTable(s.filteredPlayers, s.myId, s.sportFilter, onPlayerClick = { (navigator.parent ?: navigator).push(PlayerProfileScreen(it)) })
                     }
                 }
             }

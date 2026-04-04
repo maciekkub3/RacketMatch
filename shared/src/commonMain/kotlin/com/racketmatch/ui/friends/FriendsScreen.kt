@@ -128,7 +128,7 @@ object FriendsScreen : Screen {
                     if (selectedTab == 0) {
                         FriendsList(
                             friends = s.data.friends,
-                            onTap = { navigator.push(PlayerProfileScreen(it, initialIsFriend = true)) },
+                            onTap = { (navigator.parent ?: navigator).push(PlayerProfileScreen(it, initialIsFriend = true)) },
                             onDm = { viewModel.onEvent(FriendsEvent.OpenDm(it)) }
                         )
                     } else {
@@ -138,7 +138,7 @@ object FriendsScreen : Screen {
                             onAccept = { viewModel.onEvent(FriendsEvent.AcceptRequest(it)) },
                             onDecline = { viewModel.onEvent(FriendsEvent.DeclineRequest(it)) },
                             onCancel = { viewModel.onEvent(FriendsEvent.CancelRequest(it)) },
-                            onPlayerClick = { navigator.push(PlayerProfileScreen(it)) }
+                            onPlayerClick = { (navigator.parent ?: navigator).push(PlayerProfileScreen(it)) }
                         )
                     }
                 }
