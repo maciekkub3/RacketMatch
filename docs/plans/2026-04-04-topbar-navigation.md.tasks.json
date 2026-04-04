@@ -1,0 +1,12 @@
+{
+  "planPath": "docs/plans/2026-04-04-topbar-navigation.md",
+  "tasks": [
+    {"id": 30, "subject": "Task 1: Push Profile to outerNavigator from MainScreen", "status": "pending"},
+    {"id": 31, "subject": "Task 2: Add TopAppBar to ProfileScreen", "status": "pending", "blockedBy": [30]},
+    {"id": 32, "subject": "Task 3: Proper TopAppBar for SettingsScreen", "status": "pending", "blockedBy": [31]},
+    {"id": 33, "subject": "Task 4: Push Messages to outerNavigator + add back button", "status": "pending"},
+    {"id": 34, "subject": "Task 5: Push PlayerProfileScreen to outerNavigator", "status": "pending"},
+    {"id": 35, "subject": "Task 6: PlayerProfileScreen proper TopAppBar", "status": "pending", "blockedBy": [34]}
+  ],
+  "lastUpdated": "2026-04-04T00:00:00Z"
+}
