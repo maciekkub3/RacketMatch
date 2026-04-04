@@ -34,7 +34,9 @@ import com.racketmatch.presentation.viewmodel.SettingsViewModel
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.ui.theme.ThemeState
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 object SettingsScreen : Screen {
@@ -78,6 +80,7 @@ private fun SettingsContent(
     viewModel: SettingsViewModel,
     onBack: () -> Unit
 ) {
+    val tokenStorage = koinInject<TokenStorage>()
     var passwordValue by remember { mutableStateOf("") }
 
     Column(
@@ -213,7 +216,10 @@ private fun SettingsContent(
             }
             Switch(
                 checked = ThemeState.isDark,
-                onCheckedChange = { ThemeState.isDark = it },
+                onCheckedChange = {
+                    ThemeState.isDark = it
+                    tokenStorage.isDarkTheme = it
+                },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = ProCircuit.Bg, checkedTrackColor = ProCircuit.Lime,
                     uncheckedThumbColor = ProCircuit.OnSurface, uncheckedTrackColor = ProCircuit.SurfaceHigh
