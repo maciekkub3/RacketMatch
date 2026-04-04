@@ -34,6 +34,7 @@ import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.presentation.viewmodel.MoreViewModel
 import com.racketmatch.presentation.viewmodel.NotificationViewModel
+import com.racketmatch.ui.messages.MessagesScreen
 import com.racketmatch.ui.notifications.NotificationsScreen
 import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.matches.MatchListScreen
@@ -120,7 +121,7 @@ object MainScreen : Screen {
                         onDismiss = { showMoreSheet = false },
                         onProfile = { showMoreSheet = false; outerNavigator.push(ProfileScreen) },
                         onFriends = { showMoreSheet = false; tabNavigator.current = FriendsTab },
-                        onMessages = { showMoreSheet = false; tabNavigator.current = MessagesTab },
+                        onMessages = { showMoreSheet = false; outerNavigator.push(MessagesScreen) },
                         onFeed = { showMoreSheet = false; tabNavigator.current = FeedTab },
                         onCoaches = { showMoreSheet = false; tabNavigator.current = CoachesTab },
                         pendingFriends = badges.pendingFriends,

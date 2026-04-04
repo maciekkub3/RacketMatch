@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,12 +57,25 @@ object MessagesScreen : Screen {
         }
 
         Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            Text(
-                "Wiadomości",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(ProCircuit.SurfaceLow)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { navigator.pop() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz",
+                        tint = ProCircuit.OnBg)
+                }
+                Text(
+                    "Wiadomości",
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 20.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
 
             when (val s = state) {
                 MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
