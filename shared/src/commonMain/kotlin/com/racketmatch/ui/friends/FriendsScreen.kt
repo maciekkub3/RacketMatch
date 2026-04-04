@@ -47,7 +47,7 @@ object FriendsScreen : Screen {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is FriendsEffect.NavigateToDm -> {
-                        navigator.push(
+                        (navigator.parent?.parent ?: navigator).push(
                             DmChatScreen(
                                 conversationId = minOf("me", effect.friend.id) + "_" + maxOf("me", effect.friend.id),
                                 currentUserId = "me",
@@ -128,7 +128,7 @@ object FriendsScreen : Screen {
                     if (selectedTab == 0) {
                         FriendsList(
                             friends = s.data.friends,
-                            onTap = { (navigator.parent ?: navigator).push(PlayerProfileScreen(it, initialIsFriend = true)) },
+                            onTap = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(it, initialIsFriend = true)) },
                             onDm = { viewModel.onEvent(FriendsEvent.OpenDm(it)) }
                         )
                     } else {
@@ -138,7 +138,7 @@ object FriendsScreen : Screen {
                             onAccept = { viewModel.onEvent(FriendsEvent.AcceptRequest(it)) },
                             onDecline = { viewModel.onEvent(FriendsEvent.DeclineRequest(it)) },
                             onCancel = { viewModel.onEvent(FriendsEvent.CancelRequest(it)) },
-                            onPlayerClick = { (navigator.parent ?: navigator).push(PlayerProfileScreen(it)) }
+                            onPlayerClick = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(it)) }
                         )
                     }
                 }

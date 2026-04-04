@@ -498,7 +498,7 @@ private fun SessionCard(session: OpenSession, isMySession: Boolean, onJoin: () -
 
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ProCircuit.SurfaceHigh)
-            .clickable(enabled = !isMySession) { (navigator.parent ?: navigator).push(PlayerProfileScreen(sessionUser)) }
+            .clickable(enabled = !isMySession) { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(sessionUser)) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -823,7 +823,7 @@ private fun PlayerListView(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
                                 player = player,
                                 myElo = state.myElo,
                                 isPending = player.id in state.pendingChallengeIds,
-                                onCardClick = { (navigator.parent ?: navigator).push(PlayerProfileScreen(player)) },
+                                onCardClick = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(player)) },
                                 onChallengeClick = { onEvent(ExploreEvent.ShowChallengeDialog(player.id)) }
                             )
                         }
