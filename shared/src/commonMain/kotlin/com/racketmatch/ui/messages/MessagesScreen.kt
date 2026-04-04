@@ -7,8 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +29,6 @@ import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.theme.ProCircuit
 import org.koin.compose.viewmodel.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 object MessagesScreen : Screen {
 
     @Composable
@@ -44,7 +41,7 @@ object MessagesScreen : Screen {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is MessagesEffect.OpenConversation -> {
-                        navigator.push(
+                        (navigator.parent?.parent ?: navigator).push(
                             DmChatScreen(
                                 conversationId = effect.conversation.id,
                                 currentUserId = "me",
@@ -57,63 +54,30 @@ object MessagesScreen : Screen {
             }
         }
 
-        Scaffold(
-            containerColor = ProCircuit.Bg,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "Wiadomości",
-                            fontFamily = AppFontFamily,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp,
-                            color = ProCircuit.OnBg
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Wstecz",
-                                tint = ProCircuit.OnBg
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+            when (val s = state) {
+                MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = ProCircuit.Lime)
+                }
+                MessagesState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Błąd ładowania", color = ProCircuit.OnSurface)
+                }
+                is MessagesState.Content -> {
+                    if (s.conversations.isEmpty()) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Brak wiadomości. Napisz do znajomego!",
+                                fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+                                color = ProCircuit.OnSurface
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = ProCircuit.SurfaceLow
-                    )
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = padding.calculateTopPadding())
-            ) {
-                when (val s = state) {
-                    MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = ProCircuit.Lime)
-                    }
-                    MessagesState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Błąd ładowania", color = ProCircuit.OnSurface)
-                    }
-                    is MessagesState.Content -> {
-                        if (s.conversations.isEmpty()) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "Brak wiadomości. Napisz do znajomego!",
-                                    fontFamily = AppBodyFontFamily, fontSize = 14.sp,
-                                    color = ProCircuit.OnSurface
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                items(s.conversations) { conv ->
-                                    ConversationRow(conv, onClick = { viewModel.openConversation(conv) })
-                                }
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(s.conversations) { conv ->
+                                ConversationRow(conv, onClick = { viewModel.openConversation(conv) })
                             }
                         }
                     }

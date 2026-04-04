@@ -120,7 +120,7 @@ object MainScreen : Screen {
                         onDismiss = { showMoreSheet = false },
                         onProfile = { showMoreSheet = false; outerNavigator.push(ProfileScreen) },
                         onFriends = { showMoreSheet = false; tabNavigator.current = FriendsTab },
-                        onMessages = { showMoreSheet = false; outerNavigator.push(MessagesScreen) },
+                        onMessages = { showMoreSheet = false; tabNavigator.current = MessagesTab },
                         onFeed = { showMoreSheet = false; tabNavigator.current = FeedTab },
                         onCoaches = { showMoreSheet = false; tabNavigator.current = CoachesTab },
                         pendingFriends = badges.pendingFriends,
@@ -369,6 +369,15 @@ object CoachesTab : Tab {
 }
 
 // ─── New Social Tabs (stubs — filled in later tasks) ─────────────────────────
+
+object MessagesTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 6u, title = "Wiadomości", icon = rememberVectorPainter(Icons.Default.Star))
+    @Composable
+    override fun Content() {
+        Navigator(MessagesScreen) { CurrentScreen() }
+    }
+}
 
 object FriendsTab : Tab {
     override val options: TabOptions
