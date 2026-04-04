@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,700&amp;family=Manrope:wght@300;400;600;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-fixed-variant": "#6c287d",
+              "surface": "#f9f9f9",
+              "on-primary-container": "#8ce1a1",
+              "on-background": "#1a1c1c",
+              "on-secondary-container": "#732f84",
+              "on-tertiary": "#ffffff",
+              "outline-variant": "#bfc9bd",
+              "primary-container": "#006633",
+              "inverse-on-surface": "#f0f1f1",
+              "on-primary": "#ffffff",
+              "surface-bright": "#f9f9f9",
+              "on-secondary-fixed": "#340042",
+              "on-error-container": "#93000a",
+              "on-tertiary-container": "#cecfcf",
+              "background": "#f9f9f9",
+              "surface-container-high": "#e8e8e8",
+              "secondary": "#874297",
+              "surface-variant": "#e2e2e2",
+              "tertiary-container": "#575858",
+              "on-error": "#ffffff",
+              "on-primary-fixed": "#00210c",
+              "primary": "#004b24",
+              "error-container": "#ffdad6",
+              "surface-container-highest": "#e2e2e2",
+              "on-primary-fixed-variant": "#005228",
+              "tertiary": "#3f4141",
+              "secondary-container": "#f0a2ff",
+              "secondary-fixed-dim": "#f3aeff",
+              "on-secondary": "#ffffff",
+              "primary-fixed-dim": "#84d999",
+              "surface-tint": "#0f6d39",
+              "on-surface-variant": "#3f4940",
+              "error": "#ba1a1a",
+              "tertiary-fixed-dim": "#c6c6c6",
+              "inverse-surface": "#2f3131",
+              "secondary-fixed": "#fdd6ff",
+              "on-tertiary-fixed-variant": "#454747",
+              "inverse-primary": "#84d999",
+              "surface-container-lowest": "#ffffff",
+              "on-surface": "#1a1c1c",
+              "tertiary-fixed": "#e2e2e2",
+              "surface-container": "#eeeeee",
+              "surface-dim": "#dadada",
+              "on-tertiary-fixed": "#1a1c1c",
+              "surface-container-low": "#f3f3f3",
+              "primary-fixed": "#9ff6b4",
+              "outline": "#6f7a6f"
+            },
+            fontFamily: {
+              "headline": ["Noto Serif"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+      }
+      .active-nav .material-symbols-outlined {
+        font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface font-body text-on-surface">
+<!-- Top App Bar -->
+<header class="w-full top-0 sticky z-40 bg-[#f9f9f9] dark:bg-stone-950">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container-high">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="professional portrait of a middle-aged man with a friendly expression in a modern lifestyle setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCMBRYElX4aHR-j-oyLRZt69wAcbwAVxYPbd9bTHI72zjNKlYATGwF7nCEJtEv4JwerTWQIsyJNljGncORuEkhyfZVpFcH6zitRtauXzzQJA0tOZGCBHnp7v0xgxwKNGGDBnf2WNOmk8jAijYE4lDVolyX2_VGShGny_UMnfZ-3CrLT4fsuCXgMmoeM69o3guStgJi-lvoM4EQiLvLtvjhke99bwzBRZYaKGnYvJdzHXmHMG7DEXV1Jt8A37UohFJXPsrxRncfzr1w"/>
+</div>
+<h1 class="font-noto-serif text-2xl font-bold italic text-[#004b24] dark:text-emerald-500 tracking-tight leading-tight">RacketMatch</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-[#004b24] dark:text-emerald-500 text-2xl hover:opacity-80 transition-opacity">notifications</button>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 pt-8 pb-32">
+<!-- Hero Section -->
+<section class="mb-12 relative overflow-hidden rounded-xl bg-primary-container p-8 md:p-16 text-on-primary">
+<div class="relative z-10 max-w-2xl">
+<span class="font-label uppercase tracking-[0.2em] text-[10px] font-bold text-on-primary-container mb-4 block">Elite Training</span>
+<h2 class="font-headline text-4xl md:text-6xl font-bold mb-6 leading-tight">Master the Court with World-Class Coaches.</h2>
+<p class="font-body text-lg text-on-primary/80 max-w-md">Certified professionals specializing in Padel and Tennis excellence. Elevate your game from club level to championship status.</p>
+</div>
+<!-- Subtle Texture Overlap -->
+<div class="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none">
+<svg class="w-full h-full fill-current" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="40" stroke="white" stroke-width="0.5"></circle>
+<circle cx="50" cy="50" fill="none" r="30" stroke="white" stroke-width="0.5"></circle>
+</svg>
+</div>
+</section>
+<!-- Filters (Non-standard list layout) -->
+<div class="flex flex-wrap gap-4 mb-12">
+<button class="px-6 py-2 rounded-full bg-secondary text-on-secondary font-label text-xs font-bold tracking-widest uppercase shadow-sm">All Coaches</button>
+<button class="px-6 py-2 rounded-full bg-surface-container-low hover:bg-surface-container-high transition-colors text-on-surface-variant font-label text-xs font-bold tracking-widest uppercase">Tennis Specialist</button>
+<button class="px-6 py-2 rounded-full bg-surface-container-low hover:bg-surface-container-high transition-colors text-on-surface-variant font-label text-xs font-bold tracking-widest uppercase">Padel Master</button>
+<button class="px-6 py-2 rounded-full bg-surface-container-low hover:bg-surface-container-high transition-colors text-on-surface-variant font-label text-xs font-bold tracking-widest uppercase">Available Today</button>
+</div>
+<!-- Coaching Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Coach Card 1 -->
+<div class="group relative bg-surface-container-low rounded-xl overflow-hidden flex flex-col border border-outline-variant/10">
+<div class="relative h-80 overflow-hidden">
+<img alt="Coach Julian" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="focused male tennis coach holding a racket on a sun-drenched green grass court, soft bokeh background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjjWOkpqS2WUMgpmybhEdA0rCEqHMTnwK-RAg3escWj8hutYamelsMdGt_o76eR0_Wnow0WohU-bRYBOBrwcPY7sL4GjXK4Wo1EwtUKF43GcxHFUYD0-WNDJJi_TT9KjPysVU67UI60xPcsPhP-jk-sK-A-8WNF_DvZPPRAa9aCKaxgx8jlr01z4fgCLMoaGO1C3wy1_5MxN53u130DcLIXKXPxIXKitY0MDl6mH356VIWP3YKMjsiuMOsIo5kCLcs_Be9Qc0Kgnk"/>
+<div class="absolute top-4 left-4">
+<span class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Tennis Specialist</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+<h3 class="font-headline text-2xl text-white">Julian Vanderbilt</h3>
+<p class="text-white/70 text-sm font-light italic">Former ATP professional, 12 years coaching</p>
+</div>
+</div>
+<div class="p-6 flex-grow flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-4">
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<span class="font-headline text-xl text-primary font-bold">£85<span class="text-xs font-body font-normal text-on-surface-variant">/hr</span></span>
+</div>
+<div class="space-y-3 mb-6">
+<div class="flex items-center gap-2 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">workspace_premium</span>
+<span>LTA Level 5 Performance Coach</span>
+</div>
+<div class="flex items-center gap-2 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">schedule</span>
+<span>Available: Mon, Wed, Sat</span>
+</div>
+</div>
+</div>
+<button class="w-full py-4 bg-primary text-on-primary rounded-lg font-label font-bold tracking-[0.15em] uppercase text-xs hover:bg-primary-container transition-all active:scale-95 duration-150">Book Session</button>
+</div>
+</div>
+<!-- Coach Card 2 -->
+<div class="group relative bg-surface-container-low rounded-xl overflow-hidden flex flex-col border border-outline-variant/10">
+<div class="relative h-80 overflow-hidden">
+<img alt="Coach Elena" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="professional female athlete in sporting attire standing confidently on a blue padel court, morning natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3Atx10l8OI-OGAAhZpeDcbp33mhUiKyKL-e8xlhI9VQZbu01-4sVMvKQFpKFaBsuj7JXPLegfUwrxQC_H6ZkzOH9e0_Dxd3_0es7CJVmYqEXGZK6E2P-oOJEvhloNk_oTrhkVAUjTOdzlICMyam0UzhE7Zk7amRx8Q0w1200XN6XqznZxtfBW8qRl-uu6iQABi49dh6hUmCb4cg70fa3SBw3N8dHp4wMeGNnBAuvFeXvh--YWBcHx7_DiHVxt6pHfJFT3VvLF8B8"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Padel Master</span>
+<span class="bg-primary text-on-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Top Rated</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+<h3 class="font-headline text-2xl text-white">Elena Rossi</h3>
+<p class="text-white/70 text-sm font-light italic">World Padel Tour certified coach</p>
+</div>
+</div>
+<div class="p-6 flex-grow flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-4">
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 0;">star</span>
+</div>
+<span class="font-headline text-xl text-primary font-bold">£70<span class="text-xs font-body font-normal text-on-surface-variant">/hr</span></span>
+</div>
+<div class="space-y-3 mb-6">
+<div class="flex items-center gap-2 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">workspace_premium</span>
+<span>International Padel Federation Elite</span>
+</div>
+<div class="flex items-center gap-2 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">schedule</span>
+<span>Available: Weekdays after 5PM</span>
+</div>
+</div>
+</div>
+<button class="w-full py-4 bg-primary text-on-primary rounded-lg font-label font-bold tracking-[0.15em] uppercase text-xs hover:bg-primary-container transition-all active:scale-95 duration-150">Book Session</button>
+</div>
+</div>
+<!-- Coach Card 3 -->
+<div class="group relative bg-surface-container-low rounded-xl overflow-hidden flex flex-col border border-outline-variant/10">
+<div class="relative h-80 overflow-hidden">
+<img alt="Coach Marcus" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" data-alt="smiling mature tennis coach leaning on a net at an outdoor luxury sports club, afternoon sun casting long shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB256nBDb_pZBu2h8JBqq9G1-ZHotJQ40XuwLiJQ4SQE6GDsFp7b41gLpnx_EKX58a7ci_paTiZghXPDvfZheyAhU66V9pUs2jcRxfJScCRVYcHx7v19LojPSanTqF3bvOk28dEj4u0bkxldMUJsIdB_PErS5IK5Lzh3-gbJJ2GYo9zncNUqu5dxJ2ddJRKH3nY-PqPh7r2Q5uv7sRrvTbZCAnTMFYRjrjE0HIoc2hz5v0egSxaw199x5_7-Xz6x67H_uKRJbBGQrU"/>
+<div class="absolute top-4 left-4">
+<span class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Technique Specialist</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+<h3 class="font-headline text-2xl text-white">Marcus Sterling</h3>
+<p class="text-white/70 text-sm font-light italic">Biometrics &amp; Serve Specialist</p>
+</div>
+</div>
+<div class="p-6 flex-grow flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-4">
+<div class="flex gap-1">
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<span class="font-headline text-xl text-primary font-bold">£95<span class="text-xs font-body font-normal text-on-surface-variant">/hr</span></span>
+</div>
+<div class="space-y-3 mb-6">
+<div class="flex items-center gap-2 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">workspace_premium</span>
+<span>Advanced Biometric Certification</span>
+</div>
+<div class="flex items-center gap-2 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">schedule</span>
+<span>Available: Weekends only</span>
+</div>
+</div>
+</div>
+<button class="w-full py-4 bg-primary text-on-primary rounded-lg font-label font-bold tracking-[0.15em] uppercase text-xs hover:bg-primary-container transition-all active:scale-95 duration-150">Book Session</button>
+</div>
+</div>
+</div>
+<!-- Info Block (Editorial Layout) -->
+<section class="mt-24 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+<div class="relative">
+<div class="aspect-square bg-surface-container-high rounded-xl overflow-hidden shadow-2xl">
+<img alt="Court Detail" class="w-full h-full object-cover" data-alt="close up of a tennis racket and several yellow tennis balls resting on a pristine green grass court" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHKe6ld9vsCQi-s0CiP6XlC8s_7X2-rpyrBuig-ClXK6DrTLrViODIX-5XRQ5LDr-O1SaADSrfHv38zjSO51AdaaMhNPIwN_ShRvdf0CRwQpP535oAmGxnFx0v-kXrPGcI04SNLomtzKiqOiijMvp-I_8TIQWDcg0FDb7EHPqzdjow5CuQBbthSZOv4F25AE8r9e0H6phr6ot6JQzunRocq0GMj-K3WTFehQ739QCxZB-aCj6whzriUTsXp72UqoRPyksZj1Gv7E8"/>
+</div>
+<div class="absolute -bottom-6 -right-6 w-48 h-48 bg-secondary-fixed rounded-xl flex items-center justify-center p-6 text-center">
+<div>
+<p class="font-headline text-3xl text-on-secondary-fixed font-bold">100%</p>
+<p class="font-label text-[10px] tracking-widest uppercase text-on-secondary-fixed-variant">Certified Professionals</p>
+</div>
+</div>
+</div>
+<div class="space-y-6">
+<h2 class="font-headline text-4xl font-bold text-primary leading-tight">The Standard of Excellence.</h2>
+<p class="text-on-surface-variant leading-relaxed">Our vetting process is rigorous. Every coach on RacketMatch undergoes a triple-verification process: historical performance data, active certification status, and on-court tactical demonstration. We don't just find you a coach; we find you a mentor.</p>
+<div class="pt-4 border-t border-outline-variant/30">
+<ul class="space-y-4">
+<li class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-body text-sm font-semibold">National Governing Body Certified</span>
+</li>
+<li class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-body text-sm font-semibold">Public Liability Insured</span>
+</li>
+<li class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-body text-sm font-semibold">Premium Equipment Provided</span>
+</li>
+</ul>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-[#f9f9f9]/70 dark:bg-stone-950/70 backdrop-blur-xl border-t border-[#bfc9bd]/15 shadow-[0_-4px_32px_rgba(26,28,28,0.05)]">
+<div class="flex justify-around items-center px-4 pb-6 pt-2 max-w-7xl mx-auto">
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors p-2 tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors p-2 tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined">sports_tennis</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Matches</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors p-2 tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Rankings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#874297] dark:text-purple-400 font-black active-nav p-2 tap-highlight-transparent active:scale-90" href="#">
+<span class="material-symbols-outlined">person_search</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Coaches</span>
+</a>
+</div>
+</nav>
+</body></html>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Matches | RacketMatch</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,700&amp;family=Manrope:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-secondary-fixed-variant": "#6c287d",
+                        "surface": "#f9f9f9",
+                        "on-primary-container": "#8ce1a1",
+                        "on-background": "#1a1c1c",
+                        "on-secondary-container": "#732f84",
+                        "on-tertiary": "#ffffff",
+                        "outline-variant": "#bfc9bd",
+                        "primary-container": "#006633",
+                        "inverse-on-surface": "#f0f1f1",
+                        "on-primary": "#ffffff",
+                        "surface-bright": "#f9f9f9",
+                        "on-secondary-fixed": "#340042",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-container": "#cecfcf",
+                        "background": "#f9f9f9",
+                        "surface-container-high": "#e8e8e8",
+                        "secondary": "#874297",
+                        "surface-variant": "#e2e2e2",
+                        "tertiary-container": "#575858",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed": "#00210c",
+                        "primary": "#004b24",
+                        "error-container": "#ffdad6",
+                        "surface-container-highest": "#e2e2e2",
+                        "on-primary-fixed-variant": "#005228",
+                        "tertiary": "#3f4141",
+                        "secondary-container": "#f0a2ff",
+                        "secondary-fixed-dim": "#f3aeff",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed-dim": "#84d999",
+                        "surface-tint": "#0f6d39",
+                        "on-surface-variant": "#3f4940",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "inverse-surface": "#2f3131",
+                        "secondary-fixed": "#fdd6ff",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "inverse-primary": "#84d999",
+                        "surface-container-lowest": "#ffffff",
+                        "on-surface": "#1a1c1c",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container": "#eeeeee",
+                        "surface-dim": "#dadada",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "surface-container-low": "#f3f3f3",
+                        "primary-fixed": "#9ff6b4",
+                        "outline": "#6f7a6f"
+                    },
+                    fontFamily: {
+                        "headline": ["Noto Serif"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        .editorial-shadow {
+            box-shadow: 0 32px 64px -12px rgba(26, 28, 28, 0.05);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface font-body text-on-surface">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-50 bg-[#f9f9f9] dark:bg-stone-950">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="close-up portrait of a professional tennis player in white athletic gear looking confident and calm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWc0tsW_i9UktXGdQBcfHPnsVjEeCryBHZmJDPQVOfdKnpju6_9dDbRq7E8FCCGVXYBgR78sfvyLPpQ8_C8FPNdKuU7dGlszYOqQENDMOD0YmDDPZ5l4ehNtvRjuPG2SkA-RZ2dXcR0lRhkLkq9fOQynndcdCantivjMMARiWH_y2muEgUZoIxh70uF7t6LLgbDa1dg6tknOlZHkU01yCbdIJy15YiSdfNHSHrU3sUrioZT1LmJW71eMyEhypOQj8VY__pM3lzBRw"/>
+</div>
+</div>
+<h1 class="font-noto-serif text-2xl font-bold italic text-[#004b24] dark:text-emerald-500 leading-tight tracking-tight">RacketMatch</h1>
+<div class="flex items-center gap-4">
+<button class="text-[#004b24] dark:text-emerald-500 hover:opacity-80 transition-opacity scale-95 duration-150">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 pt-8 pb-32">
+<!-- Editorial Header Section -->
+<section class="mb-12 relative">
+<div class="absolute -left-4 top-0 w-1 h-full bg-secondary opacity-20"></div>
+<span class="font-label text-[10px] uppercase tracking-[0.2em] font-bold text-secondary mb-2 block">Tournament Registry</span>
+<h2 class="font-headline text-5xl font-bold text-primary leading-none tracking-tighter mb-4">Your Matches</h2>
+<p class="font-body text-on-surface-variant max-w-xl text-lg">Manage your upcoming challenges and review past performance on the digital clubhouse courts.</p>
+</section>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+<!-- Active Challenges & Scheduled (Main Focus) -->
+<div class="lg:col-span-8 space-y-10">
+<!-- Active Challenges Section -->
+<div>
+<div class="flex items-center justify-between mb-8">
+<h3 class="font-headline text-2xl text-primary italic">Active Challenges</h3>
+<div class="h-[1px] flex-grow mx-6 bg-outline-variant opacity-20"></div>
+</div>
+<div class="space-y-6">
+<!-- Pending Match Card -->
+<div class="bg-surface-container-low p-1 rounded-xl relative group">
+<div class="bg-surface-container-lowest p-6 rounded-lg transition-all duration-300 hover:translate-x-1">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+<div class="flex items-center gap-6">
+<div class="relative">
+<div class="w-16 h-16 rounded-full overflow-hidden">
+<img alt="Opponent" class="w-full h-full object-cover" data-alt="portrait of a focused male tennis player with a headband, athletic build, outdoor lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6Wydwc7GXVVerBXtO79uIIUNzDsthrwgrhERA1ikDsR-A_Z2UcPWIXnGBZrt72eBsQK0vn7xomxZK2AQV0BArcofupkLVfUChj1RskuOCfA4VN7mda7auVoZcG9L8jisr8grDE-XV5Zk504-_v2Q59C1hFWZIdLfUU2Lr62dy7fHoJcdnJp4hEjsYVI9OCPX36VsBqVHpFujSRhh079WfsMIzMFy0dShpxpp5bISRRDIip9N1ov2Xv5flUoeQEhvyBhMgR-ZWZA8"/>
+</div>
+<div class="absolute -bottom-1 -right-1 bg-secondary text-on-secondary w-7 h-7 rounded-full flex items-center justify-center border-2 border-surface-container-lowest">
+<span class="material-symbols-outlined text-sm" data-icon="sports_tennis">sports_tennis</span>
+</div>
+</div>
+<div>
+<h4 class="font-headline text-xl text-on-surface leading-tight">Julian Thorne</h4>
+<div class="flex items-center gap-3 mt-1">
+<span class="font-label text-xs font-bold text-on-surface-variant opacity-60">ELO 1420</span>
+<span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+<span class="font-label text-[10px] uppercase tracking-wider text-secondary font-extrabold">RANKED MATCH</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="text-right hidden md:block mr-4">
+<span class="block font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">Status</span>
+<span class="font-body font-bold text-error">Pending</span>
+</div>
+<button class="bg-primary text-on-primary px-6 py-2.5 rounded-md font-label text-sm font-bold tracking-wide hover:bg-primary-container transition-colors shadow-sm active:scale-95 duration-150">
+                                            ACCEPT
+                                        </button>
+<button class="w-11 h-11 flex items-center justify-center rounded-md border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Scheduled Match Card -->
+<div class="bg-surface-container-low p-1 rounded-xl relative">
+<div class="bg-surface-container-lowest p-6 rounded-lg">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+<div class="flex items-center gap-6">
+<div class="relative">
+<div class="w-16 h-16 rounded-full overflow-hidden">
+<img alt="Opponent" class="w-full h-full object-cover" data-alt="portrait of a smiling woman athlete in sporty clothes with sun flare, lush green background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQfDkFnb6fdaW_NrOfVrhHq9EyQSJbtE4EDqsduonpZH7hdJrubQQESMrl6cnRV8wvX6i23tNfm2YuL5Pb1vqwuPtGHWsLNefb_ngX5nkY9bI4SLpcyhxDyEreno5Pjw_xAZqwLnKx2fyUFmexzKqqBZK73f68HRSjxwCRnyq9YZFDh61obIYf8dphnk87r28oiESVgX1V3JHkjOrxkWh8jYR_7vfmQ0aoNKXjNBEAUo6273is2UWFX-OeTcXnidt2Z1QWLQAd4OE"/>
+</div>
+<div class="absolute -bottom-1 -right-1 bg-primary text-on-primary w-7 h-7 rounded-full flex items-center justify-center border-2 border-surface-container-lowest">
+<span class="material-symbols-outlined text-sm" data-icon="sports_kabaddi">sports_kabaddi</span>
+</div>
+</div>
+<div>
+<h4 class="font-headline text-xl text-on-surface leading-tight">Elena Moretti</h4>
+<div class="flex items-center gap-3 mt-1">
+<span class="font-label text-xs font-bold text-on-surface-variant opacity-60">ELO 1580</span>
+<span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+<span class="font-label text-[10px] uppercase tracking-wider text-primary font-extrabold">MASTER SERIES</span>
+</div>
+<div class="mt-2 flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="text-xs font-medium italic">Oct 24 • 10:30 AM @ Center Court</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="text-right hidden md:block mr-4">
+<span class="block font-label text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">Status</span>
+<span class="font-body font-bold text-primary">Scheduled</span>
+</div>
+<button class="bg-surface-container-high text-on-surface px-6 py-2.5 rounded-md font-label text-sm font-bold tracking-wide hover:bg-surface-variant transition-colors active:scale-95 duration-150">
+                                            LOG RESULT
+                                        </button>
+<button class="w-11 h-11 flex items-center justify-center rounded-md border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Match History Section -->
+<div>
+<div class="flex items-center justify-between mb-8">
+<h3 class="font-headline text-2xl text-primary italic">Match History</h3>
+<div class="h-[1px] flex-grow mx-6 bg-outline-variant opacity-20"></div>
+<button class="font-label text-[10px] uppercase tracking-[0.2em] font-bold text-secondary">View All Archive</button>
+</div>
+<div class="space-y-4">
+<!-- History Item 1 - Win -->
+<div class="bg-surface-container-low group rounded-lg overflow-hidden transition-all hover:bg-surface-container-high">
+<div class="flex items-center p-4">
+<div class="w-12 h-12 rounded-full overflow-hidden mr-4 grayscale group-hover:grayscale-0 transition-all">
+<img alt="Opponent" class="w-full h-full object-cover" data-alt="headshot of a middle-aged man in sporty polo shirt against a blurred park background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCK76lhkC6Y1f2AZRlbF1a0rjlhqKvkryjZdBbl-NIFchoUx_kDKHeBiwv1f6AJUiH6T2GemNJIan-NVYvcAhg0vkEiDo1G5wEECVEPe0MSyuOnARP2CXJm142a1rE-C1wJWfNsJLGFv8jqDPvGsW0DXqPc9zxZxpNzhqshaZvMjPH6-Vkit4lQBnQzBvrLuBcHNNvoaNRFjIdedJZ4tS63w5d2By38ay-jk4TaeMJsfE8DYvkKZgCnuY0ql2WvNGUoWRSs2hA0KxY"/>
+</div>
+<div class="flex-grow">
+<div class="flex items-center justify-between">
+<span class="font-headline text-lg text-on-surface">Marcus Chen</span>
+<div class="flex items-center gap-4">
+<div class="bg-primary/10 px-3 py-1 rounded-full">
+<span class="font-label text-[10px] font-black text-primary uppercase">6-4, 6-2</span>
+</div>
+<span class="font-body font-extrabold text-primary text-sm uppercase tracking-tighter w-8">WIN</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant/60">
+<span class="font-label text-[10px] uppercase tracking-tighter">Casual Match</span>
+<span class="text-[10px]">•</span>
+<span class="font-label text-[10px] uppercase tracking-tighter">Oct 18, 2023</span>
+</div>
+</div>
+</div>
+</div>
+<!-- History Item 2 - Loss -->
+<div class="bg-surface-container-low group rounded-lg overflow-hidden transition-all hover:bg-surface-container-high">
+<div class="flex items-center p-4">
+<div class="w-12 h-12 rounded-full overflow-hidden mr-4 grayscale group-hover:grayscale-0 transition-all">
+<img alt="Opponent" class="w-full h-full object-cover" data-alt="portrait of a determined female tennis player with a focused gaze and short hair" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCt8TCfgktBNfmB--w6JD_xI8kBOyib8_Noo9Ivq8fLWOLyN-t57c3VPc3ZpY1NWX_wS8BWBovNG6afQkLeYaY4X-Cw0l1-hf9AJ278HbMIWc5A22REiP7G2ABt2uv8ogPKiKHwtDo92X1rhwf0u_kPhuvCFy1BOZ-gPkn3kq_pj-OWEwBF4SLUko0Qef8efZcXwq6RcuYCQCc49xk1-BD_sEKl7WeiwCyMjv-3G9fdpJe5YjFST7VodRHPVlWdNOejqF_WZdsmAVk"/>
+</div>
+<div class="flex-grow">
+<div class="flex items-center justify-between">
+<span class="font-headline text-lg text-on-surface">Sarah Jenkins</span>
+<div class="flex items-center gap-4">
+<div class="bg-secondary/10 px-3 py-1 rounded-full">
+<span class="font-label text-[10px] font-black text-secondary uppercase">3-6, 5-7</span>
+</div>
+<span class="font-body font-extrabold text-error text-sm uppercase tracking-tighter w-8">LOSS</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant/60">
+<span class="font-label text-[10px] uppercase tracking-tighter">Ranked Match</span>
+<span class="text-[10px]">•</span>
+<span class="font-label text-[10px] uppercase tracking-tighter">Oct 12, 2023</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Sidebar Contextual Data -->
+<div class="lg:col-span-4 space-y-8">
+<!-- Stat Block Card -->
+<div class="bg-surface-container-high p-8 rounded-xl editorial-shadow">
+<h3 class="font-label text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant mb-6">Performance Index</h3>
+<div class="space-y-6">
+<div class="flex justify-between items-end">
+<div>
+<span class="block font-headline text-4xl font-bold text-primary leading-none">1,540</span>
+<span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant mt-1 block">Current ELO</span>
+</div>
+<div class="text-right">
+<span class="font-body font-bold text-primary">+24</span>
+<span class="block font-label text-[10px] uppercase tracking-tighter text-on-surface-variant/50">Last 30 Days</span>
+</div>
+</div>
+<div class="h-1 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary w-3/4 rounded-full"></div>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-4">
+<div class="bg-surface-container-lowest p-4 rounded-lg">
+<span class="block font-headline text-2xl font-bold text-primary">12</span>
+<span class="font-label text-[10px] uppercase font-bold text-on-surface-variant/60">Wins</span>
+</div>
+<div class="bg-surface-container-lowest p-4 rounded-lg">
+<span class="block font-headline text-2xl font-bold text-on-surface">4</span>
+<span class="font-label text-[10px] uppercase font-bold text-on-surface-variant/60">Losses</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Match Type Legend -->
+<div class="p-6 border border-outline-variant/20 rounded-xl">
+<h4 class="font-headline text-lg italic text-primary mb-4">League Classification</h4>
+<div class="space-y-4">
+<div class="flex items-start gap-4">
+<div class="w-2 h-2 rounded-full bg-outline-variant mt-2"></div>
+<div>
+<span class="font-label text-xs font-bold text-on-surface uppercase">Casual</span>
+<p class="text-xs text-on-surface-variant/70 leading-relaxed">Friendly matches for skill building and social play. No ELO impact.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="w-2 h-2 rounded-full bg-secondary mt-2"></div>
+<div>
+<span class="font-label text-xs font-bold text-on-surface uppercase">Ranked</span>
+<p class="text-xs text-on-surface-variant/70 leading-relaxed">Competitive matches with ELO adjustments and ranking points.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="w-2 h-2 rounded-full bg-primary mt-2"></div>
+<div>
+<span class="font-label text-xs font-bold text-on-surface uppercase">Master Series</span>
+<p class="text-xs text-on-surface-variant/70 leading-relaxed">High-stakes seasonal tournaments. Invite only based on performance.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-2 bg-[#f9f9f9]/70 dark:bg-stone-950/70 backdrop-blur-xl z-50 border-t border-[#bfc9bd]/15 shadow-[0_-4px_32px_rgba(26,28,28,0.05)] md:hidden">
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors active:scale-90 tap-highlight-transparent" href="#">
+<span class="material-symbols-outlined" data-icon="explore">explore</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#874297] dark:text-purple-400 font-black hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors active:scale-90 tap-highlight-transparent" href="#">
+<span class="material-symbols-outlined active-icon" data-icon="sports_tennis" style="font-variation-settings: 'FILL' 1;">sports_tennis</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold">Matches</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors active:scale-90 tap-highlight-transparent" href="#">
+<span class="material-symbols-outlined" data-icon="leaderboard">leaderboard</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold">Rankings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors active:scale-90 tap-highlight-transparent" href="#">
+<span class="material-symbols-outlined" data-icon="person_search">person_search</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold">Coaches</span>
+</a>
+</nav>
+<!-- FAB (Suppressed on Details/List but keeping it contextual for 'Create Match' if applicable) -->
+<!-- Not rendered as per shell suppression rules for focused task pages, but added here for the 'Matches' main screen context if needed -->
+<button class="fixed right-6 bottom-24 md:bottom-12 bg-primary text-on-primary w-14 h-14 rounded-full flex items-center justify-center shadow-lg hover:bg-primary-container transition-all active:scale-95 z-40">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</body></html>

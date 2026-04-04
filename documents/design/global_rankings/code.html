@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,700&amp;family=Manrope:wght@300;400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-fixed-variant": "#6c287d",
+              "surface": "#f9f9f9",
+              "on-primary-container": "#8ce1a1",
+              "on-background": "#1a1c1c",
+              "on-secondary-container": "#732f84",
+              "on-tertiary": "#ffffff",
+              "outline-variant": "#bfc9bd",
+              "primary-container": "#006633",
+              "inverse-on-surface": "#f0f1f1",
+              "on-primary": "#ffffff",
+              "surface-bright": "#f9f9f9",
+              "on-secondary-fixed": "#340042",
+              "on-error-container": "#93000a",
+              "on-tertiary-container": "#cecfcf",
+              "background": "#f9f9f9",
+              "surface-container-high": "#e8e8e8",
+              "secondary": "#874297",
+              "surface-variant": "#e2e2e2",
+              "tertiary-container": "#575858",
+              "on-error": "#ffffff",
+              "on-primary-fixed": "#00210c",
+              "primary": "#004b24",
+              "error-container": "#ffdad6",
+              "surface-container-highest": "#e2e2e2",
+              "on-primary-fixed-variant": "#005228",
+              "tertiary": "#3f4141",
+              "secondary-container": "#f0a2ff",
+              "secondary-fixed-dim": "#f3aeff",
+              "on-secondary": "#ffffff",
+              "primary-fixed-dim": "#84d999",
+              "surface-tint": "#0f6d39",
+              "on-surface-variant": "#3f4940",
+              "error": "#ba1a1a",
+              "tertiary-fixed-dim": "#c6c6c6",
+              "inverse-surface": "#2f3131",
+              "secondary-fixed": "#fdd6ff",
+              "on-tertiary-fixed-variant": "#454747",
+              "inverse-primary": "#84d999",
+              "surface-container-lowest": "#ffffff",
+              "on-surface": "#1a1c1c",
+              "tertiary-fixed": "#e2e2e2",
+              "surface-container": "#eeeeee",
+              "surface-dim": "#dadada",
+              "on-tertiary-fixed": "#1a1c1c",
+              "surface-container-low": "#f3f3f3",
+              "primary-fixed": "#9ff6b4",
+              "outline": "#6f7a6f"
+            },
+            fontFamily: {
+              "headline": ["Noto Serif"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-tab { font-variation-settings: 'FILL' 1; }
+        .glass-nav { backdrop-filter: blur(16px); }
+        .grainy-bg { position: relative; }
+        .grainy-bg::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.02;
+            pointer-events: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface font-body text-on-surface antialiased grainy-bg min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-40 bg-[#f9f9f9] dark:bg-stone-950">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="close-up portrait of a professional male athlete with a confident expression and subtle lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnBZ2Yq_VJYWOA8a6tcV0mHHIB_S8jqJgt4F2bCLydh5nI54QIEG4AoQmiYUe3NOsTJdR_IXay0fMirfQz2VpRnFcQX3jQArA_sS_-rcB3HyTSSiDF0_Wz3xmY-2maZ4oaD-J0kIxcdQ1QAhjyKO1pbyNW46rDMMeop92ViffxkYgIa9Nsh_YcVO6rhx-U-FdvZkxNDOgY_HXBD1j2pRr0p-ZCSA9fM1rP7hTb1BF1pGO5UvXg_veQ2ZkmlXTCmVCnhR5w9lDUvvk"/>
+</div>
+<h1 class="font-noto-serif text-2xl font-bold italic text-[#004b24] dark:text-emerald-500 tracking-tight leading-tight">RacketMatch</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-stone-600 dark:text-stone-400 hover:opacity-80 transition-opacity active:scale-95 duration-150">
+<span class="material-symbols-outlined text-2xl">notifications</span>
+</button>
+</div>
+</div>
+</header>
+<main class="max-w-7xl mx-auto px-6 pt-8">
+<!-- Hero Editorial Section -->
+<div class="relative overflow-hidden mb-12 rounded-xl bg-primary-container p-8 md:p-12 text-on-primary">
+<div class="relative z-10 max-w-2xl">
+<span class="font-label text-[10px] uppercase tracking-[0.2em] font-bold text-on-primary-container mb-4 block">CITY LEADERBOARD</span>
+<h2 class="font-headline text-4xl md:text-5xl font-bold mb-6 leading-tight">The London<br/><span class="italic text-on-primary-container">Masters Tier</span></h2>
+<p class="font-body text-lg opacity-90 max-w-md">Ranked ELO performance across all club circuits. Only the top 5% earn the Masters insignia.</p>
+</div>
+<!-- Decorative Element -->
+<div class="absolute -right-20 -bottom-20 w-96 h-96 bg-primary rounded-full opacity-20 blur-3xl"></div>
+<div class="absolute right-12 top-1/2 -translate-y-1/2 hidden md:block">
+<span class="material-symbols-outlined text-[160px] opacity-10" style="font-variation-settings: 'wght' 100;">leaderboard</span>
+</div>
+</div>
+<!-- Tier Legend & Sport Filters -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-12">
+<!-- Filters -->
+<div class="lg:col-span-4 space-y-8">
+<div class="bg-surface-container-low p-6 rounded-xl">
+<h3 class="font-label text-xs uppercase tracking-widest font-bold text-secondary mb-6">SELECT DISCIPLINE</h3>
+<div class="flex flex-col gap-3">
+<button class="flex items-center justify-between p-4 rounded-lg bg-surface-container-lowest border border-primary/10 shadow-sm transition-all group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">sports_tennis</span>
+<span class="font-bold">Tennis</span>
+</div>
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+</button>
+<button class="flex items-center justify-between p-4 rounded-lg bg-transparent hover:bg-surface-container-highest transition-all group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-stone-400 group-hover:text-stone-600">sports_handball</span>
+<span class="text-stone-600">Padel</span>
+</div>
+</button>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl">
+<h3 class="font-label text-xs uppercase tracking-widest font-bold text-secondary mb-6">ELO TIERS</h3>
+<div class="space-y-4">
+<div class="flex items-center justify-between text-sm">
+<span class="text-stone-500">Master</span>
+<span class="font-bold text-secondary">2000+</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-full"></div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<span class="text-stone-500">Expert</span>
+<span class="font-bold">1500 - 1999</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary w-3/4"></div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<span class="text-stone-500">Advanced</span>
+<span class="font-bold">1200 - 1499</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-primary/60 w-1/2"></div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<span class="text-stone-500">Beginner</span>
+<span class="font-bold text-stone-400">&lt; 1000</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Ranking List -->
+<div class="lg:col-span-8">
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden shadow-[0_-4px_32px_rgba(26,28,28,0.02)]">
+<!-- Table Header -->
+<div class="grid grid-cols-12 px-8 py-6 border-b border-outline-variant/10 bg-surface-container-low/30">
+<div class="col-span-1 font-label text-[10px] uppercase tracking-widest text-stone-400">RANK</div>
+<div class="col-span-7 font-label text-[10px] uppercase tracking-widest text-stone-400">PLAYER</div>
+<div class="col-span-2 font-label text-[10px] uppercase tracking-widest text-stone-400 text-right">ELO</div>
+<div class="col-span-2 font-label text-[10px] uppercase tracking-widest text-stone-400 text-right">TREND</div>
+</div>
+<!-- Row 1: Master -->
+<div class="grid grid-cols-12 px-8 py-6 items-center hover:bg-stone-50/50 transition-colors">
+<div class="col-span-1 font-headline text-2xl italic font-bold text-secondary">01</div>
+<div class="col-span-7 flex items-center gap-4">
+<div class="relative">
+<img alt="Player" class="w-12 h-12 rounded-full object-cover" data-alt="portrait of a focused man in athletic wear with high contrast lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAt-O2U4AnHfeRnNwSetbR-yk3GaPsBkTd2J0SER11OfGoCaw5dl4iKUDm9eh95L-3ciHSN4_DhDmVhVaoKfQVP_9NUlmSguiK89BdjeThHUir3QFrg5y4XfgJQ49NALtRNNktHLE9C3mbBQ5fF1FFI-8byTp6l38qxNBYtQvYIBVAA_lAXzSIOZxkZ3WbTRgOclI_wDdFe4FTqNQvMgJQ3Z3WuM02R-StP8G55diX4stzAkvc7zE21gbmeL9UMxvJV2-PaAqB2hM4"/>
+<div class="absolute -top-1 -right-1 bg-secondary text-white rounded-full p-0.5" title="Masters Tier">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">stars</span>
+</div>
+</div>
+<div>
+<div class="font-headline text-lg font-bold">Julian Sterling</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-secondary-fixed text-on-secondary-fixed text-[9px] font-black uppercase rounded-full tracking-tighter">MASTERS</span>
+<span class="text-xs text-stone-400 font-medium">Richmond Park TC</span>
+</div>
+</div>
+</div>
+<div class="col-span-2 text-right">
+<span class="font-headline text-xl font-bold text-primary">2482</span>
+</div>
+<div class="col-span-2 text-right">
+<span class="text-green-600 flex items-center justify-end gap-1 text-sm font-bold">
+<span class="material-symbols-outlined text-sm">trending_up</span> 14
+                            </span>
+</div>
+</div>
+<!-- Row 2: Master -->
+<div class="grid grid-cols-12 px-8 py-6 items-center hover:bg-stone-50/50 transition-colors">
+<div class="col-span-1 font-headline text-2xl italic font-bold text-stone-300">02</div>
+<div class="col-span-7 flex items-center gap-4">
+<div class="relative">
+<img alt="Player" class="w-12 h-12 rounded-full object-cover" data-alt="close-up of a smiling young woman athlete with blurred tennis court background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDp-LUgRtwCI3soHL6Xw7GSSsAk08HCBoK278yg75NlRhkaxSrlJR7ye_F8WVAXA9cKLJM2tRnfJEl8oFHvUdX5_K7ZzfnvxEb89DXgaUwPezvdUk64H-SCo7Rhn8XtyuUdHS4WiN73hjqjVxyPNNjPWmHQWgpPKJyXRBdjcgbvfIiPu52-Um_Wm0fgc43OSNZcF6SjkGV5lnkY0LuR7Gv7XahMr1Y5unN0D2KhdYg0_anV3ed-hA9K2_B5NvT4GHgBQ_dLIwHy87E"/>
+<div class="absolute -top-1 -right-1 bg-secondary text-white rounded-full p-0.5">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">stars</span>
+</div>
+</div>
+<div>
+<div class="font-headline text-lg font-bold">Elena Vance</div>
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 bg-secondary-fixed text-on-secondary-fixed text-[9px] font-black uppercase rounded-full tracking-tighter">MASTERS</span>
+<span class="text-xs text-stone-400 font-medium">Wimbledon Common</span>
+</div>
+</div>
+</div>
+<div class="col-span-2 text-right">
+<span class="font-headline text-xl font-bold text-primary">2391</span>
+</div>
+<div class="col-span-2 text-right">
+<span class="text-stone-400 flex items-center justify-end gap-1 text-sm font-bold">
+<span class="material-symbols-outlined text-sm">horizontal_rule</span> 0
+                            </span>
+</div>
+</div>
+<!-- Row 3: Expert -->
+<div class="grid grid-cols-12 px-8 py-6 items-center hover:bg-stone-50/50 transition-colors">
+<div class="col-span-1 font-headline text-2xl italic font-bold text-stone-200">03</div>
+<div class="col-span-7 flex items-center gap-4">
+<img alt="Player" class="w-12 h-12 rounded-full object-cover grayscale" data-alt="headshot of a focused male player in a white polo shirt with cinematic lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqhxuD1P0eL7NiI6VYScMNl70FafYru8O9PiTMzP7E7wBIqrL2Vm4idZc8tpieZdgIfJyoxRsWFG3ZmZNmeJU42nmiTjL64WIvqjay-E0kqvo9yOxkHoOG0CO6I6qdYQ-ApbXuifbbT9rv_lZIa0GKdkwbncaW0htn-q6JwNPc9KjljyzYrhG0hChVYK86CkBvQ_EF4CBclTA76rxNKY2_4U5XHR0J4PGO0iyWjrxAKWh3XggrR4qxWMt9cnEF8aVilpv2miFTyao"/>
+<div>
+<div class="font-headline text-lg font-bold">Marcus Thorne</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-stone-400 font-medium">Southwark Arena</span>
+</div>
+</div>
+</div>
+<div class="col-span-2 text-right">
+<span class="font-headline text-xl font-bold text-primary">1988</span>
+</div>
+<div class="col-span-2 text-right">
+<span class="text-red-600 flex items-center justify-end gap-1 text-sm font-bold">
+<span class="material-symbols-outlined text-sm">trending_down</span> 8
+                            </span>
+</div>
+</div>
+<!-- Row 4: Expert -->
+<div class="grid grid-cols-12 px-8 py-6 items-center hover:bg-stone-50/50 transition-colors">
+<div class="col-span-1 font-headline text-2xl italic font-bold text-stone-100">04</div>
+<div class="col-span-7 flex items-center gap-4">
+<img alt="Player" class="w-12 h-12 rounded-full object-cover grayscale" data-alt="professional portrait of a woman in sports attire looking directly at camera" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCenQwlOxMtOxtCPrPngH9APAczjjzuUB1fGtA3HF23-beM-t4oQS7qwH8m5YA0v8K6-l87VI6c7kXwgPNx07VgQhT1ylmzXxpn7KEkztF95OzObu_CMAvZIH3w5UGqeBQKUjJxKWwgnknzZHYtHn0F8G8wPKCf3QNfEDNYnZuQNtYHmtytWS-b_iqxYBxuPeN6wNqjVzjEVgfv8KCqR2AxWzHlXpQxAyyZVbFG2G3fUxczzsZt31-98kVuPMG7ffbSo79D8bF2M7M"/>
+<div>
+<div class="font-headline text-lg font-bold">Sarah Chen</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-stone-400 font-medium">Islington Central</span>
+</div>
+</div>
+</div>
+<div class="col-span-2 text-right">
+<span class="font-headline text-xl font-bold text-primary">1842</span>
+</div>
+<div class="col-span-2 text-right">
+<span class="text-green-600 flex items-center justify-end gap-1 text-sm font-bold">
+<span class="material-symbols-outlined text-sm">trending_up</span> 22
+                            </span>
+</div>
+</div>
+<!-- My Ranking Anchor -->
+<div class="mx-6 my-4 p-4 rounded-xl bg-primary text-on-primary flex items-center justify-between shadow-lg">
+<div class="flex items-center gap-6">
+<div class="font-headline text-2xl font-bold italic opacity-60">142</div>
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full border-2 border-on-primary/20 overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="man in activewear profile picture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC95TSPevkXufGcqJQB7b5Kix-y95CwXjAf5DaOm2gpIZPF2IS9gq16y9vA8SC6SUMoEXptTgtqSjIwzwU8f_zGeM58iAb1_V-mrT4lZOUf6Op-E8L3A-W4YBG3hH7DaYAEFEPNoOR6QBxdLSQMCeujsjGO9DTiHasec0MxsxdQoi_TjNufS9M2QSs7kSgAkw7-9uV_f-fkvm2MnjDjTMdcZsfeLK5STvANU6uvOodpWdQNGiJMciiA2UAqep69qkSeRH7eTXm-gw0"/>
+</div>
+<div>
+<div class="font-bold">You (Alex Smith)</div>
+<div class="text-[10px] uppercase tracking-widest opacity-70">ADVANCED TIER</div>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-8">
+<div class="text-right">
+<div class="font-headline text-xl font-black">1310</div>
+<div class="text-[10px] uppercase opacity-70">ELO SCORE</div>
+</div>
+<span class="material-symbols-outlined">expand_less</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 border-t border-[#bfc9bd]/15 bg-[#f9f9f9]/70 dark:bg-stone-950/70 backdrop-blur-xl">
+<div class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-2">
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors p-2 active:scale-90" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors p-2 active:scale-90" href="#">
+<span class="material-symbols-outlined">sports_tennis</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Matches</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#874297] dark:text-purple-400 font-black hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors p-2 active:scale-90" href="#">
+<span class="material-symbols-outlined active-tab">leaderboard</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Rankings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl transition-colors p-2 active:scale-90" href="#">
+<span class="material-symbols-outlined">person_search</span>
+<span class="font-manrope text-[10px] uppercase tracking-[0.1em] font-bold mt-1">Coaches</span>
+</a>
+</div>
+</nav>
+</body></html>
