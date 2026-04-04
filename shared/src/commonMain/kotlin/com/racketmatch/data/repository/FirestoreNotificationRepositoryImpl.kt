@@ -46,7 +46,10 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
                                 Instant.fromEpochSeconds(ts.seconds, ts.nanoseconds.toLong())
                             }.getOrDefault(Clock.System.now())
                         )
-                    }.getOrNull()
+                    }.getOrElse { e ->
+                        println("RacketMatch doc ${doc.id} parse error: $e")
+                        null
+                    }
                 }
             }
     }
