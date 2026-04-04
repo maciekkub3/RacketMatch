@@ -19,12 +19,14 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
     private fun itemsCollection(userId: String) =
         db.collection("notifications").document(userId).collection("items")
 
-    override fun observeNotifications(userId: String): Flow<List<AppNotification>> =
-        itemsCollection(userId)
+    override fun observeNotifications(userId: String): Flow<List<AppNotification>> {
+        println("RacketMatch Firestore observing path: notifications/$userId/items")
+        return itemsCollection(userId)
             .orderBy("createdAt", Direction.DESCENDING)
             .limit(50)
             .snapshots()
             .map { snapshot ->
+                println("RacketMatch Firestore snapshot received, docs=${snapshot.documents.size}")
                 snapshot.documents.mapNotNull { doc ->
                     runCatching {
                         AppNotification(
@@ -47,6 +49,7 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
                     }.getOrNull()
                 }
             }
+    }
 
     override suspend fun markAsRead(userId: String, notificationId: String) {
         itemsCollection(userId)

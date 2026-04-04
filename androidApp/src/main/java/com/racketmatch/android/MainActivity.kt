@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import cafe.adriel.voyager.navigator.Navigator
+import com.racketmatch.android.BuildConfig
 import com.racketmatch.ui.navigation.SplashScreen
 import com.racketmatch.ui.theme.AppTheme
 import com.racketmatch.data.remote.TokenStorage
