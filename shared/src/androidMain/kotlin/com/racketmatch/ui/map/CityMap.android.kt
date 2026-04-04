@@ -102,20 +102,22 @@ actual fun CityMap(
 
                 override fun onBeforeClusterItemRendered(item: CourtClusterItem, markerOptions: MarkerOptions) {
                     markerOptions
-                        .icon(BitmapDescriptorFactory.fromBitmap(courtBitmap(item.court, isDark)))
+                        .icon(BitmapDescriptorFactory.fromBitmap(courtBitmap(item.court, item.sessionCount, isDark)))
                         .anchor(0.5f, 0.5f)
                 }
 
                 override fun onBeforeClusterRendered(cluster: Cluster<CourtClusterItem>, markerOptions: MarkerOptions) {
                     val sports = cluster.items.flatMap { it.court.sports }.toSet()
+                    val hasSession = cluster.items.any { it.sessionCount > 0 }
                     markerOptions
-                        .icon(BitmapDescriptorFactory.fromBitmap(clusterBitmap(sports, cluster.size, isDark)))
+                        .icon(BitmapDescriptorFactory.fromBitmap(clusterBitmap(sports, cluster.size, hasSession, isDark)))
                         .anchor(0.5f, 0.5f)
                 }
 
                 override fun onClusterRendered(cluster: Cluster<CourtClusterItem>, marker: com.google.android.gms.maps.model.Marker) {
                     val sports = cluster.items.flatMap { it.court.sports }.toSet()
-                    marker.setIcon(BitmapDescriptorFactory.fromBitmap(clusterBitmap(sports, cluster.size, isDark)))
+                    val hasSession = cluster.items.any { it.sessionCount > 0 }
+                    marker.setIcon(BitmapDescriptorFactory.fromBitmap(clusterBitmap(sports, cluster.size, hasSession, isDark)))
                 }
 
                 // Cluster as soon as 2+ markers are close
@@ -156,42 +158,45 @@ private fun circleBgAlt(isDark: Boolean) =
     if (isDark) android.graphics.Color.parseColor("#1E1E1C")
     else android.graphics.Color.parseColor("#004d26")
 
-private fun courtBitmap(court: Court, isDark: Boolean): Bitmap {
+private fun courtBitmap(court: Court, sessionCount: Int, isDark: Boolean): Bitmap {
+    val hasSession = sessionCount > 0
     val hasTennis = court.sports.contains(Sport.TENNIS)
     val hasPadel  = court.sports.contains(Sport.PADEL)
     return if (hasTennis && hasPadel) {
-        doubleCircleBitmap(1, isDark)
+        doubleCircleBitmap(1, hasSession, isDark)
     } else {
         val emoji = if (hasPadel) "🏸" else "🎾"
-        singleCircleBitmap(emoji, 1, isDark)
+        singleCircleBitmap(emoji, 1, hasSession, isDark)
     }
 }
 
-private fun clusterBitmap(sports: Set<Sport>, count: Int, isDark: Boolean): Bitmap {
+private fun clusterBitmap(sports: Set<Sport>, count: Int, hasSession: Boolean, isDark: Boolean): Bitmap {
     val hasTennis = sports.contains(Sport.TENNIS)
     val hasPadel  = sports.contains(Sport.PADEL)
     return if (hasTennis && hasPadel) {
-        doubleCircleBitmap(count, isDark)
+        doubleCircleBitmap(count, hasSession, isDark)
     } else {
         val emoji = if (hasPadel) "🏸" else "🎾"
-        singleCircleBitmap(emoji, count, isDark)
+        singleCircleBitmap(emoji, count, hasSession, isDark)
     }
 }
 
 /** Single sport — one circle with emoji + optional count badge. */
-private fun singleCircleBitmap(emoji: String, count: Int, isDark: Boolean): Bitmap {
+private fun singleCircleBitmap(emoji: String, count: Int, hasSession: Boolean, isDark: Boolean): Bitmap {
     val r = 62f
-    val badgeR = 14f
+    val ringExtra = if (hasSession) 18f else 0f
+    val badgeR = 20f   // was 14f
     val pad = badgeR
-    val totalW = (r * 2 + pad).toInt()
-    val totalH = (r * 2 + pad).toInt()
+    val totalW = (r * 2 + pad + ringExtra).toInt()
+    val totalH = (r * 2 + pad + ringExtra).toInt()
 
     val bitmap = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
-    val cx = r
-    val cy = r + pad / 2f
+    val cx = r + ringExtra / 2f
+    val cy = r + pad / 2f + ringExtra / 2f
 
+    if (hasSession) drawRing(canvas, cx, cy, r)
     drawCircleWithShadow(canvas, cx, cy, r, circleBg(isDark))
 
     val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -201,8 +206,7 @@ private fun singleCircleBitmap(emoji: String, count: Int, isDark: Boolean): Bitm
     canvas.drawText(emoji, cx, cy - (emojiPaint.descent() + emojiPaint.ascent()) / 2f, emojiPaint)
 
     if (count > 1) {
-        val limeColor = if (isDark) android.graphics.Color.parseColor("#9EC80A")
-        else android.graphics.Color.parseColor("#006633")
+        val limeColor = android.graphics.Color.parseColor("#9EC80A")
         drawBadge(canvas, cx + r * 0.65f, cy - r * 0.65f, badgeR, count, limeColor)
     }
 
@@ -210,19 +214,26 @@ private fun singleCircleBitmap(emoji: String, count: Int, isDark: Boolean): Bitm
 }
 
 /** Tennis + Padel — two overlapping circles + optional count badge. */
-private fun doubleCircleBitmap(count: Int, isDark: Boolean): Bitmap {
+private fun doubleCircleBitmap(count: Int, hasSession: Boolean, isDark: Boolean): Bitmap {
     val r = 54f
     val overlap = r * 0.55f
-    val badgeR = 14f
+    val badgeR = 20f   // was 14f
+    val ringExtra = if (hasSession) 18f else 0f
     val padTop = badgeR
-    val leftCx = r + badgeR * 0.3f
+    val leftCx = r + badgeR * 0.3f + ringExtra / 2f
     val rightCx = leftCx + r * 2f - overlap
-    val totalW = (rightCx + r + badgeR * 0.8f).toInt()
-    val totalH = (r * 2f + padTop).toInt()
+    val totalW = (rightCx + r + badgeR * 0.8f + ringExtra / 2f).toInt()
+    val totalH = (r * 2f + padTop + ringExtra).toInt()
 
     val bitmap = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val cy = r + padTop / 2f
+    val cy = r + padTop / 2f + ringExtra / 2f
+
+    if (hasSession) {
+        val midCx = (leftCx + rightCx) / 2f
+        val halfWidth = (rightCx - leftCx) / 2f + r
+        drawRing(canvas, midCx, cy, halfWidth)
+    }
 
     // Right circle drawn first so left circle is on top
     drawCircleWithShadow(canvas, rightCx, cy, r, circleBgAlt(isDark))
@@ -237,12 +248,20 @@ private fun doubleCircleBitmap(count: Int, isDark: Boolean): Bitmap {
     canvas.drawText("🏸", rightCx, cy + offsetY, emojiPaint)
 
     if (count > 1) {
-        val limeColor = if (isDark) android.graphics.Color.parseColor("#9EC80A")
-        else android.graphics.Color.parseColor("#006633")
+        val limeColor = android.graphics.Color.parseColor("#9EC80A")
         drawBadge(canvas, rightCx + r * 0.62f, cy - r * 0.62f, badgeR, count, limeColor)
     }
 
     return bitmap
+}
+
+private fun drawRing(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+    val limeColor = android.graphics.Color.parseColor("#9EC80A")
+    canvas.drawCircle(cx, cy, r + 8f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = limeColor
+        style = Paint.Style.STROKE
+        strokeWidth = 6f
+    })
 }
 
 private fun drawCircleWithShadow(canvas: Canvas, cx: Float, cy: Float, r: Float, bgColor: Int) {
@@ -267,7 +286,7 @@ private fun drawBadge(canvas: Canvas, bx: Float, by: Float, r: Float, value: Int
     })
     val bp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.color = android.graphics.Color.WHITE
-        textSize = r * 1.0f
+        textSize = r * 1.1f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
     }

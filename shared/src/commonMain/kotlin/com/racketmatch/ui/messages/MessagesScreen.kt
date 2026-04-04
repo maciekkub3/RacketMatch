@@ -41,7 +41,7 @@ object MessagesScreen : Screen {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is MessagesEffect.OpenConversation -> {
-                        navigator.push(
+                        (navigator.parent?.parent ?: navigator).push(
                             DmChatScreen(
                                 conversationId = effect.conversation.id,
                                 currentUserId = "me",
@@ -61,7 +61,6 @@ object MessagesScreen : Screen {
                 fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
             )
-
             when (val s = state) {
                 MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ProCircuit.Lime)

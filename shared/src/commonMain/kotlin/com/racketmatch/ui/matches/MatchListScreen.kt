@@ -390,38 +390,40 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
             }
         } else {
             // They proposed (or no details yet) — I can accept / counter / decline
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        if (!hasDetails) showAcceptConfirm = true
-                        else viewModel.onEvent(MatchEvent.AcceptMatch(match.id))
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-                ) {
-                    Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            if (!hasDetails) showAcceptConfirm = true
+                            else viewModel.onEvent(MatchEvent.AcceptMatch(match.id))
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+                    ) {
+                        Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 10.sp, letterSpacing = 1.sp)
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.onEvent(MatchEvent.DeclineMatch(match.id)) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
+                    ) {
+                        Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp, letterSpacing = 1.sp)
+                    }
                 }
                 OutlinedButton(
                     onClick = { showProposeDialog = true },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
                     border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
                 ) {
-                    Text(if (theyProposed) "KONTRA" else "ZAPROPONUJ",
+                    Text(if (theyProposed) "ZAPROPONUJ KONTRĘ" else "ZAPROPONUJ KORT/CZAS",
                         fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
-                }
-                OutlinedButton(
-                    onClick = { viewModel.onEvent(MatchEvent.DeclineMatch(match.id)) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
-                ) {
-                    Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 10.sp, letterSpacing = 1.sp)
                 }
             }

@@ -2,12 +2,14 @@ package com.racketmatch.ui.profile
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +38,7 @@ import com.racketmatch.presentation.viewmodel.ProfileViewModel
 import com.racketmatch.ui.auth.LoginScreen
 import org.koin.compose.viewmodel.koinViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 object ProfileScreen : Screen {
 
     @Composable
@@ -56,29 +59,66 @@ object ProfileScreen : Screen {
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            when (val s = state) {
-                ProfileState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ProCircuit.Lime)
-                }
-                ProfileState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Nie udało się załadować profilu", color = ProCircuit.OnSurface)
-                }
-                is ProfileState.Content -> ProfileContent(
-                    state = s,
-                    onSubscribeClick = { navigator.push(SubscriptionScreen) },
-                    onSettingsClick = { navigator.push(SettingsScreen) },
-                    onLogout = { viewModel.logout() }
+        Scaffold(
+            containerColor = ProCircuit.Bg,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Profil",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp,
+                            color = ProCircuit.OnBg
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Wstecz",
+                                tint = ProCircuit.OnBg
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { navigator.push(SettingsScreen) }) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Ustawienia",
+                                tint = ProCircuit.OnBg
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = ProCircuit.SurfaceLow
+                    )
                 )
+            }
+        ) { padding ->
+            Box(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).background(ProCircuit.Bg)) {
+                when (val s = state) {
+                    ProfileState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = ProCircuit.Lime)
+                    }
+                    ProfileState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Nie udało się załadować profilu", color = ProCircuit.OnSurface)
+                    }
+                    is ProfileState.Content -> ProfileContent(
+                        state = s,
+                        onSubscribeClick = { navigator.push(SubscriptionScreen) },
+                        onLogout = { viewModel.logout() }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> Unit, onSettingsClick: () -> Unit, onLogout: () -> Unit) {
+private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> Unit, onLogout: () -> Unit) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ProfileHeader(user = state.user, onSettingsClick = onSettingsClick) }
+        item { ProfileHeader(user = state.user) }
 
         if (!state.user.bio.isNullOrBlank()) {
             item {
@@ -149,7 +189,7 @@ private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> 
 }
 
 @Composable
-private fun ProfileHeader(user: User, onSettingsClick: () -> Unit) {
+private fun ProfileHeader(user: User) {
     val winRate = if (user.wins + user.losses > 0)
         "${(user.wins.toFloat() / (user.wins + user.losses) * 100).toInt()}%" else "—"
     val totalMatches = user.wins + user.losses
@@ -202,14 +242,6 @@ private fun ProfileHeader(user: User, onSettingsClick: () -> Unit) {
                     letterSpacing = 2.sp,
                     color = ProCircuit.OnSurface
                 )
-            }
-            Box(
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                    .background(ProCircuit.SurfaceLow)
-                    .clickable(onClick = onSettingsClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("⚙", fontSize = 18.sp)
             }
         }
 

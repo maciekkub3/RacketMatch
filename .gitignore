@@ -75,4 +75,5 @@ backend/src/main/resources/firebase-service-account.json
 # ----------------------------
 *.tmp
 *.swp
-*.swo
+*.swoGoogleService-Info.plist
+google-services.json

@@ -5,14 +5,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import cafe.adriel.voyager.navigator.Navigator
+import com.racketmatch.android.BuildConfig
 import com.racketmatch.ui.navigation.SplashScreen
 import com.racketmatch.ui.theme.AppTheme
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.ui.theme.ThemeState
 import com.racketmatch.di.apiModule
 import com.racketmatch.di.networkModule
 import com.racketmatch.di.repositoryModule
 import com.racketmatch.di.viewModelModule
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.getKoin
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext.startKoin
 import org.koin.core.qualifier.named
@@ -33,7 +36,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        registerFcmToken()
+        val tokenStorage = getKoin().get<TokenStorage>()
+        ThemeState.isDark = tokenStorage.isDarkTheme
+        lifecycleScope.launch {
+            tokenStorage.loginVersionFlow.collect { version ->
+                if (version > 0) registerFcmToken()
+            }
+        }
 
         setContent {
             AppTheme {
@@ -54,7 +63,7 @@ class MainActivity : ComponentActivity() {
             .addOnSuccessListener { token ->
                 lifecycleScope.launch {
                     try {
-                        org.koin.android.ext.android.getKoin().get<com.racketmatch.data.remote.api.UserApi>()
+                        getKoin().get<com.racketmatch.data.remote.api.UserApi>()
                             .updateFcmToken(token)
                     } catch (_: Exception) {}
                 }

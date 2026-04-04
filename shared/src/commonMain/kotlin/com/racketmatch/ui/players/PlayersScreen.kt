@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +24,6 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
-import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.Court
 import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.OpenSession
@@ -36,13 +34,10 @@ import com.racketmatch.presentation.viewmodel.ExploreEffect
 import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreState
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
-import com.racketmatch.presentation.viewmodel.NotificationViewModel
 import com.racketmatch.presentation.viewmodel.PostSessionDialogState
 import com.racketmatch.presentation.viewmodel.SessionTimeFilter
 import com.racketmatch.ui.navigation.MatchesTab
-import com.racketmatch.ui.navigation.ProfileTab
 import com.racketmatch.ui.map.CityMap
-import com.racketmatch.ui.notifications.NotificationsScreen
 import com.racketmatch.ui.onboarding.OnboardingAnchor
 import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.theme.AppBodyFontFamily
@@ -54,9 +49,7 @@ import com.racketmatch.ui.theme.ThemeState
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 
 object PlayersScreen : Screen {
     @Composable
@@ -146,13 +139,6 @@ private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
     val courtSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val uriHandler = LocalUriHandler.current
-    val avatarLetter = state.myName.firstOrNull()?.uppercase() ?: "?"
-    val tabNavigator = LocalTabNavigator.current
-    val navigator = LocalNavigator.currentOrThrow
-    val tokenStorage = koinInject<TokenStorage>()
-    val userId = tokenStorage.currentUserId ?: ""
-    val notifVm: NotificationViewModel = koinViewModel { parametersOf(userId) }
-    val notifState by notifVm.state.collectAsState()
 
     // Count active filters for badge
     val activeFilterCount = listOfNotNull(
@@ -177,52 +163,6 @@ private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
         if (!state.isMapView) {
             Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg.copy(alpha = 0.97f))) {
                 PlayerListView(state = state, onEvent = onEvent)
-            }
-        }
-
-        // ── Persistent top bar (over map AND list) ───────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopStart)
-                .background(ProCircuit.SurfaceLow)
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Avatar → taps to Profile tab
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(ProCircuit.Lime.copy(alpha = 0.18f))
-                    .clickable { tabNavigator.current = ProfileTab },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(avatarLetter, fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 15.sp, color = ProCircuit.Lime)
-            }
-            Spacer(Modifier.weight(1f))
-            Text(
-                "RACKETMATCH",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 13.sp, letterSpacing = 2.sp, color = ProCircuit.OnBg
-            )
-            Spacer(Modifier.weight(1f))
-            // Bell icon with unread badge
-            BadgedBox(
-                badge = {
-                    if (notifState.unreadCount > 0) {
-                        Badge {
-                            Text(
-                                if (notifState.unreadCount > 9) "9+" else notifState.unreadCount.toString()
-                            )
-                        }
-                    }
-                }
-            ) {
-                IconButton(onClick = { navigator.push(NotificationsScreen) }) {
-                    Icon(Icons.Default.Notifications, contentDescription = "Powiadomienia")
-                }
             }
         }
 
@@ -558,7 +498,7 @@ private fun SessionCard(session: OpenSession, isMySession: Boolean, onJoin: () -
 
     Row(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ProCircuit.SurfaceHigh)
-            .clickable(enabled = !isMySession) { navigator.push(PlayerProfileScreen(sessionUser)) }
+            .clickable(enabled = !isMySession) { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(sessionUser)) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -883,7 +823,7 @@ private fun PlayerListView(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
                                 player = player,
                                 myElo = state.myElo,
                                 isPending = player.id in state.pendingChallengeIds,
-                                onCardClick = { navigator.push(PlayerProfileScreen(player)) },
+                                onCardClick = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(player)) },
                                 onChallengeClick = { onEvent(ExploreEvent.ShowChallengeDialog(player.id)) }
                             )
                         }

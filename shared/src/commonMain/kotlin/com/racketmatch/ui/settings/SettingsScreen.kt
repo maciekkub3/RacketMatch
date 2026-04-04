@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,9 +36,12 @@ import com.racketmatch.presentation.viewmodel.SettingsViewModel
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.ui.theme.ThemeState
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 object SettingsScreen : Screen {
 
     @Composable
@@ -57,8 +62,33 @@ object SettingsScreen : Screen {
 
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = ProCircuit.Bg
-        ) { _ ->
+            containerColor = ProCircuit.Bg,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Ustawienia",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp,
+                            color = ProCircuit.OnBg
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Wstecz",
+                                tint = ProCircuit.OnBg
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = ProCircuit.SurfaceLow
+                    )
+                )
+            }
+        ) { padding ->
             when (val s = state) {
                 SettingsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ProCircuit.Lime)
@@ -66,7 +96,7 @@ object SettingsScreen : Screen {
                 SettingsState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Could not load profile", color = ProCircuit.OnSurface)
                 }
-                is SettingsState.Content -> SettingsContent(s, viewModel, onBack = { navigator.pop() })
+                is SettingsState.Content -> SettingsContent(s, viewModel, topPadding = padding.calculateTopPadding())
             }
         }
     }
@@ -76,25 +106,16 @@ object SettingsScreen : Screen {
 private fun SettingsContent(
     state: SettingsState.Content,
     viewModel: SettingsViewModel,
-    onBack: () -> Unit
+    topPadding: androidx.compose.ui.unit.Dp = 0.dp
 ) {
+    val tokenStorage = koinInject<TokenStorage>()
     var passwordValue by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp)
+            .padding(top = topPadding, start = 24.dp, end = 24.dp)
     ) {
         Spacer(Modifier.height(24.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                Text("←  BACK", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                    fontSize = 11.sp, letterSpacing = 1.sp, color = ProCircuit.Lime)
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Text("SETTINGS", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-            fontSize = 28.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
-        Spacer(Modifier.height(28.dp))
 
         // Avatar preview + URL field
         AvatarSection(
@@ -213,7 +234,10 @@ private fun SettingsContent(
             }
             Switch(
                 checked = ThemeState.isDark,
-                onCheckedChange = { ThemeState.isDark = it },
+                onCheckedChange = {
+                    ThemeState.isDark = it
+                    tokenStorage.isDarkTheme = it
+                },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = ProCircuit.Bg, checkedTrackColor = ProCircuit.Lime,
                     uncheckedThumbColor = ProCircuit.OnSurface, uncheckedTrackColor = ProCircuit.SurfaceHigh

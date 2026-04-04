@@ -8,6 +8,8 @@ import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.firestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import dev.gitlive.firebase.firestore.Timestamp
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
 class FirestoreNotificationRepositoryImpl : NotificationRepository {
@@ -17,12 +19,14 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
     private fun itemsCollection(userId: String) =
         db.collection("notifications").document(userId).collection("items")
 
-    override fun observeNotifications(userId: String): Flow<List<AppNotification>> =
-        itemsCollection(userId)
+    override fun observeNotifications(userId: String): Flow<List<AppNotification>> {
+        println("RacketMatch Firestore observing path: notifications/$userId/items")
+        return itemsCollection(userId)
             .orderBy("createdAt", Direction.DESCENDING)
             .limit(50)
             .snapshots()
             .map { snapshot ->
+                println("RacketMatch Firestore snapshot received, docs=${snapshot.documents.size}")
                 snapshot.documents.mapNotNull { doc ->
                     runCatching {
                         AppNotification(
@@ -32,20 +36,22 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
                             }.getOrDefault(NotificationType.UNKNOWN),
                             title = doc.get("title") as? String ?: "",
                             body = doc.get("body") as? String ?: "",
-                            data = (doc.get("data") as? Map<*, *>)
-                                ?.entries
-                                ?.associate { it.key.toString() to it.value.toString() }
-                                ?: emptyMap(),
+                            data = runCatching {
+                                doc.get<Map<String, String>>("data")
+                            }.getOrDefault(emptyMap()),
                             read = doc.get("read") as? Boolean ?: false,
-                            createdAt = run {
-                                val seconds = doc.get<Long>("createdAt._seconds") ?: 0L
-                                val nanos = doc.get<Int>("createdAt._nanoseconds") ?: 0
-                                Instant.fromEpochSeconds(seconds, nanos)
-                            }
+                            createdAt = runCatching {
+                                val ts = doc.get<Timestamp>("createdAt")
+                                Instant.fromEpochSeconds(ts.seconds, ts.nanoseconds.toLong())
+                            }.getOrDefault(Clock.System.now())
                         )
-                    }.getOrNull()
+                    }.getOrElse { e ->
+                        println("RacketMatch doc ${doc.id} parse error: $e")
+                        null
+                    }
                 }
             }
+    }
 
     override suspend fun markAsRead(userId: String, notificationId: String) {
         itemsCollection(userId)
