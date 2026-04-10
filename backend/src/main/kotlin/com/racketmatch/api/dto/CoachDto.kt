@@ -18,7 +18,10 @@ data class CoachProfileDto(
     val city: String,
     val eloRating: Int,
     val lowestServicePriceCents: Int? = null,
-    val trainingLocations: List<String> = emptyList()
+    val trainingLocations: List<String> = emptyList(),
+    val bookingLeadTimeHours: Int = 24,
+    val bookingHorizonDays: Int = 30,
+    val bufferMinutes: Int = 0,
 )
 
 data class CoachServiceDto(
@@ -112,7 +115,10 @@ fun CoachProfileEntity.toDto(services: List<CoachServiceEntity> = emptyList()) =
     city = user.city,
     eloRating = user.eloRating,
     lowestServicePriceCents = services.filter { it.isActive }.minOfOrNull { it.priceCents },
-    trainingLocations = trainingLocations.toList()
+    trainingLocations = trainingLocations.toList(),
+    bookingLeadTimeHours = bookingLeadTimeHours,
+    bookingHorizonDays = bookingHorizonDays,
+    bufferMinutes = bufferMinutes,
 )
 
 fun CoachServiceEntity.toDto() = CoachServiceDto(

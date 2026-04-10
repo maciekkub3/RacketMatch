@@ -30,5 +30,14 @@ class CoachProfileEntity(
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "coach_training_locations", joinColumns = [JoinColumn(name = "coach_id")])
     @Column(name = "location")
-    var trainingLocations: MutableList<String> = mutableListOf()
+    var trainingLocations: MutableList<String> = mutableListOf(),
+
+    @Column(name = "booking_lead_time_hours")
+    var bookingLeadTimeHours: Int = 24,
+
+    @Column(name = "booking_horizon_days")
+    var bookingHorizonDays: Int = 30,
+
+    @Column(name = "buffer_minutes")
+    var bufferMinutes: Int = 0,
 )
