@@ -10,4 +10,6 @@ interface ProfileRepository {
     suspend fun getRecentMatches(): List<Match>
     suspend fun getEloHistory(): List<EloPoint>
     suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<Sport>, password: String?, dateOfBirth: String? = null, avatarUrl: String? = null): User
+    suspend fun activateRole(activateCoach: Boolean? = null, activatePlayerProfile: Boolean? = null): User
+    suspend fun uploadAvatar(imageBytes: ByteArray): String
 }

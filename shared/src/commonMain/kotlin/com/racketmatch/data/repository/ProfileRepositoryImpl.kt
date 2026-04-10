@@ -21,4 +21,10 @@ class ProfileRepositoryImpl(private val profileApi: ProfileApi) : ProfileReposit
 
     override suspend fun updateProfile(displayName: String, city: String, bio: String?, sports: List<Sport>, password: String?, dateOfBirth: String?, avatarUrl: String?): User =
         profileApi.updateProfile(displayName, city, bio, sports.map { it.name }, password, dateOfBirth, avatarUrl).toDomain()
+
+    override suspend fun activateRole(activateCoach: Boolean?, activatePlayerProfile: Boolean?): User =
+        profileApi.activateRole(activateCoach = activateCoach, activatePlayerProfile = activatePlayerProfile).toDomain()
+
+    override suspend fun uploadAvatar(imageBytes: ByteArray): String =
+        profileApi.uploadAvatar(imageBytes)
 }

@@ -38,15 +38,15 @@ import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.ui.theme.ThemeState
+import com.racketmatch.util.kmpViewModel
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 object SettingsScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: SettingsViewModel = koinViewModel()
+        val viewModel: SettingsViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
@@ -56,6 +56,7 @@ object SettingsScreen : Screen {
                 when (effect) {
                     is SettingsEffect.Saved          -> { snackbarHostState.showSnackbar("Saved!"); navigator.pop() }
                     is SettingsEffect.ShowError      -> snackbarHostState.showSnackbar(effect.msg)
+                    is SettingsEffect.ShowMessage    -> snackbarHostState.showSnackbar(effect.msg)
                 }
             }
         }
@@ -94,7 +95,7 @@ object SettingsScreen : Screen {
                     CircularProgressIndicator(color = ProCircuit.Lime)
                 }
                 SettingsState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Could not load profile", color = ProCircuit.OnSurface)
+                    Text("Nie można załadować profilu", color = ProCircuit.OnSurface)
                 }
                 is SettingsState.Content -> SettingsContent(s, viewModel, topPadding = padding.calculateTopPadding())
             }
@@ -117,26 +118,31 @@ private fun SettingsContent(
     ) {
         Spacer(Modifier.height(24.dp))
 
-        // Avatar preview + URL field
+        // Avatar preview + picker
+        val imagePicker = com.racketmatch.ui.common.rememberImagePickerLauncher { bytes ->
+            viewModel.onEvent(SettingsEvent.UploadAvatar(bytes))
+        }
         AvatarSection(
             displayName = state.displayName,
             avatarUrl = state.avatarUrl,
-            onAvatarUrlChange = { viewModel.onEvent(SettingsEvent.AvatarUrlChanged(it)) }
+            isUploading = state.isUploadingAvatar,
+            onPickGallery = { imagePicker.launchGallery() },
+            onPickCamera = { imagePicker.launchCamera() }
         )
 
         Spacer(Modifier.height(28.dp))
-        SettingsSectionLabel("PROFILE")
+        SettingsSectionLabel("PROFIL")
         Spacer(Modifier.height(12.dp))
 
-        SettingsField("Display name", state.displayName) {
+        SettingsField("Imię i nazwisko", state.displayName) {
             viewModel.onEvent(SettingsEvent.DisplayNameChanged(it))
         }
         Spacer(Modifier.height(12.dp))
-        SettingsField("City", state.city) {
+        SettingsField("Miasto", state.city) {
             viewModel.onEvent(SettingsEvent.CityChanged(it))
         }
         Spacer(Modifier.height(12.dp))
-        SettingsField("Bio", state.bio, maxLines = 3, singleLine = false) {
+        SettingsField("O mnie", state.bio, maxLines = 3, singleLine = false) {
             viewModel.onEvent(SettingsEvent.BioChanged(it))
         }
         Spacer(Modifier.height(12.dp))
@@ -146,13 +152,13 @@ private fun SettingsContent(
         ) { if (it.length <= 60) viewModel.onEvent(SettingsEvent.StatusTextChanged(it)) }
 
         Spacer(Modifier.height(24.dp))
-        SettingsSectionLabel("SPORTS")
+        SettingsSectionLabel("SPORTY")
         Spacer(Modifier.height(4.dp))
-        Text("Select the sports you play. You'll get separate ELO for each.",
+        Text("Wybierz sporty, w które grasz. Otrzymasz osobne ELO dla każdego.",
             fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface)
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            listOf(Sport.TENNIS to "🎾 Tennis", Sport.PADEL to "🏸 Padel").forEach { (sport, label) ->
+            listOf(Sport.TENNIS to "🎾 Tenis", Sport.PADEL to "🏸 Padel").forEach { (sport, label) ->
                 val selected = sport in state.sports
                 Box(
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
@@ -173,9 +179,9 @@ private fun SettingsContent(
         }
 
         Spacer(Modifier.height(24.dp))
-        SettingsSectionLabel("SECURITY")
+        SettingsSectionLabel("BEZPIECZEŃSTWO")
         Spacer(Modifier.height(12.dp))
-        SettingsField("New password (leave blank to keep current)", passwordValue,
+        SettingsField("Nowe hasło (zostaw puste, aby zachować obecne)", passwordValue,
             isPassword = true, keyboardType = KeyboardType.Password) { v ->
             passwordValue = v
             viewModel.onEvent(SettingsEvent.PasswordChanged(v))
@@ -183,12 +189,12 @@ private fun SettingsContent(
 
         if (state.isMaster) {
             Spacer(Modifier.height(24.dp))
-            SettingsSectionLabel("MASTER SETTINGS")
+            SettingsSectionLabel("USTAWIENIA MASTERA")
             Spacer(Modifier.height(4.dp))
-            Text("Set your challenge fee (in PLN). You keep 80%.",
+            Text("Ustaw opłatę za wyzwanie (w PLN). Zachowujesz 80%.",
                 fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface)
             Spacer(Modifier.height(12.dp))
-            SettingsField("Challenge fee (PLN)", state.masterFee, keyboardType = KeyboardType.Number) {
+            SettingsField("Opłata za wyzwanie (PLN)", state.masterFee, keyboardType = KeyboardType.Number) {
                 viewModel.onEvent(SettingsEvent.MasterFeeChanged(it))
             }
         }
@@ -197,7 +203,7 @@ private fun SettingsContent(
         // but we surface a reminder here
         if (state.isCoach) {
             Spacer(Modifier.height(24.dp))
-            SettingsSectionLabel("COACH PROFILE")
+            SettingsSectionLabel("PROFIL TRENERA")
             Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier.fillMaxWidth()
@@ -206,17 +212,38 @@ private fun SettingsContent(
                     .padding(16.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Your public coach profile", fontFamily = AppFontFamily,
+                    Text("Twój publiczny profil trenera", fontFamily = AppFontFamily,
                         fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ProCircuit.Lime)
-                    Text("Your bio (above) is shown to players on your coach card. Keep it professional and mention your certifications.",
+                    Text("Twoje bio (powyżej) jest widoczne dla graczy na Twojej karcie trenera. Napisz o certyfikatach i doświadczeniu.",
                         fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface,
                         lineHeight = 18.sp)
                 }
             }
         }
 
+        // Role management section — only shown when user doesn't have both roles
+        if (!state.isCoach || !state.hasPlayerProfile) {
+            Spacer(Modifier.height(24.dp))
+            SettingsSectionLabel("ROLE")
+            Spacer(Modifier.height(10.dp))
+            if (!state.isCoach) {
+                SettingsRoleRow(
+                    label = "Aktywuj profil trenera",
+                    subtitle = "Zacznij oferować zajęcia treningowe",
+                    onClick = { viewModel.onEvent(SettingsEvent.ActivateCoachProfile) }
+                )
+            }
+            if (!state.hasPlayerProfile) {
+                SettingsRoleRow(
+                    label = "Aktywuj profil gracza",
+                    subtitle = "Dołącz do rankingów i znajdź partnerów",
+                    onClick = { viewModel.onEvent(SettingsEvent.ActivatePlayerProfile) }
+                )
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
-        SettingsSectionLabel("APPEARANCE")
+        SettingsSectionLabel("WYGLĄD")
         Spacer(Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth()
@@ -262,7 +289,7 @@ private fun SettingsContent(
             if (state.isSaving) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = ProCircuit.Bg)
             } else {
-                Text("SAVE CHANGES", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                Text("ZAPISZ ZMIANY", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                     fontSize = 13.sp, letterSpacing = 1.sp)
             }
         }
@@ -274,13 +301,13 @@ private fun SettingsContent(
 private fun AvatarSection(
     displayName: String,
     avatarUrl: String,
-    onAvatarUrlChange: (String) -> Unit
+    isUploading: Boolean,
+    onPickGallery: () -> Unit,
+    onPickCamera: () -> Unit
 ) {
-    var showUrlField by remember { mutableStateOf(avatarUrl.isNotBlank()) }
     val letter = displayName.firstOrNull()?.uppercase() ?: "?"
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        // Avatar circle
         Box(
             modifier = Modifier
                 .size(88.dp)
@@ -302,43 +329,35 @@ private fun AvatarSection(
                     fontSize = 36.sp, color = ProCircuit.Lime
                 )
             }
+            if (isUploading) {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = ProCircuit.Lime, modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                }
+            }
         }
         Spacer(Modifier.height(12.dp))
-        TextButton(onClick = { showUrlField = !showUrlField }) {
-            Text(
-                if (showUrlField) "Ukryj" else "Zmień avatar (URL)",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                fontSize = 12.sp, color = ProCircuit.Lime
-            )
-        }
-        if (showUrlField) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = avatarUrl,
-                onValueChange = onAvatarUrlChange,
-                modifier = Modifier.fillMaxWidth(),
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = onPickGallery,
+                enabled = !isUploading,
                 shape = RoundedCornerShape(12.dp),
-                placeholder = {
-                    Text("https://...", fontFamily = AppBodyFontFamily, fontSize = 13.sp,
-                        color = ProCircuit.OnSurface.copy(alpha = 0.5f))
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor      = ProCircuit.Lime,
-                    unfocusedBorderColor    = Color(0xFF464849),
-                    focusedTextColor        = ProCircuit.OnBg,
-                    unfocusedTextColor      = ProCircuit.OnBg,
-                    cursorColor             = ProCircuit.Lime,
-                    focusedContainerColor   = ProCircuit.SurfaceLow,
-                    unfocusedContainerColor = ProCircuit.SurfaceLow
-                )
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Wklej link do zdjęcia. Zmiany będą widoczne po zapisaniu.",
-                fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
-            )
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime.copy(alpha = 0.5f))
+            ) {
+                Text("Galeria", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = onPickCamera,
+                enabled = !isUploading,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime.copy(alpha = 0.5f))
+            ) {
+                Text("Aparat", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
         }
     }
 }
@@ -347,6 +366,27 @@ private fun AvatarSection(
 private fun SettingsSectionLabel(text: String) {
     Text(text, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
         fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
+}
+
+@Composable
+private fun SettingsRoleRow(label: String, subtitle: String? = null, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.SurfaceLow)
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+            fontSize = 15.sp, color = ProCircuit.OnBg)
+        if (subtitle != null) {
+            Spacer(Modifier.height(2.dp))
+            Text(subtitle, fontFamily = AppBodyFontFamily, fontSize = 12.sp,
+                color = ProCircuit.OnSurface)
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable

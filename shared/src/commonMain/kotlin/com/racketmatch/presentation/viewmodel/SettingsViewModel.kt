@@ -25,9 +25,11 @@ sealed class SettingsState {
         val sports: Set<Sport>,
         val isMaster: Boolean,
         val isCoach: Boolean,
+        val hasPlayerProfile: Boolean,
         val masterFee: String,
         val statusText: String = "",
-        val isSaving: Boolean = false
+        val isSaving: Boolean = false,
+        val isUploadingAvatar: Boolean = false
     ) : SettingsState()
     object Error : SettingsState()
 }
@@ -42,12 +44,16 @@ sealed class SettingsEvent {
     data class PasswordChanged(val value: String) : SettingsEvent()
     data class AvatarUrlChanged(val value: String) : SettingsEvent()
     data class StatusTextChanged(val text: String) : SettingsEvent()
+    data class UploadAvatar(val bytes: ByteArray) : SettingsEvent()
     object Save : SettingsEvent()
+    object ActivateCoachProfile : SettingsEvent()
+    object ActivatePlayerProfile : SettingsEvent()
 }
 
 sealed class SettingsEffect {
     object Saved : SettingsEffect()
     data class ShowError(val msg: String) : SettingsEffect()
+    data class ShowMessage(val msg: String) : SettingsEffect()
 }
 
 class SettingsViewModel(
@@ -77,6 +83,7 @@ class SettingsViewModel(
                     sports = user.sports.toSet(),
                     isMaster = user.isMaster,
                     isCoach = user.isCoach,
+                    hasPlayerProfile = user.hasPlayerProfile,
                     masterFee = user.masterFee?.toString() ?: ""
                 )
             } catch (e: Exception) {
@@ -96,12 +103,58 @@ class SettingsViewModel(
             is SettingsEvent.PasswordChanged    -> pendingPassword = event.value.ifBlank { null }
             is SettingsEvent.AvatarUrlChanged   -> _state.value = content.copy(avatarUrl = event.value)
             is SettingsEvent.StatusTextChanged  -> _state.value = content.copy(statusText = event.text)
+            is SettingsEvent.UploadAvatar       -> uploadAvatar(content, event.bytes)
             is SettingsEvent.SportToggled       -> {
                 val updated = if (event.sport in content.sports)
                     content.sports - event.sport else content.sports + event.sport
                 _state.value = content.copy(sports = updated)
             }
             is SettingsEvent.Save -> save(content)
+            is SettingsEvent.ActivateCoachProfile -> activateCoachProfile(content)
+            is SettingsEvent.ActivatePlayerProfile -> activatePlayerProfile(content)
+        }
+    }
+
+    private fun uploadAvatar(content: SettingsState.Content, bytes: ByteArray) {
+        _state.value = content.copy(isUploadingAvatar = true)
+        viewModelScope.launch(dispatcher) {
+            try {
+                val url = profileRepository.uploadAvatar(bytes)
+                val updated = (_state.value as? SettingsState.Content) ?: content
+                _state.value = updated.copy(avatarUrl = url, isUploadingAvatar = false)
+                tokenStorage.incrementProfileVersion()
+            } catch (e: Exception) {
+                val updated = (_state.value as? SettingsState.Content) ?: content
+                _state.value = updated.copy(isUploadingAvatar = false)
+                _effects.emit(SettingsEffect.ShowError("Upload failed: ${e::class.simpleName}: ${e.message}"))
+            }
+        }
+    }
+
+    private fun activateCoachProfile(content: SettingsState.Content) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                profileRepository.activateRole(activateCoach = true)
+                tokenStorage.isCoach = true
+                tokenStorage.coachModeActive = true
+                _state.value = content.copy(isCoach = true)
+                _effects.emit(SettingsEffect.ShowMessage("Profil trenera aktywowany"))
+            } catch (e: Exception) {
+                _effects.emit(SettingsEffect.ShowError("Nie udało się aktywować profilu trenera"))
+            }
+        }
+    }
+
+    private fun activatePlayerProfile(content: SettingsState.Content) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                profileRepository.activateRole(activatePlayerProfile = true)
+                tokenStorage.hasPlayerProfile = true
+                _state.value = content.copy(hasPlayerProfile = true)
+                _effects.emit(SettingsEffect.ShowMessage("Profil gracza aktywowany"))
+            } catch (e: Exception) {
+                _effects.emit(SettingsEffect.ShowError("Nie udało się aktywować profilu gracza"))
+            }
         }
     }
 
