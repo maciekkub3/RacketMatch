@@ -2,6 +2,19 @@ package com.racketmatch.domain.model
 
 import kotlin.time.Instant
 
+data class BookingSettings(
+    val leadTimeHours: Int = 24,
+    val horizonDays: Int = 30,
+    val bufferMinutes: Int = 0
+)
+
+data class CoachException(
+    val id: String,
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val label: String? = null
+)
+
 data class CoachProfile(
     val userId: String,
     val displayName: String,

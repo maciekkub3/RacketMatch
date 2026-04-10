@@ -15,7 +15,10 @@ data class CoachProfileDto(
     val city: String,
     val eloRating: Int,
     val lowestServicePriceCents: Int? = null,
-    val trainingLocations: List<String> = emptyList()
+    val trainingLocations: List<String> = emptyList(),
+    val bookingLeadTimeHours: Int = 24,
+    val bookingHorizonDays: Int = 30,
+    val bufferMinutes: Int = 0
 )
 
 @Serializable
@@ -107,6 +110,28 @@ data class CreateBookingRequestDto(
     val startsAt: String,
     val endsAt: String,
     val durationMinutes: Int
+)
+
+@Serializable
+data class CoachExceptionDto(
+    val id: String,
+    val startsAt: String,
+    val endsAt: String,
+    val label: String? = null
+)
+
+@Serializable
+data class CreateExceptionRequestDto(
+    val startsAt: String,
+    val endsAt: String,
+    val label: String? = null
+)
+
+@Serializable
+data class UpdateBookingSettingsDto(
+    val bookingLeadTimeHours: Int? = null,
+    val bookingHorizonDays: Int? = null,
+    val bufferMinutes: Int? = null
 )
 
 // toDomain mappers

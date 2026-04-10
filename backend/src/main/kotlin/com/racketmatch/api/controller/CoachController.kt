@@ -98,6 +98,15 @@ class CoachController(
         return slots
     }
 
+    @GetMapping("/me")
+    fun getMyProfile(authentication: Authentication): CoachProfileDto {
+        val coachId = UUID.fromString(authentication.name)
+        val profile = coachProfileRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach profile not found") }
+        val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId)
+        return profile.toDto(services)
+    }
+
     @GetMapping("/me/exceptions")
     fun getMyExceptions(authentication: Authentication): List<CoachExceptionDto> {
         val coachId = UUID.fromString(authentication.name)

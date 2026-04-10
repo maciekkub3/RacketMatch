@@ -2,8 +2,11 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.domain.model.BookingSettings
+import com.racketmatch.domain.model.CoachException
 import com.racketmatch.domain.model.CoachWeeklyAvailability
 import com.racketmatch.domain.repository.CoachRepository
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,7 +60,11 @@ private const val DAY_MAX = 24 * 60  // 1440
 
 sealed class CoachAvailabilityState {
     object Loading : CoachAvailabilityState()
-    data class Content(val days: List<DayAvailability>) : CoachAvailabilityState()
+    data class Content(
+        val days: List<DayAvailability>,
+        val bookingSettings: BookingSettings = BookingSettings(),
+        val exceptions: List<CoachException> = emptyList()
+    ) : CoachAvailabilityState()
     object Error : CoachAvailabilityState()
 }
 
@@ -68,6 +75,12 @@ sealed class CoachAvailabilityEvent {
     data class SetStart(val dayOfWeek: Int, val windowIndex: Int, val minutes: Int) : CoachAvailabilityEvent()
     data class SetEnd(val dayOfWeek: Int, val windowIndex: Int, val minutes: Int) : CoachAvailabilityEvent()
     object Save : CoachAvailabilityEvent()
+    data class SetLeadTime(val hours: Int) : CoachAvailabilityEvent()
+    data class SetHorizon(val days: Int) : CoachAvailabilityEvent()
+    data class SetBuffer(val minutes: Int) : CoachAvailabilityEvent()
+    data class CopyDayTo(val fromDayOfWeek: Int, val toDays: Set<Int>) : CoachAvailabilityEvent()
+    data class AddException(val startsAt: Instant, val endsAt: Instant, val label: String?) : CoachAvailabilityEvent()
+    data class DeleteException(val id: String) : CoachAvailabilityEvent()
 }
 
 sealed class CoachAvailabilityEffect {
@@ -90,14 +103,54 @@ class CoachAvailabilityViewModel(
 
     fun onEvent(event: CoachAvailabilityEvent) {
         val current = (_state.value as? CoachAvailabilityState.Content) ?: return
-        if (event is CoachAvailabilityEvent.Save) {
-            save(current.days)
-            return
+        when (event) {
+            is CoachAvailabilityEvent.Save -> {
+                save(current)
+                return
+            }
+            is CoachAvailabilityEvent.SetLeadTime ->
+                _state.value = current.copy(bookingSettings = current.bookingSettings.copy(leadTimeHours = event.hours))
+            is CoachAvailabilityEvent.SetHorizon ->
+                _state.value = current.copy(bookingSettings = current.bookingSettings.copy(horizonDays = event.days))
+            is CoachAvailabilityEvent.SetBuffer ->
+                _state.value = current.copy(bookingSettings = current.bookingSettings.copy(bufferMinutes = event.minutes))
+            is CoachAvailabilityEvent.CopyDayTo -> {
+                val source = current.days.first { it.dayOfWeek == event.fromDayOfWeek }
+                _state.value = current.copy(days = current.days.map { day ->
+                    if (day.dayOfWeek in event.toDays)
+                        day.copy(enabled = source.enabled, windows = source.windows.toList())
+                    else day
+                })
+            }
+            is CoachAvailabilityEvent.AddException -> {
+                viewModelScope.launch(dispatcher) {
+                    try {
+                        val created = coachRepository.createException(event.startsAt, event.endsAt, event.label)
+                        val cur = (_state.value as? CoachAvailabilityState.Content) ?: return@launch
+                        _state.value = cur.copy(exceptions = cur.exceptions + created)
+                    } catch (_: Exception) {
+                        _effects.emit(CoachAvailabilityEffect.Error("Nie udało się dodać wyjątku"))
+                    }
+                }
+            }
+            is CoachAvailabilityEvent.DeleteException -> {
+                viewModelScope.launch(dispatcher) {
+                    try {
+                        coachRepository.deleteException(event.id)
+                        val cur = (_state.value as? CoachAvailabilityState.Content) ?: return@launch
+                        _state.value = cur.copy(exceptions = cur.exceptions.filter { it.id != event.id })
+                    } catch (_: Exception) {
+                        _effects.emit(CoachAvailabilityEffect.Error("Nie udało się usunąć wyjątku"))
+                    }
+                }
+            }
+            else -> {
+                _state.value = current.copy(days = current.days.map { day ->
+                    if (day.dayOfWeek != eventDay(event)) return@map day
+                    applyEvent(day, event)
+                })
+            }
         }
-        _state.value = current.copy(days = current.days.map { day ->
-            if (day.dayOfWeek != eventDay(event)) return@map day
-            applyEvent(day, event)
-        })
     }
 
     private fun eventDay(event: CoachAvailabilityEvent): Int = when (event) {
@@ -106,7 +159,7 @@ class CoachAvailabilityViewModel(
         is CoachAvailabilityEvent.RemoveWindow -> event.dayOfWeek
         is CoachAvailabilityEvent.SetStart     -> event.dayOfWeek
         is CoachAvailabilityEvent.SetEnd       -> event.dayOfWeek
-        CoachAvailabilityEvent.Save            -> -1
+        else                                   -> -1
     }
 
     private fun applyEvent(day: DayAvailability, event: CoachAvailabilityEvent): DayAvailability = when (event) {
@@ -141,7 +194,7 @@ class CoachAvailabilityViewModel(
                 else w
             })
         }
-        CoachAvailabilityEvent.Save -> day
+        else -> day
     }
 
     private fun load() {
@@ -161,17 +214,23 @@ class CoachAvailabilityViewModel(
                         windows   = if (windows.isEmpty()) listOf(TimeWindow(9 * 60, 17 * 60)) else windows
                     )
                 }
-                _state.value = CoachAvailabilityState.Content(days)
+                val exceptions = coachRepository.getMyExceptions()
+                val bookingSettings = coachRepository.getMyBookingSettings()
+                _state.value = CoachAvailabilityState.Content(
+                    days = days,
+                    bookingSettings = bookingSettings,
+                    exceptions = exceptions
+                )
             } catch (_: Exception) {
                 _state.value = CoachAvailabilityState.Error
             }
         }
     }
 
-    private fun save(days: List<DayAvailability>) {
+    private fun save(current: CoachAvailabilityState.Content) {
         viewModelScope.launch(dispatcher) {
             try {
-                val items = days.filter { it.enabled }.flatMap { day ->
+                val items = current.days.filter { it.enabled }.flatMap { day ->
                     day.windows.map { w ->
                         CoachWeeklyAvailability(
                             dayOfWeek = day.dayOfWeek,
@@ -181,6 +240,11 @@ class CoachAvailabilityViewModel(
                     }
                 }
                 coachRepository.saveMyAvailability(items)
+                coachRepository.updateBookingSettings(
+                    leadTimeHours = current.bookingSettings.leadTimeHours,
+                    horizonDays = current.bookingSettings.horizonDays,
+                    bufferMinutes = current.bookingSettings.bufferMinutes
+                )
                 _effects.emit(CoachAvailabilityEffect.Saved)
             } catch (_: Exception) {
                 _effects.emit(CoachAvailabilityEffect.Error("Nie udało się zapisać"))
