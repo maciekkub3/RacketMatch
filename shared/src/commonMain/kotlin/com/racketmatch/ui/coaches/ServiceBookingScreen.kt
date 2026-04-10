@@ -5,6 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -29,6 +32,7 @@ import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.datetime.*
 import org.koin.core.parameter.parametersOf
@@ -44,21 +48,64 @@ data class ServiceBookingScreen(
         val viewModel: CoachDetailViewModel = kmpViewModel { parametersOf(coachId) }
         val state by viewModel.stateFlow.collectAsState()
 
-        val availableSlots = remember(state) {
-            (state as? CoachDetailState.Content)
-                ?.slots?.filter { it.isAvailable } ?: emptyList()
+        val allSlots = remember(state) {
+            (state as? CoachDetailState.Content)?.slots ?: emptyList()
         }
 
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        val days = (0..6).map { today.plus(it, DateTimeUnit.DAY) }
 
-        var selectedDay by remember { mutableStateOf(today) }
-        var selectedSlot by remember { mutableStateOf<BookingSlot?>(null) }
+        var displayedYear  by remember { mutableStateOf(today.year) }
+        var displayedMonth by remember { mutableStateOf(today.monthNumber) }
+        var selectedDay    by remember { mutableStateOf(today) }
+        var selectedSlot   by remember { mutableStateOf<BookingSlot?>(null) }
         var selectedDuration by remember { mutableStateOf(60) }
 
-        val slotsForDay = remember(availableSlots, selectedDay) {
-            availableSlots.filter {
+        val daysInMonth = remember(displayedYear, displayedMonth) {
+            val first = LocalDate(displayedYear, displayedMonth, 1)
+            val lastDay = first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY).dayOfMonth
+            (0 until lastDay).map { first.plus(it, DateTimeUnit.DAY) }
+        }
+
+        val daysWithAvailability = remember(allSlots) {
+            allSlots.filter { it.isAvailable }
+                .map { it.startsAt.toLocalDateTime(TimeZone.currentSystemDefault()).date }
+                .toSet()
+        }
+
+        // Trigger slot reload for the full month when month changes
+        LaunchedEffect(displayedYear, displayedMonth) {
+            val zone = TimeZone.currentSystemDefault()
+            val first = LocalDate(displayedYear, displayedMonth, 1)
+            val last = first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
+            val from = first.atStartOfDayIn(zone)
+            val to = last.atTime(23, 59, 59).toInstant(zone)
+            viewModel.onEvent(CoachDetailEvent.LoadSlots(from = from, to = to))
+        }
+
+        // Reset selectedDay to today when month changes (avoid stale day from another month)
+        LaunchedEffect(displayedMonth) { selectedDay = today }
+
+        // Reset selected slot when duration changes
+        LaunchedEffect(selectedDuration) { selectedSlot = null }
+
+        // All slots for the selected day (available and unavailable — needed for consecutive check)
+        val allSlotsForDay = remember(allSlots, selectedDay) {
+            allSlots.filter {
                 it.startsAt.toLocalDateTime(TimeZone.currentSystemDefault()).date == selectedDay
+            }
+        }
+
+        // Only show start times where enough consecutive available slots exist for the duration.
+        // Backend generates 1-hour chunks, so:
+        //   60 min → 1 slot needed
+        //   90 or 120 min → 2 consecutive slots needed (booking spans into the next hour)
+        val extraSlotsNeeded = (selectedDuration - 1) / 60  // 0 for 60min, 1 for 90/120min
+        val slotsForDay = remember(allSlotsForDay, selectedDuration) {
+            allSlotsForDay.filter { slot ->
+                if (!slot.isAvailable) return@filter false
+                if (extraSlotsNeeded == 0) return@filter true
+                val nextSlot = allSlotsForDay.find { it.startsAt == slot.endsAt }
+                nextSlot != null && nextSlot.isAvailable
             }
         }
 
@@ -75,7 +122,8 @@ data class ServiceBookingScreen(
                     enabled = selectedSlot != null,
                     onConfirm = {
                         val slot = selectedSlot ?: return@BottomBookingBar
-                        viewModel.onEvent(CoachDetailEvent.BookSlot(service.id, slot.startsAt, slot.endsAt, selectedDuration))
+                        val actualEndsAt = slot.startsAt + selectedDuration.minutes
+                        viewModel.onEvent(CoachDetailEvent.BookSlot(service.id, slot.startsAt, actualEndsAt, selectedDuration))
                         navigator.pop()
                     }
                 )
@@ -160,7 +208,7 @@ data class ServiceBookingScreen(
                     }
                 }
 
-                // Date picker
+                // Month navigation header
                 item {
                     Spacer(Modifier.height(20.dp))
                     Row(
@@ -168,48 +216,67 @@ data class ServiceBookingScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("WYBIERZ DATĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
-                        val monthName = when (selectedDay.month) {
-                            Month.JANUARY -> "STYCZEŃ"; Month.FEBRUARY -> "LUTY"
-                            Month.MARCH -> "MARZEC"; Month.APRIL -> "KWIECIEŃ"
-                            Month.MAY -> "MAJ"; Month.JUNE -> "CZERWIEC"
-                            Month.JULY -> "LIPIEC"; Month.AUGUST -> "SIERPIEŃ"
-                            Month.SEPTEMBER -> "WRZESIEŃ"; Month.OCTOBER -> "PAŹDZIERNIK"
-                            Month.NOVEMBER -> "LISTOPAD"; Month.DECEMBER -> "GRUDZIEŃ"
-                            else -> ""
+                        IconButton(onClick = {
+                            val prev = LocalDate(displayedYear, displayedMonth, 1).minus(1, DateTimeUnit.MONTH)
+                            // Don't go before current month
+                            if (prev.year > today.year || (prev.year == today.year && prev.monthNumber >= today.monthNumber)) {
+                                displayedYear = prev.year; displayedMonth = prev.monthNumber
+                            }
+                        }) {
+                            Text("←", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                                fontSize = 20.sp, color = ProCircuit.Lime)
                         }
-                        Text("$monthName ${selectedDay.year}",
+                        Text(
+                            "${polishMonthName(displayedMonth)} $displayedYear",
                             fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.OnSurface)
+                            fontSize = 13.sp, letterSpacing = 1.sp, color = ProCircuit.OnBg
+                        )
+                        IconButton(onClick = {
+                            val next = LocalDate(displayedYear, displayedMonth, 1).plus(1, DateTimeUnit.MONTH)
+                            displayedYear = next.year; displayedMonth = next.monthNumber
+                        }) {
+                            Text("→", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                                fontSize = 20.sp, color = ProCircuit.Lime)
+                        }
                     }
+                }
+
+                // Day scroll — all days of the selected month
+                item {
                     Spacer(Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                    val scrollState = rememberLazyListState()
+                    LaunchedEffect(daysWithAvailability, displayedMonth) {
+                        val firstIdx = daysInMonth.indexOfFirst { it in daysWithAvailability }
+                        if (firstIdx >= 0) scrollState.animateScrollToItem(firstIdx)
+                    }
+                    LazyRow(
+                        state = scrollState,
+                        contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        days.forEach { day ->
+                        items(daysInMonth) { day ->
                             val isSelected = day == selectedDay
-                            val dayName = when (day.dayOfWeek) {
-                                DayOfWeek.MONDAY -> "PN"; DayOfWeek.TUESDAY -> "WT"
-                                DayOfWeek.WEDNESDAY -> "ŚR"; DayOfWeek.THURSDAY -> "CZ"
-                                DayOfWeek.FRIDAY -> "PT"; DayOfWeek.SATURDAY -> "SO"
-                                DayOfWeek.SUNDAY -> "ND"; else -> ""
-                            }
+                            val hasSlots = day in daysWithAvailability
+                            val dayName = shortDayName(day.dayOfWeek)
                             Column(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) ProCircuit.Lime else ProCircuit.SurfaceLow)
-                                    .clickable { selectedDay = day; selectedSlot = null }
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .background(when {
+                                        isSelected -> ProCircuit.Lime
+                                        !hasSlots  -> ProCircuit.SurfaceHigh
+                                        else       -> ProCircuit.SurfaceLow
+                                    })
+                                    .then(if (hasSlots) Modifier.clickable { selectedDay = day; selectedSlot = null } else Modifier)
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(dayName, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                                     fontSize = 10.sp, letterSpacing = 1.sp,
-                                    color = if (isSelected) ProCircuit.Bg else ProCircuit.OnSurface)
+                                    color = when { isSelected -> ProCircuit.Bg; !hasSlots -> ProCircuit.OnSurface; else -> ProCircuit.OnSurface })
                                 Spacer(Modifier.height(4.dp))
                                 Text("${day.dayOfMonth}", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                    fontSize = 18.sp, color = if (isSelected) ProCircuit.Bg else ProCircuit.OnBg)
+                                    fontSize = 18.sp,
+                                    color = when { isSelected -> ProCircuit.Bg; !hasSlots -> ProCircuit.OnSurface; else -> ProCircuit.OnBg })
                             }
                         }
                     }
@@ -223,8 +290,12 @@ data class ServiceBookingScreen(
                         modifier = Modifier.padding(horizontal = 20.dp))
                     Spacer(Modifier.height(10.dp))
                     if (slotsForDay.isEmpty()) {
+                        val noSlotsMsg = if (allSlotsForDay.any { it.isAvailable })
+                            "Brak terminów dla $selectedDuration min — spróbuj krótszego czasu"
+                        else
+                            "Brak dostępnych terminów w tym dniu"
                         Text(
-                            "Brak dostępnych terminów w tym dniu.",
+                            noSlotsMsg,
                             fontFamily = AppBodyFontFamily, fontSize = 13.sp,
                             color = ProCircuit.OnSurface,
                             modifier = Modifier.padding(horizontal = 20.dp)
@@ -244,11 +315,14 @@ data class ServiceBookingScreen(
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     colSlots.forEach { slot ->
                                         val isSelected = selectedSlot == slot
-                                        val time = slot.startsAt.toLocalDateTime(TimeZone.currentSystemDefault())
-                                        val label = "${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')}"
+                                        val tz = TimeZone.currentSystemDefault()
+                                        val startLocal = slot.startsAt.toLocalDateTime(tz)
+                                        val endLocal = (slot.startsAt + selectedDuration.minutes).toLocalDateTime(tz)
+                                        fun Int.pad() = toString().padStart(2, '0')
+                                        val label = "${startLocal.hour.pad()}:${startLocal.minute.pad()} – ${endLocal.hour.pad()}:${endLocal.minute.pad()}"
                                         Box(
                                             modifier = Modifier
-                                                .width(90.dp)
+                                                .width(130.dp)
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(if (isSelected) ProCircuit.Lime else ProCircuit.SurfaceLow)
                                                 .clickable { selectedSlot = slot }
@@ -291,6 +365,19 @@ data class ServiceBookingScreen(
             }
         }
     }
+}
+
+private fun polishMonthName(month: Int): String = when (month) {
+    1 -> "STYCZEŃ"; 2 -> "LUTY"; 3 -> "MARZEC"; 4 -> "KWIECIEŃ"
+    5 -> "MAJ"; 6 -> "CZERWIEC"; 7 -> "LIPIEC"; 8 -> "SIERPIEŃ"
+    9 -> "WRZESIEŃ"; 10 -> "PAŹDZIERNIK"; 11 -> "LISTOPAD"; 12 -> "GRUDZIEŃ"
+    else -> ""
+}
+
+private fun shortDayName(dow: DayOfWeek): String = when (dow) {
+    DayOfWeek.MONDAY -> "PN"; DayOfWeek.TUESDAY -> "WT"; DayOfWeek.WEDNESDAY -> "ŚR"
+    DayOfWeek.THURSDAY -> "CZ"; DayOfWeek.FRIDAY -> "PT"; DayOfWeek.SATURDAY -> "SO"
+    DayOfWeek.SUNDAY -> "ND"; else -> ""
 }
 
 @Composable
