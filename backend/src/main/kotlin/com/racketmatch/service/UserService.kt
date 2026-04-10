@@ -5,6 +5,8 @@ import com.racketmatch.api.dto.UpdateProfileRequest
 import com.racketmatch.api.dto.UserDto
 import com.racketmatch.api.dto.UserStatsDto
 import com.racketmatch.api.dto.toDto
+import com.racketmatch.domain.entity.CoachProfileEntity
+import com.racketmatch.domain.repository.CoachProfileRepository
 import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.UserRepository
 import org.springframework.http.HttpStatus
@@ -22,7 +24,8 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository,
     private val matchRepository: MatchRepository,
-    private val passwordEncoder: PasswordEncoder
+    private val passwordEncoder: PasswordEncoder,
+    private val coachProfileRepository: CoachProfileRepository
 ) {
 
     fun getProfile(userId: UUID): UserDto =
@@ -100,6 +103,15 @@ class UserService(
         user.dateOfBirth = request.dateOfBirth
         user.sports = request.sports.joinToString(",")
         request.password?.let { user.passwordHash = passwordEncoder.encode(it) }
+        request.activateCoach?.let { activate ->
+            if (activate && !user.isCoach) {
+                user.isCoach = true
+                coachProfileRepository.save(CoachProfileEntity(user = user))
+            }
+        }
+        request.activatePlayerProfile?.let { activate ->
+            if (activate) user.hasPlayerProfile = true
+        }
         return userRepository.save(user).toDto()
     }
 

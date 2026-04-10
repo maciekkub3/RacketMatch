@@ -35,5 +35,7 @@ data class UpdateProfileRequest(
     val bio: String? = null,
     val sports: List<String> = emptyList(),
     val password: String? = null,
-    val dateOfBirth: String? = null
+    val dateOfBirth: String? = null,
+    val activateCoach: Boolean? = null,
+    val activatePlayerProfile: Boolean? = null
 )
