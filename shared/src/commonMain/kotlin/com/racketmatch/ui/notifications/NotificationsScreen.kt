@@ -23,10 +23,10 @@ import com.racketmatch.domain.model.AppNotification
 import com.racketmatch.domain.model.NotificationType
 import com.racketmatch.presentation.viewmodel.NotificationEvent
 import com.racketmatch.presentation.viewmodel.NotificationViewModel
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
+import com.racketmatch.util.kmpViewModel
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,7 +37,7 @@ object NotificationsScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val tokenStorage = koinInject<TokenStorage>()
         val userId = tokenStorage.currentUserId ?: return
-        val vm: NotificationViewModel = koinViewModel { parametersOf(userId) }
+        val vm: NotificationViewModel = kmpViewModel { parametersOf(userId) }
         val state by vm.state.collectAsState()
 
         LaunchedEffect(Unit) {
@@ -142,6 +142,9 @@ private fun NotificationType.icon() = when (this) {
     NotificationType.FRIEND_REQUEST_RECEIVED,
     NotificationType.FRIEND_REQUEST_ACCEPTED -> Icons.Default.PersonAdd
     NotificationType.NEW_MESSAGE -> Icons.AutoMirrored.Filled.Message
+    NotificationType.BOOKING_REQUEST,
+    NotificationType.BOOKING_CONFIRMED,
+    NotificationType.BOOKING_DECLINED -> Icons.Default.CalendarMonth
     NotificationType.UNKNOWN -> Icons.Default.Notifications
 }
 

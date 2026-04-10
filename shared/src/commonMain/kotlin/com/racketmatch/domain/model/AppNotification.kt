@@ -1,6 +1,6 @@
 package com.racketmatch.domain.model
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 enum class NotificationType {
     CHALLENGE_RECEIVED, CHALLENGE_ACCEPTED, CHALLENGE_DECLINED,
@@ -8,6 +8,7 @@ enum class NotificationType {
     RESULT_PROPOSED, RESULT_CONFIRMED, RESULT_DISPUTED,
     FRIEND_REQUEST_RECEIVED, FRIEND_REQUEST_ACCEPTED,
     NEW_MESSAGE,
+    BOOKING_REQUEST, BOOKING_CONFIRMED, BOOKING_DECLINED,
     UNKNOWN
 }
 
