@@ -43,9 +43,15 @@ import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.NotificationRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import com.racketmatch.presentation.viewmodel.ChatViewModel
-import com.racketmatch.presentation.viewmodel.DmChatViewModel
+import com.racketmatch.presentation.viewmodel.CoachAvailabilityViewModel
+import com.racketmatch.presentation.viewmodel.CoachBookingsViewModel
+import com.racketmatch.presentation.viewmodel.PlayerBookingsViewModel
+import com.racketmatch.presentation.viewmodel.CoachCalendarViewModel
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
+import com.racketmatch.presentation.viewmodel.CoachProfileEditViewModel
+import com.racketmatch.presentation.viewmodel.CoachServicesViewModel
 import com.racketmatch.presentation.viewmodel.CoachesViewModel
+import com.racketmatch.presentation.viewmodel.DmChatViewModel
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.presentation.viewmodel.LoginViewModel
 import com.racketmatch.presentation.viewmodel.MatchViewModel
@@ -103,7 +109,7 @@ val repositoryModule = module {
 
 val viewModelModule = module {
     factory { (matchId: String) -> ChatViewModel(get(), matchId) }
-    factory { (conversationId: String) -> DmChatViewModel(get(), conversationId) }
+    factory { (conversationId: String, currentUserId: String) -> DmChatViewModel(get(), conversationId, currentUserId) }
     factory { LoginViewModel(get()) }
     factory { RegisterViewModel(get(), get()) }
     factory { ProfileSetupViewModel(get(), get()) }
@@ -117,9 +123,15 @@ val viewModelModule = module {
     factory { ProfileViewModel(get(), get(), get()) }
     factory { SettingsViewModel(get(), get()) }
     factory { RankingsViewModel(get(), get(), get()) }
-    factory { FriendsViewModel(get()) }
+    factory { FriendsViewModel(get(), get()) }
     factory { FeedViewModel(get()) }
     factory { MessagesViewModel(get()) }
     factory { MoreViewModel(get(), get()) }
     factory { (userId: String) -> NotificationViewModel(get(), userId) }
+    factory { CoachServicesViewModel(get()) }
+    factory { CoachCalendarViewModel(get()) }
+    factory { CoachBookingsViewModel(get()) }
+    factory { PlayerBookingsViewModel(get()) }
+    factory { CoachProfileEditViewModel(get(), get()) }
+    factory { CoachAvailabilityViewModel(get()) }
 }
