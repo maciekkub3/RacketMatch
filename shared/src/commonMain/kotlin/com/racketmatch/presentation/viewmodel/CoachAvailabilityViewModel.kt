@@ -12,7 +12,27 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class TimeWindow(val startHour: Int, val endHour: Int)
+/** Minutes from midnight, step = 30. e.g. 510 = 08:30, 720 = 12:00 */
+data class TimeWindow(val startMinutes: Int, val endMinutes: Int)
+
+fun TimeWindow.startLabel(): String = minutesToLabel(startMinutes)
+fun TimeWindow.endLabel(): String   = minutesToLabel(endMinutes)
+
+fun minutesToLabel(m: Int): String {
+    val h = m / 60
+    val min = m % 60
+    return "${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}"
+}
+
+/** Converts "HH:mm" string from API to total minutes */
+private fun parseTime(s: String): Int {
+    val parts = s.split(":")
+    val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
+    val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+    return h * 60 + m
+}
+
+private fun minutesToTimeString(m: Int): String = minutesToLabel(m)
 
 data class DayAvailability(
     val dayOfWeek: Int,   // 1=Mon, 7=Sun
@@ -31,6 +51,10 @@ private val DAY_NAMES = mapOf(
     7 to "Niedziela"
 )
 
+private const val STEP = 30   // minutes
+private const val DAY_MIN = 0
+private const val DAY_MAX = 24 * 60  // 1440
+
 sealed class CoachAvailabilityState {
     object Loading : CoachAvailabilityState()
     data class Content(val days: List<DayAvailability>) : CoachAvailabilityState()
@@ -41,8 +65,8 @@ sealed class CoachAvailabilityEvent {
     data class ToggleDay(val dayOfWeek: Int, val enabled: Boolean) : CoachAvailabilityEvent()
     data class AddWindow(val dayOfWeek: Int) : CoachAvailabilityEvent()
     data class RemoveWindow(val dayOfWeek: Int, val windowIndex: Int) : CoachAvailabilityEvent()
-    data class SetStartHour(val dayOfWeek: Int, val windowIndex: Int, val hour: Int) : CoachAvailabilityEvent()
-    data class SetEndHour(val dayOfWeek: Int, val windowIndex: Int, val hour: Int) : CoachAvailabilityEvent()
+    data class SetStart(val dayOfWeek: Int, val windowIndex: Int, val minutes: Int) : CoachAvailabilityEvent()
+    data class SetEnd(val dayOfWeek: Int, val windowIndex: Int, val minutes: Int) : CoachAvailabilityEvent()
     object Save : CoachAvailabilityEvent()
 }
 
@@ -66,44 +90,55 @@ class CoachAvailabilityViewModel(
 
     fun onEvent(event: CoachAvailabilityEvent) {
         val current = (_state.value as? CoachAvailabilityState.Content) ?: return
+        if (event is CoachAvailabilityEvent.Save) {
+            save(current.days)
+            return
+        }
         _state.value = current.copy(days = current.days.map { day ->
-            if (day.dayOfWeek != (event as? CoachAvailabilityEvent.ToggleDay)?.dayOfWeek
-                && day.dayOfWeek != (event as? CoachAvailabilityEvent.AddWindow)?.dayOfWeek
-                && day.dayOfWeek != (event as? CoachAvailabilityEvent.RemoveWindow)?.dayOfWeek
-                && day.dayOfWeek != (event as? CoachAvailabilityEvent.SetStartHour)?.dayOfWeek
-                && day.dayOfWeek != (event as? CoachAvailabilityEvent.SetEndHour)?.dayOfWeek
-            ) return@map day
+            if (day.dayOfWeek != eventDay(event)) return@map day
             applyEvent(day, event)
         })
-        if (event is CoachAvailabilityEvent.Save) save((_state.value as CoachAvailabilityState.Content).days)
+    }
+
+    private fun eventDay(event: CoachAvailabilityEvent): Int = when (event) {
+        is CoachAvailabilityEvent.ToggleDay    -> event.dayOfWeek
+        is CoachAvailabilityEvent.AddWindow    -> event.dayOfWeek
+        is CoachAvailabilityEvent.RemoveWindow -> event.dayOfWeek
+        is CoachAvailabilityEvent.SetStart     -> event.dayOfWeek
+        is CoachAvailabilityEvent.SetEnd       -> event.dayOfWeek
+        CoachAvailabilityEvent.Save            -> -1
     }
 
     private fun applyEvent(day: DayAvailability, event: CoachAvailabilityEvent): DayAvailability = when (event) {
         is CoachAvailabilityEvent.ToggleDay -> {
             if (event.enabled) {
-                day.copy(enabled = true, windows = if (day.windows.isEmpty()) listOf(TimeWindow(9, 17)) else day.windows)
+                day.copy(enabled = true, windows = if (day.windows.isEmpty()) listOf(TimeWindow(9 * 60, 17 * 60)) else day.windows)
             } else {
                 day.copy(enabled = false)
             }
         }
         is CoachAvailabilityEvent.AddWindow -> {
-            val lastEnd = day.windows.lastOrNull()?.endHour ?: 9
-            val newStart = lastEnd.coerceAtMost(22)
-            val newEnd = (newStart + 2).coerceAtMost(24)
+            val lastEnd = day.windows.lastOrNull()?.endMinutes ?: (9 * 60)
+            val newStart = lastEnd.coerceAtMost(DAY_MAX - STEP * 2)
+            val newEnd   = (newStart + 2 * 60).coerceAtMost(DAY_MAX)
             day.copy(windows = day.windows + TimeWindow(newStart, newEnd))
         }
         is CoachAvailabilityEvent.RemoveWindow -> {
             val updated = day.windows.toMutableList().also { it.removeAt(event.windowIndex) }
             day.copy(windows = updated, enabled = updated.isNotEmpty())
         }
-        is CoachAvailabilityEvent.SetStartHour -> {
+        is CoachAvailabilityEvent.SetStart -> {
             day.copy(windows = day.windows.mapIndexed { i, w ->
-                if (i == event.windowIndex) w.copy(startHour = event.hour.coerceIn(0, w.endHour - 1)) else w
+                if (i == event.windowIndex)
+                    w.copy(startMinutes = event.minutes.coerceIn(DAY_MIN, w.endMinutes - STEP))
+                else w
             })
         }
-        is CoachAvailabilityEvent.SetEndHour -> {
+        is CoachAvailabilityEvent.SetEnd -> {
             day.copy(windows = day.windows.mapIndexed { i, w ->
-                if (i == event.windowIndex) w.copy(endHour = event.hour.coerceIn(w.startHour + 1, 24)) else w
+                if (i == event.windowIndex)
+                    w.copy(endMinutes = event.minutes.coerceIn(w.startMinutes + STEP, DAY_MAX))
+                else w
             })
         }
         CoachAvailabilityEvent.Save -> day
@@ -118,12 +153,12 @@ class CoachAvailabilityViewModel(
                     val windows = saved
                         .filter { it.dayOfWeek == dow }
                         .sortedBy { it.startTime }
-                        .map { TimeWindow(it.startTime.take(2).toIntOrNull() ?: 9, it.endTime.take(2).toIntOrNull() ?: 17) }
+                        .map { TimeWindow(parseTime(it.startTime), parseTime(it.endTime)) }
                     DayAvailability(
                         dayOfWeek = dow,
-                        dayName = DAY_NAMES[dow] ?: "",
-                        enabled = windows.isNotEmpty(),
-                        windows = if (windows.isEmpty()) listOf(TimeWindow(9, 17)) else windows
+                        dayName   = DAY_NAMES[dow] ?: "",
+                        enabled   = windows.isNotEmpty(),
+                        windows   = if (windows.isEmpty()) listOf(TimeWindow(9 * 60, 17 * 60)) else windows
                     )
                 }
                 _state.value = CoachAvailabilityState.Content(days)
@@ -140,8 +175,8 @@ class CoachAvailabilityViewModel(
                     day.windows.map { w ->
                         CoachWeeklyAvailability(
                             dayOfWeek = day.dayOfWeek,
-                            startTime = "${w.startHour.toString().padStart(2, '0')}:00",
-                            endTime   = "${w.endHour.toString().padStart(2, '0')}:00"
+                            startTime = minutesToTimeString(w.startMinutes),
+                            endTime   = minutesToTimeString(w.endMinutes)
                         )
                     }
                 }

@@ -26,6 +26,7 @@ import com.racketmatch.presentation.viewmodel.CoachAvailabilityState
 import com.racketmatch.presentation.viewmodel.CoachAvailabilityViewModel
 import com.racketmatch.presentation.viewmodel.DayAvailability
 import com.racketmatch.presentation.viewmodel.TimeWindow
+import com.racketmatch.presentation.viewmodel.minutesToLabel
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -104,8 +105,8 @@ object CoachAvailabilityScreen : Screen {
                             onToggle = { viewModel.onEvent(CoachAvailabilityEvent.ToggleDay(day.dayOfWeek, it)) },
                             onAddWindow = { viewModel.onEvent(CoachAvailabilityEvent.AddWindow(day.dayOfWeek)) },
                             onRemoveWindow = { wi -> viewModel.onEvent(CoachAvailabilityEvent.RemoveWindow(day.dayOfWeek, wi)) },
-                            onStartChange = { wi, h -> viewModel.onEvent(CoachAvailabilityEvent.SetStartHour(day.dayOfWeek, wi, h)) },
-                            onEndChange = { wi, h -> viewModel.onEvent(CoachAvailabilityEvent.SetEndHour(day.dayOfWeek, wi, h)) }
+                            onStartChange = { wi, m -> viewModel.onEvent(CoachAvailabilityEvent.SetStart(day.dayOfWeek, wi, m)) },
+                            onEndChange   = { wi, m -> viewModel.onEvent(CoachAvailabilityEvent.SetEnd(day.dayOfWeek, wi, m)) }
                         )
                     }
 
@@ -209,6 +210,7 @@ private fun WindowRow(
     onStartChange: (Int) -> Unit,
     onEndChange: (Int) -> Unit
 ) {
+    val step = 30
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -216,20 +218,22 @@ private fun WindowRow(
     ) {
         TimeStepPicker(
             label = "OD",
-            hour = window.startHour,
-            min = 0,
-            max = window.endHour - 1,
-            onHourChange = onStartChange,
+            minutes = window.startMinutes,
+            minMinutes = 0,
+            maxMinutes = window.endMinutes - step,
+            step = step,
+            onMinutesChange = onStartChange,
             modifier = Modifier.weight(1f)
         )
         Text("→", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
             fontSize = 16.sp, color = ProCircuit.OnSurface)
         TimeStepPicker(
             label = "DO",
-            hour = window.endHour,
-            min = window.startHour + 1,
-            max = 24,
-            onHourChange = onEndChange,
+            minutes = window.endMinutes,
+            minMinutes = window.startMinutes + step,
+            maxMinutes = 24 * 60,
+            step = step,
+            onMinutesChange = onEndChange,
             modifier = Modifier.weight(1f)
         )
         if (showRemove) {
@@ -246,10 +250,11 @@ private fun WindowRow(
 @Composable
 private fun TimeStepPicker(
     label: String,
-    hour: Int,
-    min: Int,
-    max: Int,
-    onHourChange: (Int) -> Unit,
+    minutes: Int,
+    minMinutes: Int,
+    maxMinutes: Int,
+    step: Int,
+    onMinutesChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -261,12 +266,12 @@ private fun TimeStepPicker(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             IconButton(
-                onClick = { if (hour > min) onHourChange(hour - 1) },
+                onClick = { if (minutes > minMinutes) onMinutesChange(minutes - step) },
                 modifier = Modifier.size(32.dp)
             ) {
                 Text("−", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                     fontSize = 18.sp,
-                    color = if (hour > min) ProCircuit.Lime else ProCircuit.OnSurface)
+                    color = if (minutes > minMinutes) ProCircuit.Lime else ProCircuit.OnSurface)
             }
             Box(
                 modifier = Modifier
@@ -276,18 +281,18 @@ private fun TimeStepPicker(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "${hour.toString().padStart(2, '0')}:00",
+                    minutesToLabel(minutes),
                     fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                     fontSize = 14.sp, color = ProCircuit.OnBg
                 )
             }
             IconButton(
-                onClick = { if (hour < max) onHourChange(hour + 1) },
+                onClick = { if (minutes < maxMinutes) onMinutesChange(minutes + step) },
                 modifier = Modifier.size(32.dp)
             ) {
                 Text("+", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                     fontSize = 18.sp,
-                    color = if (hour < max) ProCircuit.Lime else ProCircuit.OnSurface)
+                    color = if (minutes < maxMinutes) ProCircuit.Lime else ProCircuit.OnSurface)
             }
         }
     }
