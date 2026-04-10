@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,63 +21,35 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.CoachProfile
 import com.racketmatch.domain.model.Sport
-import com.racketmatch.presentation.viewmodel.CoachesEvent
 import com.racketmatch.presentation.viewmodel.CoachesState
 import com.racketmatch.presentation.viewmodel.CoachesViewModel
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 object CoachesScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: CoachesViewModel = koinViewModel()
+        val viewModel: CoachesViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
-        var cityQuery by remember { mutableStateOf("") }
 
         Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                 item {
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 4.dp)) {
-                        Text("Coaches", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg)
-                        Text("Master the court with a world-class trainer.",
-                            fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface)
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    // City search
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp)).background(ProCircuit.SurfaceLow)
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("📍", fontSize = 14.sp)
-                        Spacer(Modifier.width(10.dp))
-                        BasicTextField(
-                            value = cityQuery,
-                            onValueChange = { cityQuery = it; viewModel.onEvent(CoachesEvent.FilterByCity(it)) },
-                            singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Medium,
-                                fontSize = 14.sp, color = ProCircuit.OnBg
-                            ),
-                            decorationBox = { inner ->
-                                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-                                    if (cityQuery.isEmpty()) {
-                                        Text("Filter by city...", fontFamily = AppBodyFontFamily,
-                                            fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ProCircuit.Outline)
-                                    }
-                                    inner()
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 16.dp)) {
+                        Text(
+                            "Trenerzy",
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
+                        )
+                        Text(
+                            "Znajdź idealnego partnera na korcie",
+                            fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface
                         )
                     }
-                    Spacer(Modifier.height(16.dp))
                 }
 
                 when (val s = state) {
@@ -89,7 +60,7 @@ object CoachesScreen : Screen {
                     }
                     CoachesState.Error -> item {
                         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text("Couldn't load coaches", color = ProCircuit.OnSurface)
+                            Text("Nie udało się załadować trenerów", color = ProCircuit.OnSurface)
                         }
                     }
                     is CoachesState.Content -> {
@@ -100,7 +71,7 @@ object CoachesScreen : Screen {
                                         Text("🏆", fontSize = 40.sp)
                                         Spacer(Modifier.height(12.dp))
                                         Text(
-                                            if (cityQuery.isNotBlank()) "No coaches in \"$cityQuery\"" else "No coaches available",
+                                            "Brak dostępnych trenerów",
                                             fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                                             fontSize = 16.sp, color = ProCircuit.OnSurface
                                         )
@@ -124,57 +95,108 @@ object CoachesScreen : Screen {
 @Composable
 private fun CoachCard(coach: CoachProfile, onClick: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(20.dp)).background(ProCircuit.SurfaceLow)
-            .clickable(onClick = onClick).padding(18.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(ProCircuit.SurfaceLow)
+            .clickable(onClick = onClick)
+            .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
             // Avatar
             Box(
-                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(14.dp))
+                modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))
                     .background(ProCircuit.SurfaceHigh),
                 contentAlignment = Alignment.Center
             ) {
-                Text(coach.displayName.take(1).uppercase(), fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black, fontSize = 22.sp, color = ProCircuit.Lime)
+                Text(
+                    coach.displayName.take(1).uppercase(),
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 28.sp, color = ProCircuit.Lime
+                )
             }
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(coach.displayName, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp, color = ProCircuit.OnBg)
-                Text("${coach.city} · ELO ${coach.eloRating}", fontFamily = AppBodyFontFamily,
-                    fontSize = 12.sp, color = ProCircuit.OnSurface)
-            }
-            // Price
-            Column(horizontalAlignment = Alignment.End) {
-                Text("${coach.hourlyRate / 100} zł", fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black, fontSize = 18.sp, color = ProCircuit.Lime)
-                Text("/h", fontFamily = AppBodyFontFamily, fontSize = 10.sp, color = ProCircuit.OnSurface)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        coach.displayName,
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp, color = ProCircuit.OnBg, modifier = Modifier.weight(1f)
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⭐", fontSize = 12.sp)
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            "${coach.eloRating}",
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp, color = ProCircuit.OnBg
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "📍 ${coach.city}",
+                    fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
+                )
+                if (!coach.bio.isNullOrBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        coach.bio!!,
+                        fontFamily = AppBodyFontFamily, fontSize = 12.sp,
+                        color = ProCircuit.OnSurface, maxLines = 2,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                }
             }
         }
 
-        // Bio snippet
-        if (coach.bio.isNotBlank()) {
-            Spacer(Modifier.height(10.dp))
-            Text(coach.bio, fontFamily = AppBodyFontFamily, fontSize = 12.sp,
-                color = ProCircuit.OnSurface, maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                lineHeight = 17.sp)
-        }
+        Spacer(Modifier.height(12.dp))
 
-        // Sports + certifications chips
-        if (coach.sports.isNotEmpty() || coach.certifications.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 coach.sports.forEach { sport ->
-                    val emoji = when (sport) { Sport.TENNIS -> "🎾"; Sport.PADEL -> "🏸" }
-                    Chip("$emoji ${sport.name}", ProCircuit.Lime.copy(alpha = 0.15f), ProCircuit.Lime)
+                    SportChip(sport)
                 }
-                coach.certifications.forEach { cert ->
-                    Chip(cert, ProCircuit.Tertiary.copy(alpha = 0.12f), ProCircuit.Tertiary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                coach.lowestServicePriceCents?.let { cents ->
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "OD",
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                            fontSize = 8.sp, letterSpacing = 1.sp, color = ProCircuit.OnSurface
+                        )
+                        Text(
+                            "${cents / 100} zł",
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 16.sp, color = ProCircuit.Lime
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(ProCircuit.Lime)
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        "ZAREZERWUJ",
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 10.sp, letterSpacing = 0.5.sp, color = ProCircuit.Bg
+                    )
                 }
             }
         }
@@ -182,12 +204,15 @@ private fun CoachCard(coach: CoachProfile, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Chip(label: String, bg: androidx.compose.ui.graphics.Color, fg: androidx.compose.ui.graphics.Color) {
+private fun SportChip(sport: Sport) {
+    val label = when (sport) { Sport.TENNIS -> "🎾 TENIS"; Sport.PADEL -> "🏸 PADEL" }
     Box(
-        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(bg)
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(ProCircuit.Lime.copy(alpha = 0.15f))
             .padding(horizontal = 10.dp, vertical = 5.dp)
     ) {
         Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-            fontSize = 9.sp, letterSpacing = 0.5.sp, color = fg)
+            fontSize = 9.sp, letterSpacing = 0.5.sp, color = ProCircuit.Lime)
     }
 }
