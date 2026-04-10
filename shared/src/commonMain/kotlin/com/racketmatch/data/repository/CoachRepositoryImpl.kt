@@ -88,6 +88,9 @@ class CoachRepositoryImpl(private val coachApi: CoachApi) : CoachRepository {
     override suspend fun getMyCoachProfile(): CoachProfile =
         coachApi.getMyCoachProfile().toDomain()
 
+    override suspend fun updateMyCoachProfile(trainingLocations: List<String>): CoachProfile =
+        coachApi.updateMyCoachProfile(UpdateCoachProfileDto(trainingLocations = trainingLocations)).toDomain()
+
     override suspend fun getMyBookingSettings(): BookingSettings {
         val dto = coachApi.getMyCoachProfile()
         return BookingSettings(

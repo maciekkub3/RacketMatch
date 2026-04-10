@@ -132,6 +132,6 @@ val viewModelModule = module {
     factory { CoachCalendarViewModel(get()) }
     factory { CoachBookingsViewModel(get()) }
     factory { PlayerBookingsViewModel(get()) }
-    factory { CoachProfileEditViewModel(get(), get()) }
+    factory { CoachProfileEditViewModel(get(), get(), get(), get()) }
     factory { CoachAvailabilityViewModel(get()) }
 }

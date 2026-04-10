@@ -96,6 +96,12 @@ class CoachApi(private val client: HttpClient) {
     suspend fun getMyCoachProfile(): CoachProfileDto =
         client.get("api/coaches/me").body()
 
+    suspend fun updateMyCoachProfile(request: UpdateCoachProfileDto): CoachProfileDto =
+        client.patch("api/coaches/me") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
+
     suspend fun updateBookingSettings(request: UpdateBookingSettingsDto): CoachProfileDto =
         client.patch("api/coaches/me/booking-settings") {
             contentType(ContentType.Application.Json)

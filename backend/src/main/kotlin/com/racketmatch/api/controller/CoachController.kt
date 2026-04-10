@@ -5,6 +5,7 @@ import com.racketmatch.api.dto.CoachExceptionDto
 import com.racketmatch.api.dto.CoachProfileDto
 import com.racketmatch.api.dto.CreateExceptionRequest
 import com.racketmatch.api.dto.UpdateBookingSettingsRequest
+import com.racketmatch.api.dto.UpdateCoachProfileRequest
 import com.racketmatch.api.dto.toDto
 import com.racketmatch.domain.entity.CoachCalendarEventEntity
 import com.racketmatch.domain.repository.BookingRepository
@@ -141,6 +142,17 @@ class CoachController(
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
         if (event.coach.id != coachId) throw ResponseStatusException(HttpStatus.FORBIDDEN)
         calendarRepository.deleteById(id)
+    }
+
+    @PatchMapping("/me")
+    fun updateMyProfile(authentication: Authentication, @RequestBody req: UpdateCoachProfileRequest): CoachProfileDto {
+        val coachId = UUID.fromString(authentication.name)
+        val profile = coachProfileRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+        req.trainingLocations?.let { profile.trainingLocations = it.toMutableList() }
+        val saved = coachProfileRepository.save(profile)
+        val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId)
+        return saved.toDto(services)
     }
 
     @PatchMapping("/me/booking-settings")

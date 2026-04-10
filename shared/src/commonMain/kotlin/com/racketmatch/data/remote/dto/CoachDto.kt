@@ -134,6 +134,11 @@ data class UpdateBookingSettingsDto(
     val bufferMinutes: Int? = null
 )
 
+@Serializable
+data class UpdateCoachProfileDto(
+    val trainingLocations: List<String>? = null
+)
+
 // toDomain mappers
 fun CoachProfileDto.toDomain() = CoachProfile(
     userId = userId,

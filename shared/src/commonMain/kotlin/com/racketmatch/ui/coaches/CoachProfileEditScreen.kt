@@ -253,6 +253,52 @@ private fun CoachProfileEditContent(
             }
         }
 
+        if (state.availableCourts.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            CoachEditSectionLabel("KORTY")
+            Spacer(Modifier.height(12.dp))
+            state.availableCourts.forEach { court ->
+                val selected = court.name in state.selectedCourtNames
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                        .clickable { viewModel.onEvent(CoachProfileEditEvent.ToggleCourt(court.name)) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            court.name,
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = if (selected) ProCircuit.Bg else ProCircuit.OnBg
+                        )
+                        if (court.address != null) {
+                            Text(
+                                court.address,
+                                fontFamily = AppBodyFontFamily,
+                                fontSize = 11.sp,
+                                color = if (selected) ProCircuit.Bg.copy(alpha = 0.7f) else ProCircuit.OnSurface
+                            )
+                        }
+                    }
+                    if (selected) {
+                        Text(
+                            "✓",
+                            fontSize = 16.sp,
+                            color = ProCircuit.Bg,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
 
         OutlinedButton(

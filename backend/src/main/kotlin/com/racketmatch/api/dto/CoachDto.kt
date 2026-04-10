@@ -124,6 +124,10 @@ data class UpdateBookingSettingsRequest(
     val bufferMinutes: Int? = null
 )
 
+data class UpdateCoachProfileRequest(
+    val trainingLocations: List<String>? = null
+)
+
 fun CoachProfileEntity.toDto(services: List<CoachServiceEntity> = emptyList()) = CoachProfileDto(
     userId = userId!!,
     displayName = user.displayName,
