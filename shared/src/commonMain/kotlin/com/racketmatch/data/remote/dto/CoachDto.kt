@@ -1,9 +1,7 @@
 package com.racketmatch.data.remote.dto
 
-import com.racketmatch.domain.model.BookingSlot
-import com.racketmatch.domain.model.CoachProfile
-import com.racketmatch.domain.model.Sport
-import kotlinx.datetime.Instant
+import com.racketmatch.domain.model.*
+import kotlin.time.Instant
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -11,12 +9,61 @@ data class CoachProfileDto(
     val userId: String,
     val displayName: String,
     val avatarUrl: String? = null,
-    val bio: String,
-    val hourlyRate: Int,
+    val bio: String? = null,
     val sports: List<String>,
     val certifications: List<String>,
     val city: String,
-    val eloRating: Int
+    val eloRating: Int,
+    val lowestServicePriceCents: Int? = null,
+    val trainingLocations: List<String> = emptyList()
+)
+
+@Serializable
+data class CoachServiceDto(
+    val id: String,
+    val coachId: String,
+    val name: String,
+    val description: String? = null,
+    val pricingType: String,
+    val priceCents: Int,
+    val isActive: Boolean
+)
+
+@Serializable
+data class CreateCoachServiceRequestDto(
+    val name: String,
+    val description: String? = null,
+    val pricingType: String,
+    val priceCents: Int
+)
+
+@Serializable
+data class UpdateCoachServiceRequestDto(
+    val name: String,
+    val description: String? = null,
+    val pricingType: String,
+    val priceCents: Int,
+    val isActive: Boolean
+)
+
+@Serializable
+data class CalendarEventDto(
+    val id: String,
+    val title: String? = null,
+    val notes: String? = null,
+    val eventType: String,
+    val startsAt: String,
+    val endsAt: String,
+    val bookingId: String? = null
+)
+
+@Serializable
+data class CreateCalendarEventRequestDto(
+    val title: String? = null,
+    val notes: String? = null,
+    val eventType: String,
+    val startsAt: String,
+    val endsAt: String
 )
 
 @Serializable
@@ -27,26 +74,95 @@ data class BookingSlotDto(
 )
 
 @Serializable
-data class CreateBookingRequestDto(
+data class CoachBookingDto(
+    val id: String,
     val coachId: String,
+    val playerId: String,
+    val serviceId: String? = null,
+    val serviceName: String? = null,
     val startsAt: String,
-    val endsAt: String
+    val endsAt: String,
+    val durationMinutes: Int? = null,
+    val status: String
 )
 
+@Serializable
+data class CoachAvailabilityDto(
+    val dayOfWeek: Int,
+    val startTime: String,
+    val endTime: String
+)
+
+@Serializable
+data class SaveAvailabilityItemDto(
+    val dayOfWeek: Int,
+    val startTime: String,
+    val endTime: String
+)
+
+@Serializable
+data class CreateBookingRequestDto(
+    val coachId: String,
+    val serviceId: String,
+    val startsAt: String,
+    val endsAt: String,
+    val durationMinutes: Int
+)
+
+// toDomain mappers
 fun CoachProfileDto.toDomain() = CoachProfile(
     userId = userId,
     displayName = displayName,
     avatarUrl = avatarUrl,
-    bio = bio,
-    hourlyRate = hourlyRate,
+    bio = bio ?: "",
     sports = sports.map { Sport.valueOf(it) },
     certifications = certifications,
     city = city,
-    eloRating = eloRating
+    eloRating = eloRating,
+    lowestServicePriceCents = lowestServicePriceCents,
+    trainingLocations = trainingLocations
+)
+
+fun CoachServiceDto.toDomain() = CoachService(
+    id = id,
+    coachId = coachId,
+    name = name,
+    description = description,
+    pricingType = PricingType.valueOf(pricingType),
+    priceCents = priceCents,
+    isActive = isActive
+)
+
+fun CalendarEventDto.toDomain() = CalendarEvent(
+    id = id,
+    title = title,
+    notes = notes,
+    eventType = CalendarEventType.valueOf(eventType),
+    startsAt = Instant.parse(startsAt),
+    endsAt = Instant.parse(endsAt),
+    bookingId = bookingId
 )
 
 fun BookingSlotDto.toDomain() = BookingSlot(
     startsAt = Instant.parse(startsAt),
     endsAt = Instant.parse(endsAt),
     isAvailable = isAvailable
+)
+
+fun CoachAvailabilityDto.toDomain() = CoachWeeklyAvailability(
+    dayOfWeek = dayOfWeek,
+    startTime = startTime,
+    endTime = endTime
+)
+
+fun CoachBookingDto.toDomain() = CoachBooking(
+    id = id,
+    coachId = coachId,
+    playerId = playerId,
+    serviceId = serviceId,
+    serviceName = serviceName,
+    startsAt = Instant.parse(startsAt),
+    endsAt = Instant.parse(endsAt),
+    durationMinutes = durationMinutes,
+    status = status
 )
