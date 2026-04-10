@@ -3,7 +3,6 @@ package com.racketmatch.ui.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -35,8 +34,8 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
-import com.racketmatch.presentation.viewmodel.MoreViewModel
 import com.racketmatch.presentation.viewmodel.NotificationViewModel
+import com.racketmatch.ui.more.WięcejScreen
 import com.racketmatch.ui.coaches.CoachAvailabilityScreen
 import com.racketmatch.ui.coaches.CoachBookingsScreen
 import com.racketmatch.ui.coaches.CoachCalendarScreen
@@ -60,13 +59,10 @@ import org.koin.core.parameter.parametersOf
 
 object MainScreen : Screen {
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val tokenStorage: TokenStorage = koinInject()
-        val moreViewModel: MoreViewModel = kmpViewModel()
         val exploreViewModel: ExploreViewModel = kmpViewModel()
-        val badges by moreViewModel.badges.collectAsState()
         val exploreState by exploreViewModel.stateFlow.collectAsState()
         val myAvatarUrl = exploreState.myAvatarUrl
         val avatarLetter = exploreState.myName.firstOrNull()?.uppercase() ?: "?"
@@ -74,7 +70,6 @@ object MainScreen : Screen {
         val notifVm: NotificationViewModel = kmpViewModel { parametersOf(userId) }
         val notifState by notifVm.state.collectAsState()
         var onboardingComplete by remember { mutableStateOf(true) }
-        var showMoreSheet by remember { mutableStateOf(false) }
         val outerNavigator = LocalNavigator.currentOrThrow
         val isCoach = tokenStorage.isCoach
         val hasPlayerProfile = tokenStorage.hasPlayerProfile
@@ -158,7 +153,6 @@ object MainScreen : Screen {
                                     if (it == PlayersTab) exploreViewModel.onEvent(ExploreEvent.ResetToMap)
                                     tabNavigator.current = it
                                 },
-                                onMoreTap = { moreViewModel.refresh(); showMoreSheet = true },
                                 matchBadge = notifState.unreadMatchCount,
                                 moreBadge = notifState.unreadFriendCount + notifState.unreadDmCount
                             )
@@ -172,18 +166,6 @@ object MainScreen : Screen {
                         }
                     }
 
-                    if (showMoreSheet) {
-                        MoreBottomSheet(
-                            onDismiss = { showMoreSheet = false },
-                            onProfile = { showMoreSheet = false; outerNavigator.push(ProfileScreen) },
-                            onFriends = { showMoreSheet = false; tabNavigator.current = FriendsTab },
-                            onMessages = { showMoreSheet = false; tabNavigator.current = MessagesTab },
-                            onFeed = { showMoreSheet = false; tabNavigator.current = FeedTab },
-                            onCoaches = { showMoreSheet = false; tabNavigator.current = CoachesTab },
-                            pendingFriends = badges.pendingFriends,
-                            unreadMessages = badges.unreadMessages
-                        )
-                    }
                 }
             }
         }
@@ -264,73 +246,14 @@ private fun MainTopBar(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MoreBottomSheet(
-    onDismiss: () -> Unit,
-    onProfile: () -> Unit,
-    onFriends: () -> Unit,
-    onMessages: () -> Unit,
-    onFeed: () -> Unit,
-    onCoaches: () -> Unit,
-    pendingFriends: Int,
-    unreadMessages: Int
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = ProCircuit.SurfaceLow,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            MoreRow(emoji = "👤", label = "Profil", badge = 0, onClick = onProfile)
-            MoreRow(emoji = "👋", label = "Znajomi", badge = pendingFriends, onClick = onFriends)
-            MoreRow(emoji = "💬", label = "Wiadomości", badge = unreadMessages, onClick = onMessages)
-            MoreRow(emoji = "📰", label = "Aktywność", badge = 0, onClick = onFeed)
-            MoreRow(emoji = "🎾", label = "Trenerzy", badge = 0, onClick = onCoaches)
-        }
-    }
-}
-
-@Composable
-private fun MoreRow(emoji: String, label: String, badge: Int, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(emoji, fontSize = 22.sp)
-            Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                fontSize = 16.sp, color = ProCircuit.OnBg)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (badge > 0) {
-                Box(
-                    modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                        .background(ProCircuit.Lime).padding(horizontal = 8.dp, vertical = 2.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("$badge", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 11.sp, color = ProCircuit.Bg)
-                }
-            }
-            Text("›", fontSize = 20.sp, color = ProCircuit.OnSurface)
-        }
-    }
-}
-
 @Composable
 private fun ProCircuitNavBar(
     current: Tab,
     onTabSelect: (Tab) -> Unit,
-    onMoreTap: () -> Unit,
     matchBadge: Int = 0,
     moreBadge: Int = 0
 ) {
-    val mainTabs = listOf(PlayersTab, MatchesTab, RankingsTab)
+    val mainTabs = listOf(PlayersTab, MatchesTab, RankingsTab, WięcejTab)
 
     Box(
         modifier = Modifier.fillMaxWidth()
@@ -358,13 +281,17 @@ private fun ProCircuitNavBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    val tabMatchBadge = if (tab == MatchesTab) matchBadge else 0
+                    val tabBadge = when (tab) {
+                        MatchesTab -> matchBadge
+                        WięcejTab -> moreBadge
+                        else -> 0
+                    }
                     BadgedBox(badge = {
-                        if (tabMatchBadge > 0) {
+                        if (tabBadge > 0) {
                             Badge(
                                 containerColor = ProCircuit.Lime,
                                 contentColor = ProCircuit.Bg
-                            ) { Text(tabMatchBadge.toString()) }
+                            ) { Text(tabBadge.toString()) }
                         }
                     }) {
                         Icon(
@@ -383,41 +310,6 @@ private fun ProCircuitNavBar(
                         color = if (isSelected) ProCircuit.SurfaceLow else ProCircuit.OnBg
                     )
                 }
-            }
-            // WIĘCEJ non-tab item
-            val moreIsActive = current !in mainTabs
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (moreIsActive) ProCircuit.Tertiary else Color.Transparent)
-                    .clickable { onMoreTap() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                BadgedBox(badge = {
-                    if (moreBadge > 0) {
-                        Badge(
-                            containerColor = ProCircuit.Lime,
-                            contentColor = ProCircuit.Bg
-                        ) { Text(moreBadge.toString()) }
-                    }
-                }) {
-                    Icon(
-                        painter = rememberVectorPainter(Icons.Default.Person),
-                        contentDescription = "Więcej",
-                        tint = if (moreIsActive) ProCircuit.SurfaceLow else ProCircuit.OnBg,
-                        modifier = Modifier.height(22.dp)
-                    )
-                }
-                Text(
-                    text = "WIĘCEJ",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 8.sp,
-                    letterSpacing = 1.sp,
-                    color = if (moreIsActive) ProCircuit.SurfaceLow else ProCircuit.OnBg
-                )
             }
         }
     }
@@ -451,6 +343,18 @@ object CoachesTab : Tab {
         @Composable get() = TabOptions(index = 3u, title = "Coaches", icon = rememberVectorPainter(Icons.Default.Search))
     @Composable
     override fun Content() { Navigator(CoachesScreen) { CurrentScreen() } }
+}
+
+object WięcejTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(
+            index = 4u, title = "Więcej",
+            icon = rememberVectorPainter(Icons.Default.Person)
+        )
+    @Composable
+    override fun Content() {
+        Navigator(WięcejScreen) { CurrentScreen() }
+    }
 }
 
 // ─── New Social Tabs (stubs — filled in later tasks) ─────────────────────────
