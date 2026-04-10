@@ -105,6 +105,25 @@ data class CreateCalendarEventRequest(
     val endsAt: Instant
 )
 
+data class CoachExceptionDto(
+    val id: UUID,
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val label: String? = null
+)
+
+data class CreateExceptionRequest(
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val label: String? = null
+)
+
+data class UpdateBookingSettingsRequest(
+    val bookingLeadTimeHours: Int? = null,
+    val bookingHorizonDays: Int? = null,
+    val bufferMinutes: Int? = null
+)
+
 fun CoachProfileEntity.toDto(services: List<CoachServiceEntity> = emptyList()) = CoachProfileDto(
     userId = userId!!,
     displayName = user.displayName,
