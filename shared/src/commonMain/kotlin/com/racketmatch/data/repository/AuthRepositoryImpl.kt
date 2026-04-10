@@ -29,9 +29,10 @@ class AuthRepositoryImpl(
         displayName: String,
         city: String,
         isCoach: Boolean,
+        hasPlayerProfile: Boolean,
         sports: List<Sport>
     ): AuthResult {
-        val response = authApi.register(email, password, displayName, city, isCoach, sports.map { it.name })
+        val response = authApi.register(email, password, displayName, city, isCoach, hasPlayerProfile, sports.map { it.name })
         println("RacketMatch register: saving token=${response.accessToken.take(20)}...")
         tokenStorage.saveTokens(response.accessToken, response.refreshToken)
         tokenStorage.currentUserId = response.user.id

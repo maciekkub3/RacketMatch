@@ -42,6 +42,7 @@ data class RegisterRequestDto(
     val displayName: String,
     val city: String,
     val isCoach: Boolean = false,
+    val hasPlayerProfile: Boolean = true,
     val sports: List<String> = emptyList()
 )
 

@@ -25,6 +25,7 @@ sealed class RegisterEvent {
         val displayName: String,
         val city: String,
         val isCoach: Boolean,
+        val hasPlayerProfile: Boolean = true,
         val sports: List<Sport> = emptyList()
     ) : RegisterEvent()
 }
@@ -48,15 +49,15 @@ class RegisterViewModel(
 
     fun onEvent(event: RegisterEvent) {
         when (event) {
-            is RegisterEvent.Submit -> register(event.email, event.password, event.displayName, event.city, event.isCoach, event.sports)
+            is RegisterEvent.Submit -> register(event.email, event.password, event.displayName, event.city, event.isCoach, event.hasPlayerProfile, event.sports)
         }
     }
 
-    private fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, sports: List<Sport>) {
+    private fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, hasPlayerProfile: Boolean, sports: List<Sport>) {
         viewModelScope.launch(dispatcher) {
             _state.value = RegisterState.Loading
             try {
-                authRepository.register(email, password, displayName, city, isCoach, sports)
+                authRepository.register(email, password, displayName, city, isCoach, hasPlayerProfile, sports)
                 tokenStorage.isNewUser = true
                 _effects.emit(RegisterEffect.NavigateToProfileSetup)
             } catch (e: Exception) {
