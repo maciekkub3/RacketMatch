@@ -10,6 +10,7 @@ data class RegisterRequest(
     @field:NotBlank val displayName: String,
     @field:NotBlank val city: String,
     val isCoach: Boolean = false,
+    val hasPlayerProfile: Boolean = true,
     val sports: List<String> = emptyList()
 )
 
@@ -33,5 +34,6 @@ data class UpdateProfileRequest(
     @field:NotBlank val city: String,
     val bio: String? = null,
     val sports: List<String> = emptyList(),
-    val password: String? = null
+    val password: String? = null,
+    val dateOfBirth: String? = null
 )

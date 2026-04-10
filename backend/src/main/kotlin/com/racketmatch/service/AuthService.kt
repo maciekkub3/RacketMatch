@@ -4,8 +4,10 @@ import com.racketmatch.api.dto.AuthResponse
 import com.racketmatch.api.dto.toDto
 import com.racketmatch.config.JwtConfig
 import com.racketmatch.config.JwtService
+import com.racketmatch.domain.entity.CoachProfileEntity
 import com.racketmatch.domain.entity.RefreshTokenEntity
 import com.racketmatch.domain.entity.UserEntity
+import com.racketmatch.domain.repository.CoachProfileRepository
 import com.racketmatch.domain.repository.RefreshTokenRepository
 import com.racketmatch.domain.repository.UserRepository
 import org.springframework.http.HttpStatus
@@ -21,6 +23,7 @@ import java.util.UUID
 class AuthService(
     private val userRepository: UserRepository,
     private val refreshTokenRepository: RefreshTokenRepository,
+    private val coachProfileRepository: CoachProfileRepository,
     private val jwtService: JwtService,
     private val jwtConfig: JwtConfig,
     private val passwordEncoder: PasswordEncoder
@@ -32,6 +35,7 @@ class AuthService(
         displayName: String,
         city: String,
         isCoach: Boolean,
+        hasPlayerProfile: Boolean = true,
         sports: List<String> = emptyList()
     ): AuthResponse {
         if (userRepository.existsByEmail(email)) {
@@ -44,9 +48,13 @@ class AuthService(
                 displayName = displayName,
                 city = city,
                 isCoach = isCoach,
+                hasPlayerProfile = hasPlayerProfile,
                 sports = sports.joinToString(",")
             )
         )
+        if (isCoach) {
+            coachProfileRepository.save(CoachProfileEntity(user = user))
+        }
         return buildAuthResponse(user)
     }
 

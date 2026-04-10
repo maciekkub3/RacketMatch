@@ -28,6 +28,7 @@ class AuthController(
             displayName = request.displayName,
             city = request.city,
             isCoach = request.isCoach,
+            hasPlayerProfile = request.hasPlayerProfile,
             sports = request.sports
         )
 

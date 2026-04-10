@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN has_player_profile BOOLEAN NOT NULL DEFAULT true;

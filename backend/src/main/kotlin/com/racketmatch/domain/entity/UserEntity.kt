@@ -25,7 +25,10 @@ class UserEntity(
     var avatarUrl: String? = null,
 
     @Column(name = "is_coach")
-    val isCoach: Boolean = false,
+    var isCoach: Boolean = false,
+
+    @Column(name = "has_player_profile")
+    var hasPlayerProfile: Boolean = true,
 
     @Column(nullable = false)
     var city: String,
@@ -54,6 +57,9 @@ class UserEntity(
     @Column(name = "bio", columnDefinition = "TEXT")
     var bio: String? = null,
 
+    @Column(name = "date_of_birth")
+    var dateOfBirth: String? = null,
+
     @Column(name = "wins")
     var wins: Int = 0,
 
@@ -67,10 +73,11 @@ class UserEntity(
         return UserEntity(
             id = id, email = email, passwordHash = passwordHash,
             displayName = displayName, avatarUrl = avatarUrl, isCoach = isCoach,
+            hasPlayerProfile = hasPlayerProfile,
             city = city, eloRating = eloRating, isMaster = isMaster,
             masterFee = masterFee, subscriptionActive = subscriptionActive,
             matchesPlayed = matchesPlayed, fcmToken = fcmToken,
-            bio = bio, wins = wins, losses = losses, createdAt = createdAt
+            bio = bio, dateOfBirth = dateOfBirth, wins = wins, losses = losses, createdAt = createdAt
         )
     }
 }

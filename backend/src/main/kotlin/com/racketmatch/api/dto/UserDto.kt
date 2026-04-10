@@ -9,6 +9,7 @@ data class UserDto(
     val displayName: String,
     val avatarUrl: String?,
     val isCoach: Boolean,
+    val hasPlayerProfile: Boolean = true,
     val city: String,
     val eloRating: Int,
     val isMaster: Boolean,
@@ -16,6 +17,7 @@ data class UserDto(
     val subscriptionActive: Boolean,
     val sports: List<String> = emptyList(),
     val bio: String? = null,
+    val dateOfBirth: String? = null,
     val wins: Int = 0,
     val losses: Int = 0
 )
@@ -26,6 +28,7 @@ fun UserEntity.toDto() = UserDto(
     displayName = displayName,
     avatarUrl = avatarUrl,
     isCoach = isCoach,
+    hasPlayerProfile = hasPlayerProfile,
     city = city,
     eloRating = eloRating,
     isMaster = isMaster,
@@ -33,6 +36,7 @@ fun UserEntity.toDto() = UserDto(
     subscriptionActive = subscriptionActive,
     sports = if (sports.isBlank()) emptyList() else sports.split(","),
     bio = bio,
+    dateOfBirth = dateOfBirth,
     wins = wins,
     losses = losses
 )
