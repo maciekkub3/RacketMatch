@@ -66,9 +66,10 @@ data class ServiceBookingScreen(
             (0 until lastDay).map { first.plus(it, DateTimeUnit.DAY) }
         }
 
-        val daysWithAvailability = remember(allSlots) {
+        val daysWithAvailability = remember(allSlots, displayedYear, displayedMonth) {
             allSlots.filter { it.isAvailable }
                 .map { it.startsAt.toLocalDateTime(TimeZone.currentSystemDefault()).date }
+                .filter { it.year == displayedYear && it.monthNumber == displayedMonth }
                 .toSet()
         }
 
@@ -82,8 +83,12 @@ data class ServiceBookingScreen(
             viewModel.onEvent(CoachDetailEvent.LoadSlots(from = from, to = to))
         }
 
-        // Reset selectedDay to today when month changes (avoid stale day from another month)
-        LaunchedEffect(displayedMonth) { selectedDay = today }
+        // When month changes, select the first available day in that month (or first day if none)
+        LaunchedEffect(displayedMonth, daysWithAvailability) {
+            val firstAvailable = daysInMonth.firstOrNull { it in daysWithAvailability }
+            selectedDay = firstAvailable ?: daysInMonth.firstOrNull() ?: today
+            selectedSlot = null
+        }
 
         // Reset selected slot when duration changes
         LaunchedEffect(selectedDuration) { selectedSlot = null }
@@ -96,16 +101,25 @@ data class ServiceBookingScreen(
         }
 
         // Only show start times where enough consecutive available slots exist for the duration.
-        // Backend generates 1-hour chunks, so:
-        //   60 min → 1 slot needed
-        //   90 or 120 min → 2 consecutive slots needed (booking spans into the next hour)
-        val extraSlotsNeeded = (selectedDuration - 1) / 60  // 0 for 60min, 1 for 90/120min
+        // Backend generates 1-hour chunks, so a 120-min booking needs 2 additional consecutive
+        // free slots beyond the start slot. extraSlotsNeeded = duration/60 - 1.
+        //   60 min → 0 extra (just the start slot)
+        //   90 min → 1 extra (spans into the next hour)
+        //   120 min → 1 extra (spans 2 hours but only the next slot boundary matters)
+        // For durations > 120 min this would need a loop; for now 60/90/120 are the only options.
+        val extraSlotsNeeded = selectedDuration / 60 - 1  // 0 for 60min, 0 for 90min, 1 for 120min
         val slotsForDay = remember(allSlotsForDay, selectedDuration) {
             allSlotsForDay.filter { slot ->
                 if (!slot.isAvailable) return@filter false
                 if (extraSlotsNeeded == 0) return@filter true
-                val nextSlot = allSlotsForDay.find { it.startsAt == slot.endsAt }
-                nextSlot != null && nextSlot.isAvailable
+                // Check that the next `extraSlotsNeeded` consecutive slots are available
+                var cursor = slot
+                repeat(extraSlotsNeeded) {
+                    val next = allSlotsForDay.find { it.startsAt == cursor.endsAt }
+                    if (next == null || !next.isAvailable) return@filter false
+                    cursor = next
+                }
+                true
             }
         }
 

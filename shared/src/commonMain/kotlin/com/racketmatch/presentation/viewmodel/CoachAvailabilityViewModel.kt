@@ -221,7 +221,8 @@ class CoachAvailabilityViewModel(
                     bookingSettings = bookingSettings,
                     exceptions = exceptions
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                println("CoachAvailabilityViewModel: load() failed — ${e.message}")
                 _state.value = CoachAvailabilityState.Error
             }
         }
@@ -246,7 +247,8 @@ class CoachAvailabilityViewModel(
                     bufferMinutes = current.bookingSettings.bufferMinutes
                 )
                 _effects.emit(CoachAvailabilityEffect.Saved)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                println("CoachAvailabilityViewModel: save() failed — ${e.message}")
                 _effects.emit(CoachAvailabilityEffect.Error("Nie udało się zapisać"))
             }
         }

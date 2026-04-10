@@ -62,6 +62,8 @@ class CoachController(
         val weeklyAvailability = availabilityRepository.findByCoachId(id)
         if (weeklyAvailability.isEmpty()) return emptyList()
 
+        // TODO: ZoneOffset.UTC assumes all coaches are in UTC. For multi-timezone support,
+        //       store coach timezone in coach_profiles and use it here.
         val zone = ZoneOffset.UTC
         val now = Instant.now()
         val leadTimeEnd = now.plus(profile.bookingLeadTimeHours.toLong(), ChronoUnit.HOURS)
@@ -87,7 +89,7 @@ class CoachController(
                 val dayEnd = day.atTime(avail.endTime).toInstant(zone)
                 while (cursor.isBefore(dayEnd)) {
                     val slotEnd = cursor.plus(1, ChronoUnit.HOURS)
-                    if (cursor.isAfter(leadTimeEnd) && cursor.isBefore(effectiveTo) && !cursor.isBefore(from)) {
+                    if (cursor.isAfter(leadTimeEnd) && !cursor.isAfter(effectiveTo) && !cursor.isBefore(from)) {
                         val isBusy = busyRanges.any { (s, e) -> s < slotEnd && e > cursor }
                         slots.add(BookingSlotDto(startsAt = cursor, endsAt = slotEnd, isAvailable = !isBusy))
                     }

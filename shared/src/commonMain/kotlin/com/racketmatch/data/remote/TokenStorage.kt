@@ -59,5 +59,10 @@ open class InMemoryTokenStorage : TokenStorage {
         accessToken = null
         refreshToken = null
         currentUserId = null
+        isCoach = false
+        hasPlayerProfile = true
+        coachModeActive = false
+        isNewUser = false
+        isOnboardingComplete = false
     }
 }
