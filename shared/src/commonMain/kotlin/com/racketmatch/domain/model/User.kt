@@ -16,5 +16,6 @@ data class User(
     val bio: String? = null,
     val dateOfBirth: String? = null,
     val wins: Int = 0,
-    val losses: Int = 0
+    val losses: Int = 0,
+    val hasPlayerProfile: Boolean = true
 )

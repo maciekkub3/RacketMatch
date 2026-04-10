@@ -17,6 +17,9 @@ class AuthRepositoryImpl(
         println("RacketMatch login: saving token=${response.accessToken.take(20)}...")
         tokenStorage.saveTokens(response.accessToken, response.refreshToken)
         tokenStorage.currentUserId = response.user.id
+        tokenStorage.isCoach = response.user.isCoach
+        tokenStorage.hasPlayerProfile = response.user.hasPlayerProfile
+        if (response.user.isCoach && !response.user.hasPlayerProfile) tokenStorage.coachModeActive = true
         return response.toDomain()
     }
 
@@ -32,6 +35,9 @@ class AuthRepositoryImpl(
         println("RacketMatch register: saving token=${response.accessToken.take(20)}...")
         tokenStorage.saveTokens(response.accessToken, response.refreshToken)
         tokenStorage.currentUserId = response.user.id
+        tokenStorage.isCoach = response.user.isCoach
+        tokenStorage.hasPlayerProfile = response.user.hasPlayerProfile
+        if (response.user.isCoach && !response.user.hasPlayerProfile) tokenStorage.coachModeActive = true
         return response.toDomain()
     }
 
