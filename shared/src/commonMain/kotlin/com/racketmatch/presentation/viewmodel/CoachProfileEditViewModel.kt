@@ -66,6 +66,7 @@ class CoachProfileEditViewModel(
             try {
                 val user = profileRepository.getMyProfile()
                 val courts = runCatching { courtRepository.getCourts(user.city) }.getOrDefault(emptyList())
+                val coachProfile = runCatching { coachRepository.getMyCoachProfile() }.getOrNull()
                 _state.value = CoachProfileEditState.Content(
                     displayName = user.displayName,
                     city = user.city,
@@ -74,7 +75,7 @@ class CoachProfileEditViewModel(
                     avatarUrl = user.avatarUrl ?: "",
                     certifications = emptyList(),
                     availableCourts = courts,
-                    selectedCourtNames = emptySet()
+                    selectedCourtNames = coachProfile?.trainingLocations?.toSet() ?: emptySet()
                 )
             } catch (e: Exception) {
                 _state.value = CoachProfileEditState.Error
