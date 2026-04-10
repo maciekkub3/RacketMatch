@@ -1,7 +1,10 @@
 package com.racketmatch.api.dto
 
 import com.racketmatch.domain.entity.BookingEntity
+import com.racketmatch.domain.entity.CoachAvailabilityEntity
+import com.racketmatch.domain.entity.CoachCalendarEventEntity
 import com.racketmatch.domain.entity.CoachProfileEntity
+import com.racketmatch.domain.entity.CoachServiceEntity
 import java.time.Instant
 import java.util.UUID
 
@@ -10,11 +13,37 @@ data class CoachProfileDto(
     val displayName: String,
     val avatarUrl: String?,
     val bio: String?,
-    val hourlyRate: Int,
     val sports: List<String>,
     val certifications: List<String>,
     val city: String,
-    val eloRating: Int
+    val eloRating: Int,
+    val lowestServicePriceCents: Int? = null,
+    val trainingLocations: List<String> = emptyList()
+)
+
+data class CoachServiceDto(
+    val id: UUID,
+    val coachId: UUID,
+    val name: String,
+    val description: String?,
+    val pricingType: String,
+    val priceCents: Int,
+    val isActive: Boolean
+)
+
+data class CreateCoachServiceRequest(
+    val name: String,
+    val description: String? = null,
+    val pricingType: String,  // PER_HOUR, FIXED, PER_PERSON
+    val priceCents: Int
+)
+
+data class UpdateCoachServiceRequest(
+    val name: String,
+    val description: String? = null,
+    val pricingType: String,
+    val priceCents: Int,
+    val isActive: Boolean
 )
 
 data class BookingSlotDto(
@@ -25,38 +54,101 @@ data class BookingSlotDto(
 
 data class CreateBookingRequest(
     val coachId: UUID,
+    val serviceId: UUID,
     val startsAt: Instant,
-    val endsAt: Instant
+    val endsAt: Instant,
+    val durationMinutes: Int
 )
 
 data class BookingDto(
     val id: UUID,
     val coachId: UUID,
     val playerId: UUID,
+    val serviceId: UUID?,
+    val serviceName: String?,
     val startsAt: Instant,
     val endsAt: Instant,
-    val status: String,
-    val paymentId: String?
+    val durationMinutes: Int?,
+    val status: String
 )
 
-fun CoachProfileEntity.toDto() = CoachProfileDto(
+data class CalendarEventDto(
+    val id: UUID,
+    val title: String?,
+    val notes: String?,
+    val eventType: String,
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val bookingId: UUID?
+)
+
+data class CoachAvailabilityDto(
+    val dayOfWeek: Int,    // 1=Mon, 7=Sun
+    val startTime: String, // "HH:mm"
+    val endTime: String    // "HH:mm"
+)
+
+data class SaveAvailabilityItemRequest(
+    val dayOfWeek: Int,
+    val startTime: String,
+    val endTime: String
+)
+
+data class CreateCalendarEventRequest(
+    val title: String?,
+    val notes: String? = null,
+    val eventType: String,  // EXTERNAL_CLIENT or BLOCKED only (BOOKING is auto-created)
+    val startsAt: Instant,
+    val endsAt: Instant
+)
+
+fun CoachProfileEntity.toDto(services: List<CoachServiceEntity> = emptyList()) = CoachProfileDto(
     userId = userId!!,
     displayName = user.displayName,
     avatarUrl = user.avatarUrl,
     bio = bio,
-    hourlyRate = hourlyRate,
     sports = sports.toList(),
     certifications = certifications.toList(),
     city = user.city,
-    eloRating = user.eloRating
+    eloRating = user.eloRating,
+    lowestServicePriceCents = services.filter { it.isActive }.minOfOrNull { it.priceCents },
+    trainingLocations = trainingLocations.toList()
+)
+
+fun CoachServiceEntity.toDto() = CoachServiceDto(
+    id = id!!,
+    coachId = coach.userId!!,
+    name = name,
+    description = description,
+    pricingType = pricingType,
+    priceCents = priceCents,
+    isActive = isActive
 )
 
 fun BookingEntity.toDto() = BookingDto(
     id = id!!,
     coachId = coach.id!!,
     playerId = player.id!!,
+    serviceId = service?.id,
+    serviceName = service?.name,
     startsAt = startsAt,
     endsAt = endsAt,
-    status = status,
-    paymentId = paymentId
+    durationMinutes = durationMinutes,
+    status = status
+)
+
+fun CoachAvailabilityEntity.toDto() = CoachAvailabilityDto(
+    dayOfWeek = dayOfWeek,
+    startTime = startTime.toString().substring(0, 5),
+    endTime = endTime.toString().substring(0, 5)
+)
+
+fun CoachCalendarEventEntity.toDto() = CalendarEventDto(
+    id = id!!,
+    title = title,
+    notes = notes,
+    eventType = eventType,
+    startsAt = startsAt,
+    endsAt = endsAt,
+    bookingId = booking?.id
 )
