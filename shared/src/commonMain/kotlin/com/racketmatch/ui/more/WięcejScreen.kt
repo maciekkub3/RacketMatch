@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -14,22 +15,30 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.domain.repository.AuthRepository
+import com.racketmatch.ui.auth.LoginScreen
 import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.feed.FeedScreen
 import com.racketmatch.ui.friends.FriendsScreen
 import com.racketmatch.ui.messages.MessagesScreen
+import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 object WięcejScreen : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
+        val rootNavigator = navigator.parent?.parent ?: navigator
+        val authRepository: AuthRepository = koinInject()
+        val scope = rememberCoroutineScope()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(ProCircuit.Bg)
-                .padding(top = 56.dp)
+                .padding(top = 16.dp)
         ) {
             Text(
                 "Więcej",
@@ -39,10 +48,19 @@ object WięcejScreen : Screen {
             )
             Spacer(Modifier.height(8.dp))
             listOf(
-                Triple("👋", "Znajomi") { navigator.push(FriendsScreen) },
-                Triple("💬", "Wiadomości") { navigator.push(MessagesScreen) },
-                Triple("📰", "Aktywność") { navigator.push(FeedScreen) },
-                Triple("🎾", "Trenerzy") { navigator.push(CoachesScreen) }
+                Triple("👋", "Znajomi") { rootNavigator.push(FriendsScreen) },
+                Triple("💬", "Wiadomości") { rootNavigator.push(MessagesScreen) },
+                Triple("📰", "Aktywność") { rootNavigator.push(FeedScreen) },
+                Triple("🎾", "Trenerzy") { rootNavigator.push(CoachesScreen) },
+                Triple("⚙️", "Ustawienia") { rootNavigator.push(SettingsScreen) },
+                Triple("🚪", "Wyloguj") {
+                    scope.launch {
+                        authRepository.logout()
+                        var root = navigator
+                        while (root.parent != null) root = root.parent!!
+                        root.replaceAll(LoginScreen())
+                    }
+                }
             ).forEach { (emoji, label, onClick) ->
                 Row(
                     modifier = Modifier

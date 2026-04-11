@@ -81,20 +81,22 @@ object MainScreen : Screen {
                 Scaffold(
                     containerColor = ProCircuit.Bg,
                     topBar = {
-                        MainTopBar(
-                            avatarLetter = avatarLetter,
-                            avatarUrl = myAvatarUrl,
-                            unreadCount = notifState.unreadCount,
-                            onAvatarClick = { outerNavigator.push(CoachProfileEditScreen) },
-                            onBellClick = { outerNavigator.push(NotificationsScreen) },
-                            isCoach = true,
-                            hasPlayerProfile = hasPlayerProfile,
-                            coachModeActive = true,
-                            onModeSwitch = { targetCoachMode ->
-                                tokenStorage.coachModeActive = targetCoachMode
-                                coachModeActive = targetCoachMode
-                            }
-                        )
+                        if (coachTabNavigator.current != WięcejTab) {
+                            MainTopBar(
+                                avatarLetter = avatarLetter,
+                                avatarUrl = myAvatarUrl,
+                                unreadCount = notifState.unreadCount,
+                                onAvatarClick = { outerNavigator.push(CoachProfileEditScreen) },
+                                onBellClick = { outerNavigator.push(NotificationsScreen) },
+                                isCoach = true,
+                                hasPlayerProfile = hasPlayerProfile,
+                                coachModeActive = true,
+                                onModeSwitch = { targetCoachMode ->
+                                    tokenStorage.coachModeActive = targetCoachMode
+                                    coachModeActive = targetCoachMode
+                                }
+                            )
+                        }
                     },
                     bottomBar = {
                         CoachNavBar(current = coachTabNavigator.current) {
@@ -131,20 +133,22 @@ object MainScreen : Screen {
                     Scaffold(
                         containerColor = ProCircuit.Bg,
                         topBar = {
-                            MainTopBar(
-                                avatarLetter = avatarLetter,
-                                avatarUrl = myAvatarUrl,
-                                unreadCount = notifState.unreadCount,
-                                onAvatarClick = { outerNavigator.push(ProfileScreen) },
-                                onBellClick = { outerNavigator.push(NotificationsScreen) },
-                                isCoach = isCoach,
-                                hasPlayerProfile = hasPlayerProfile,
-                                coachModeActive = false,
-                                onModeSwitch = { targetCoachMode ->
-                                    tokenStorage.coachModeActive = targetCoachMode
-                                    coachModeActive = targetCoachMode
-                                }
-                            )
+                            if (tabNavigator.current != WięcejTab) {
+                                MainTopBar(
+                                    avatarLetter = avatarLetter,
+                                    avatarUrl = myAvatarUrl,
+                                    unreadCount = notifState.unreadCount,
+                                    onAvatarClick = { outerNavigator.push(ProfileScreen) },
+                                    onBellClick = { outerNavigator.push(NotificationsScreen) },
+                                    isCoach = isCoach,
+                                    hasPlayerProfile = hasPlayerProfile,
+                                    coachModeActive = false,
+                                    onModeSwitch = { targetCoachMode ->
+                                        tokenStorage.coachModeActive = targetCoachMode
+                                        coachModeActive = targetCoachMode
+                                    }
+                                )
+                            }
                         },
                         bottomBar = {
                             ProCircuitNavBar(
@@ -421,7 +425,7 @@ object CoachAvailabilityTab : Tab {
 
 @Composable
 private fun CoachNavBar(current: Tab, onTabSelect: (Tab) -> Unit) {
-    val coachTabs = listOf(CoachCalendarTab, CoachBookingsTab, CoachServicesTab, CoachAvailabilityTab)
+    val coachTabs = listOf(CoachCalendarTab, CoachBookingsTab, CoachServicesTab, CoachAvailabilityTab, WięcejTab)
 
     Box(
         modifier = Modifier.fillMaxWidth()
