@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -48,18 +50,26 @@ object CoachesScreen : Screen {
             if (selectedTab == 1) bookingsVm.refresh()
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
             // Header
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 8.dp)) {
-                Text(
-                    "Trenerzy",
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
-                )
-                Text(
-                    "Znajdź idealnego partnera na korcie",
-                    fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { navigator.pop() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
+                }
+                Column {
+                    Text(
+                        "Trenerzy",
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 24.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
+                    )
+                    Text(
+                        "Znajdź idealnego partnera na korcie",
+                        fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
+                    )
+                }
             }
 
             // Tab bar

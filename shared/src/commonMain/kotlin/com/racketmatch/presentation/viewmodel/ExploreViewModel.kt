@@ -33,18 +33,25 @@ data class PostSessionDialogState(
     val matchType: MatchType = MatchType.CASUAL
 )
 
+val SUPPORTED_CITIES = listOf("Warszawa", "Poznań", "Wrocław", "Szczecin")
+
+fun normalizeCityName(city: String): String =
+    SUPPORTED_CITIES.firstOrNull { it.equals(city, ignoreCase = true) } ?: "Warszawa"
+
 data class ExploreState(
     val courts: List<Court> = emptyList(),
     val sessions: List<OpenSession> = emptyList(),
+    val allPlayers: List<User> = emptyList(),
     val selectedCourtId: String? = null,
     val sportFilter: Sport? = null,
     val isMapView: Boolean = true,
-    val nearbyPlayers: List<User> = emptyList(),
     val pendingChallengeIds: Set<String> = emptySet(),
     val myElo: Int = 1200,
     val myUserId: String = "",
     val myName: String = "",
+    val myAvatarUrl: String? = null,
     val mySports: List<Sport> = emptyList(),
+    val selectedCity: String = "Warszawa",
     val challengeDialog: ChallengeDialogState? = null,
     val postSessionDialog: PostSessionDialogState? = null,
     val isLoading: Boolean = true,
@@ -54,6 +61,8 @@ data class ExploreState(
     val eloFilterEnabled: Boolean = false,
     val showFilterSheet: Boolean = false
 ) {
+    val nearbyPlayers: List<User>
+        get() = allPlayers.filter { it.city.equals(selectedCity, ignoreCase = true) }
     val selectedCourt: Court? get() = courts.find { it.id == selectedCourtId }
     val sessionsForSelectedCourt: List<OpenSession>
         get() = if (selectedCourtId == null) sessions
@@ -97,6 +106,7 @@ sealed class ExploreEvent {
     data class SetMatchTypeFilter(val type: MatchType?) : ExploreEvent()
     data class SetSessionTimeFilter(val filter: SessionTimeFilter) : ExploreEvent()
     data class SetEloFilter(val enabled: Boolean) : ExploreEvent()
+    data class SwitchCity(val city: String) : ExploreEvent()
 }
 
 sealed class ExploreEffect {
@@ -141,6 +151,7 @@ class ExploreViewModel(
             is ExploreEvent.SetMatchTypeFilter -> _state.value = _state.value.copy(matchTypeFilter = event.type)
             is ExploreEvent.SetSessionTimeFilter -> _state.value = _state.value.copy(sessionTimeFilter = event.filter)
             is ExploreEvent.SetEloFilter -> _state.value = _state.value.copy(eloFilterEnabled = event.enabled)
+            is ExploreEvent.SwitchCity -> switchCity(event.city)
             is ExploreEvent.SelectCourt -> _state.value = _state.value.copy(selectedCourtId = event.courtId)
             is ExploreEvent.DismissCourt -> _state.value = _state.value.copy(selectedCourtId = null)
             is ExploreEvent.SetSportFilter -> _state.value = _state.value.copy(sportFilter = event.sport)
@@ -206,9 +217,11 @@ class ExploreViewModel(
             val myProfile = runCatching { profileRepository.getMyProfile() }.getOrNull()
             val myElo = myProfile?.eloRating ?: 1200
             val myName = myProfile?.displayName ?: ""
+            val myAvatarUrl = myProfile?.avatarUrl
             val mySports = myProfile?.sports ?: emptyList()
-            val courts = runCatching { courtRepository.getCourts("Warszawa") }.getOrDefault(emptyList())
-            val sessions = runCatching { sessionRepository.getSessions("Warszawa") }.getOrDefault(emptyList())
+            val initialCity = normalizeCityName(myProfile?.city ?: "Warszawa")
+            val courts = runCatching { courtRepository.getCourts(initialCity) }.getOrDefault(emptyList())
+            val sessions = runCatching { sessionRepository.getSessions(initialCity) }.getOrDefault(emptyList())
             val players = runCatching {
                 playerRepository.getNearbyPlayers(PlayerFilter(), 0.0, 0.0)
             }.getOrDefault(emptyList())
@@ -219,12 +232,14 @@ class ExploreViewModel(
             _state.value = _state.value.copy(
                 courts = courts,
                 sessions = sessions,
-                nearbyPlayers = players,
+                allPlayers = players,
                 pendingChallengeIds = pendingIds,
                 myElo = myElo,
                 myUserId = myId,
                 myName = myName,
+                myAvatarUrl = myAvatarUrl,
                 mySports = mySports,
+                selectedCity = initialCity,
                 isLoading = false
             )
         }
@@ -232,8 +247,18 @@ class ExploreViewModel(
 
     private fun loadSessions() {
         viewModelScope.launch(dispatcher) {
-            val sessions = runCatching { sessionRepository.getSessions("Warszawa") }.getOrDefault(emptyList())
+            val city = _state.value.selectedCity
+            val sessions = runCatching { sessionRepository.getSessions(city) }.getOrDefault(emptyList())
             _state.value = _state.value.copy(sessions = sessions)
+        }
+    }
+
+    private fun switchCity(city: String) {
+        _state.value = _state.value.copy(selectedCity = city, selectedCourtId = null)
+        viewModelScope.launch(dispatcher) {
+            val courts = runCatching { courtRepository.getCourts(city) }.getOrDefault(emptyList())
+            val sessions = runCatching { sessionRepository.getSessions(city) }.getOrDefault(emptyList())
+            _state.value = _state.value.copy(courts = courts, sessions = sessions)
         }
     }
 

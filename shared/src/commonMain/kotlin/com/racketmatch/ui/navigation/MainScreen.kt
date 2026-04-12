@@ -40,6 +40,7 @@ import com.racketmatch.ui.coaches.CoachAvailabilityScreen
 import com.racketmatch.ui.coaches.CoachBookingsScreen
 import com.racketmatch.ui.coaches.CoachCalendarScreen
 import com.racketmatch.ui.coaches.CoachProfileEditScreen
+import com.racketmatch.ui.coaches.CoachProfileScreen
 import com.racketmatch.ui.coaches.CoachServicesScreen
 import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.messages.MessagesScreen
@@ -86,7 +87,7 @@ object MainScreen : Screen {
                                 avatarLetter = avatarLetter,
                                 avatarUrl = myAvatarUrl,
                                 unreadCount = notifState.unreadCount,
-                                onAvatarClick = { outerNavigator.push(CoachProfileEditScreen) },
+                                onAvatarClick = { outerNavigator.push(CoachProfileScreen) },
                                 onBellClick = { outerNavigator.push(NotificationsScreen) },
                                 isCoach = true,
                                 hasPlayerProfile = hasPlayerProfile,

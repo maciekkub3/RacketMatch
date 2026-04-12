@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.racketmatch.domain.model.FriendRequest
 import com.racketmatch.domain.model.FriendRequestStatus
 import com.racketmatch.domain.model.User
+import com.racketmatch.data.remote.InMemoryTokenStorage
 import com.racketmatch.domain.repository.FriendRepository
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
@@ -61,7 +62,7 @@ class FriendsViewModelTest {
     fun setUp() {
         MockKAnnotations.init(this)
         Dispatchers.setMain(dispatcher)
-        viewModel = FriendsViewModel(repo = repo)
+        viewModel = FriendsViewModel(repo = repo, tokenStorage = InMemoryTokenStorage())
     }
 
     @AfterTest
@@ -216,7 +217,8 @@ class FriendsViewModelTest {
             viewModel.onEvent(event = FriendsEvent.OpenDm(friend = mockUser))
             dispatcher.scheduler.advanceUntilIdle()
 
-            awaitItem() shouldBe FriendsEffect.NavigateToDm(friend = mockUser)
+            val effect = awaitItem() as FriendsEffect.NavigateToDm
+            effect.friend shouldBe mockUser
         }
     }
 

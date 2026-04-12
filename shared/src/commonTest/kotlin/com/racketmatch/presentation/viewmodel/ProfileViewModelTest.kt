@@ -8,7 +8,6 @@ import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.data.remote.TokenStorage
-import com.racketmatch.domain.repository.AuthRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
@@ -22,7 +21,6 @@ import kotlin.test.Test
 class ProfileViewModelTest {
 
     @MockK private lateinit var profileRepository: ProfileRepository
-    @MockK private lateinit var authRepository: AuthRepository
     @MockK private lateinit var tokenStorage: TokenStorage
     private val dispatcher = StandardTestDispatcher()
     private lateinit var viewModel: ProfileViewModel
@@ -48,7 +46,7 @@ class ProfileViewModelTest {
 
     @Test
     fun `loads profile on init`() = runTest {
-        viewModel = ProfileViewModel(profileRepository, authRepository, tokenStorage, dispatcher)
+        viewModel = ProfileViewModel(profileRepository, tokenStorage, dispatcher)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe ProfileState.Loading
@@ -63,7 +61,7 @@ class ProfileViewModelTest {
     @Test
     fun `error loading profile shows Error state`() = runTest {
         coEvery { profileRepository.getMyProfile() } throws Exception("Network error")
-        viewModel = ProfileViewModel(profileRepository, authRepository, tokenStorage, dispatcher)
+        viewModel = ProfileViewModel(profileRepository, tokenStorage, dispatcher)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe ProfileState.Loading

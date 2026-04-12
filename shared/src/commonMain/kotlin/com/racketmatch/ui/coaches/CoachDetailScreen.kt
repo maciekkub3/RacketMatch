@@ -12,10 +12,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -116,125 +120,150 @@ private fun CoachDetailContent(
         // Hero
         item {
             Box(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(380.dp)
                     .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-                    .background(ProCircuit.SurfaceLow)
-                    .padding(horizontal = 24.dp, vertical = 24.dp)
             ) {
-                Column {
+                // Photo or fallback
+                if (!coach.avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = coach.avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(ProCircuit.SurfaceHigh),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            coach.displayName.take(1).uppercase(),
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 80.sp, color = ProCircuit.Lime
+                        )
+                    }
+                }
+
+                // Dark gradient overlay — stronger at bottom for text legibility
+                Box(
+                    modifier = Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.25f),
+                            0.45f to Color.Black.copy(alpha = 0.15f),
+                            1f to Color.Black.copy(alpha = 0.85f)
+                        )
+                    )
+                )
+
+                // Content on top of photo
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Back button
                     TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
                         Text("← WSTECZ", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                             fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.Lime)
                     }
-                    Spacer(Modifier.height(12.dp))
 
-                    // Badge + ELO + sports
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                .background(ProCircuit.Lime)
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                    // Bottom: badge + name + buttons
+                    Column {
+                        // Badge + ELO + sports
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("TRENER", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.Bg)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("⭐", fontSize = 13.sp)
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                "${coach.eloRating}",
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp, color = ProCircuit.OnBg
-                            )
-                        }
-                        coach.sports.forEach { sport ->
-                            val emoji = when (sport) { Sport.TENNIS -> "🎾"; Sport.PADEL -> "🏸" }
                             Box(
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                    .background(ProCircuit.Lime.copy(alpha = 0.12f))
+                                    .background(ProCircuit.Lime)
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
+                                Text("TRENER", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                                    fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.Bg)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("⭐", fontSize = 13.sp)
+                                Spacer(Modifier.width(4.dp))
                                 Text(
-                                    "$emoji ${if (sport == Sport.TENNIS) "Tenis" else "Padel"}",
+                                    "${coach.eloRating}",
                                     fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp, color = ProCircuit.Lime
+                                    fontSize = 13.sp, color = Color.White
                                 )
                             }
+                            coach.sports.forEach { sport ->
+                                val emoji = when (sport) { Sport.TENNIS -> "🎾"; Sport.PADEL -> "🏸" }
+                                Box(
+                                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.15f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        "$emoji ${if (sport == Sport.TENNIS) "Tenis" else "Padel"}",
+                                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp, color = Color.White
+                                    )
+                                }
+                            }
                         }
-                    }
 
-                    Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(8.dp))
 
-                    // Avatar + Name
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(20.dp))
-                                .background(ProCircuit.SurfaceHigh),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                coach.displayName.take(1).uppercase(),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 32.sp, color = ProCircuit.Lime
-                            )
-                        }
-                        Spacer(Modifier.width(16.dp))
+                        // Name
                         Text(
                             coach.displayName,
                             fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 28.sp, letterSpacing = (-1).sp, color = ProCircuit.OnBg,
-                            lineHeight = 32.sp, modifier = Modifier.weight(1f)
+                            fontSize = 32.sp, letterSpacing = (-1).sp, color = Color.White,
+                            lineHeight = 36.sp
                         )
-                    }
 
-                    Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(16.dp))
 
-                    // Action buttons
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        when {
-                            isFriend -> OutlinedChip("Znajomy ✓")
-                            requestSent -> OutlinedChip("Zaproszenie wysłane ✓")
-                            else -> Button(
+                        // Action buttons
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when {
+                                isFriend -> OutlinedChip("Znajomy ✓")
+                                requestSent -> OutlinedChip("Zaproszenie wysłane ✓")
+                                else -> Button(
+                                    onClick = {
+                                        scope.launch {
+                                            try { friendRepo.sendRequest(coach.userId); requestSent = true }
+                                            catch (_: Exception) {}
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.White.copy(alpha = 0.15f),
+                                        contentColor = Color.White
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp)
+                                ) {
+                                    Text("+ Dodaj znajomego", fontFamily = AppFontFamily,
+                                        fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                }
+                            }
+                            Button(
                                 onClick = {
-                                    scope.launch {
-                                        try { friendRepo.sendRequest(coach.userId); requestSent = true }
-                                        catch (_: Exception) {}
-                                    }
+                                    val myId = tokenStorage.currentUserId ?: return@Button
+                                    val convId = minOf(myId, coach.userId) + "_" + maxOf(myId, coach.userId)
+                                    onNavigate(DmChatScreen(
+                                        conversationId = convId,
+                                        currentUserId = myId,
+                                        otherUserName = coach.displayName,
+                                        otherUserAvatarUrl = coach.avatarUrl
+                                    ))
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = ProCircuit.SurfaceHigh,
-                                    contentColor = ProCircuit.OnBg
+                                    containerColor = ProCircuit.Lime,
+                                    contentColor = ProCircuit.Bg
                                 ),
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp)
                             ) {
-                                Text("+ Dodaj do znajomych", fontFamily = AppFontFamily,
+                                Text("💬 Wiadomość", fontFamily = AppFontFamily,
                                     fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                             }
-                        }
-                        Button(
-                            onClick = {
-                                val myId = tokenStorage.currentUserId ?: return@Button
-                                val convId = minOf(myId, coach.userId) + "_" + maxOf(myId, coach.userId)
-                                onNavigate(DmChatScreen(
-                                    conversationId = convId,
-                                    currentUserId = myId,
-                                    otherUserName = coach.displayName,
-                                    otherUserAvatarUrl = coach.avatarUrl
-                                ))
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ProCircuit.Lime,
-                                contentColor = ProCircuit.Bg
-                            ),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp)
-                        ) {
-                            Text("💬 Wiadomość", fontFamily = AppFontFamily,
-                                fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                         }
                     }
                 }

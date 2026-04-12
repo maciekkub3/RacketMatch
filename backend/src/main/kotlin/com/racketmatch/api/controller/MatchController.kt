@@ -166,8 +166,10 @@ class MatchController(
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Match not found") }
         if (match.challenger.id != userId && match.challenged.id != userId)
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not a participant")
-        if (match.status != "SCHEDULED")
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Match is not scheduled")
+        if (match.status == "RESULT_PROPOSED" && match.proposedBy == userId)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot re-propose your own result")
+        if (match.status != "SCHEDULED" && match.status != "RESULT_PROPOSED")
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Match is not in a state that allows proposing a result")
 
         match.proposedScoreChallenger = request.scoreChallenger
         match.proposedScoreChallenged = request.scoreChallenged
@@ -297,14 +299,6 @@ class MatchController(
         if (challengerWon) match.challenged.losses += 1 else match.challenged.wins += 1
         userRepository.save(match.challenger)
         userRepository.save(match.challenged)
-    }
-
-    private fun findMatchForChallenged(matchId: UUID, userId: String): MatchEntity {
-        val match = matchRepository.findById(matchId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Match not found") }
-        if (match.challenged.id != UUID.fromString(userId))
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only the challenged player can perform this action")
-        return match
     }
 
     private fun findMatchForParticipant(matchId: UUID, userId: UUID): MatchEntity {

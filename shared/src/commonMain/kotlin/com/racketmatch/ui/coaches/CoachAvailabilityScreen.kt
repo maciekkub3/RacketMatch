@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -21,8 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.CoachException
 import com.racketmatch.presentation.viewmodel.CoachAvailabilityEffect
 import com.racketmatch.presentation.viewmodel.CoachAvailabilityEvent
@@ -42,62 +39,37 @@ import kotlinx.datetime.toLocalDateTime
 
 object CoachAvailabilityScreen : Screen {
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val viewModel: CoachAvailabilityViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
-        val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
-                    CoachAvailabilityEffect.Saved -> {
-                        snackbarHostState.showSnackbar("Dostępności zapisane")
-                        navigator.pop()
-                    }
+                    CoachAvailabilityEffect.Saved -> snackbarHostState.showSnackbar("Dostępności zapisane")
                     is CoachAvailabilityEffect.Error -> snackbarHostState.showSnackbar(effect.msg)
                 }
             }
         }
 
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = ProCircuit.Bg,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text("Dostępność", fontFamily = AppFontFamily,
-                            fontWeight = FontWeight.Black, fontSize = 16.sp, color = ProCircuit.OnBg)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null,
-                                tint = ProCircuit.OnBg)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ProCircuit.Bg)
-                )
-            }
-        ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             when (val s = state) {
                 CoachAvailabilityState.Loading -> Box(
-                    Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
+                    Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                 ) { CircularProgressIndicator(color = ProCircuit.Lime) }
 
                 CoachAvailabilityState.Error -> Box(
-                    Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
+                    Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                 ) { Text("Błąd ładowania", color = ProCircuit.OnSurface) }
 
                 is CoachAvailabilityState.Content -> {
                     var expandedDays by remember { mutableStateOf(setOf<Int>()) }
 
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(padding),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // ── Section 1: Booking settings ───────────────────────
@@ -190,6 +162,7 @@ object CoachAvailabilityScreen : Screen {
                     }
                 }
             }
+            SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
 }

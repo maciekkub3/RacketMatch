@@ -43,13 +43,21 @@ class ProfileSetupViewModel(
                     password = null,
                     dateOfBirth = dateOfBirth?.ifBlank { null } ?: current.dateOfBirth
                 )
-            } catch (_: Exception) {
-                // Profile setup failure is non-fatal — proceed to main
+            } catch (e: Exception) {
+                _effects.emit(ProfileSetupEffect.ShowError("Nie udało się zapisać profilu. Spróbuj ponownie w ustawieniach."))
             } finally {
                 tokenStorage.isNewUser = false
                 _isSaving.value = false
                 _effects.emit(ProfileSetupEffect.NavigateToMain)
             }
+        }
+    }
+
+    fun uploadAvatarAndNext(bytes: ByteArray?, onDone: () -> Unit) {
+        if (bytes == null) { onDone(); return }
+        viewModelScope.launch(dispatcher) {
+            runCatching { profileRepository.uploadAvatar(bytes) }
+            onDone()
         }
     }
 

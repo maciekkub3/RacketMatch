@@ -15,6 +15,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -26,17 +30,18 @@ import com.racketmatch.presentation.viewmodel.FriendsEvent
 import com.racketmatch.presentation.viewmodel.FriendsState
 import com.racketmatch.presentation.viewmodel.FriendsViewModel
 import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.players.PlayerProfileScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 object FriendsScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: FriendsViewModel = koinViewModel()
+        val viewModel: FriendsViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         var selectedTab by remember { mutableIntStateOf(0) }
@@ -47,10 +52,11 @@ object FriendsScreen : Screen {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is FriendsEffect.NavigateToDm -> {
+                        val myId = effect.currentUserId
                         (navigator.parent?.parent ?: navigator).push(
                             DmChatScreen(
-                                conversationId = minOf("me", effect.friend.id) + "_" + maxOf("me", effect.friend.id),
-                                currentUserId = "me",
+                                conversationId = minOf(myId, effect.friend.id) + "_" + maxOf(myId, effect.friend.id),
+                                currentUserId = myId,
                                 otherUserName = effect.friend.displayName,
                                 otherUserAvatarUrl = effect.friend.avatarUrl
                             )
@@ -61,13 +67,20 @@ object FriendsScreen : Screen {
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            Text(
-                "Znajomi",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
-            )
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { navigator.pop() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
+                }
+                Text(
+                    "Znajomi",
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 24.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
+                )
+            }
 
             // Tab row
             Row(
@@ -172,16 +185,13 @@ private fun FriendsList(friends: List<User>, onTap: (User) -> Unit, onDm: (User)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier.size(44.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        friend.displayName.take(1).uppercase(),
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 18.sp, color = ProCircuit.Lime
-                    )
-                }
+                UserAvatar(
+                    displayName = friend.displayName,
+                    avatarUrl = friend.avatarUrl,
+                    size = 44.dp,
+                    bgColor = ProCircuit.SurfaceHigh,
+                    fontSize = 18.sp
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -246,16 +256,13 @@ private fun InvitationsList(
                         .padding(16.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                req.fromName.take(1).uppercase(),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 16.sp, color = ProCircuit.Lime
-                            )
-                        }
+                        UserAvatar(
+                            displayName = req.fromName,
+                            avatarUrl = null,
+                            size = 40.dp,
+                            bgColor = ProCircuit.SurfaceHigh,
+                            fontSize = 16.sp
+                        )
                         Spacer(Modifier.width(12.dp))
                         Text(
                             req.fromName,

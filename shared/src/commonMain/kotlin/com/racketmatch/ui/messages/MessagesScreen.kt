@@ -16,6 +16,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -23,19 +27,23 @@ import com.racketmatch.domain.model.Conversation
 import com.racketmatch.presentation.viewmodel.MessagesEffect
 import com.racketmatch.presentation.viewmodel.MessagesState
 import com.racketmatch.presentation.viewmodel.MessagesViewModel
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.theme.ProCircuit
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
+import org.koin.compose.koinInject
 
 object MessagesScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: MessagesViewModel = koinViewModel()
+        val viewModel: MessagesViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
+        val tokenStorage = koinInject<TokenStorage>()
+        val currentUserId = tokenStorage.currentUserId ?: ""
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
@@ -44,7 +52,7 @@ object MessagesScreen : Screen {
                         (navigator.parent?.parent ?: navigator).push(
                             DmChatScreen(
                                 conversationId = effect.conversation.id,
-                                currentUserId = "me",
+                                currentUserId = currentUserId,
                                 otherUserName = effect.conversation.otherUserName,
                                 otherUserAvatarUrl = effect.conversation.otherUserAvatarUrl
                             )
@@ -54,13 +62,20 @@ object MessagesScreen : Screen {
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            Text(
-                "Wiadomości",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
-            )
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { navigator.pop() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
+                }
+                Text(
+                    "Wiadomości",
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 24.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
+                )
+            }
             when (val s = state) {
                 MessagesState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ProCircuit.Lime)

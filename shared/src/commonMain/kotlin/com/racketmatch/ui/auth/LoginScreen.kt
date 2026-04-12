@@ -2,7 +2,9 @@ package com.racketmatch.ui.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,12 +29,12 @@ import com.racketmatch.presentation.viewmodel.LoginEffect
 import com.racketmatch.presentation.viewmodel.LoginEvent
 import com.racketmatch.presentation.viewmodel.LoginState
 import com.racketmatch.presentation.viewmodel.LoginViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 class LoginScreen : Screen {
     @Composable
     override fun Content() {
-        val viewModel: LoginViewModel = koinViewModel()
+        val viewModel: LoginViewModel = kmpViewModel()
         LoginScreenContent(viewModel)
     }
 }
@@ -58,6 +60,8 @@ fun LoginScreenContent(viewModel: LoginViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(ProCircuit.Bg)
+            .imePadding()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
     ) {
         Spacer(Modifier.height(72.dp))
@@ -111,6 +115,52 @@ fun LoginScreenContent(viewModel: LoginViewModel) {
             TextButton(onClick = { navigator.push(RegisterScreen()) }) {
                 Text(text = "Nie masz konta? ", fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface)
                 Text(text = "Zarejestruj się", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ProCircuit.Lime)
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        HorizontalDivider(color = ProCircuit.SurfaceHigh)
+        Spacer(Modifier.height(12.dp))
+        Text("DEV", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+            fontSize = 9.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
+            modifier = Modifier.align(Alignment.CenterHorizontally))
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { viewModel.onEvent(LoginEvent.Submit("maciek@gmail.com", "Maciek123")) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnSurface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.SurfaceHigh)
+            ) {
+                Text("Gracz", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = { viewModel.onEvent(LoginEvent.Submit("daniel@gmail.com", "Daniel123")) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnSurface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.SurfaceHigh)
+            ) {
+                Text("Daniel", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = { viewModel.onEvent(LoginEvent.Submit("trener@gmail.com", "Trener123")) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime)
+            ) {
+                Text("Trener", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = { viewModel.onEvent(LoginEvent.Submit("trainerplayer@gmail.com", "Trainer123")) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnBg)
+            ) {
+                Text("Oboje", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
     }

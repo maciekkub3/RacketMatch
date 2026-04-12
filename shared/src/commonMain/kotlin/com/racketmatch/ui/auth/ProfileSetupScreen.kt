@@ -5,6 +5,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,24 +23,30 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import com.racketmatch.ui.navigation.MainScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.presentation.viewmodel.ProfileSetupEffect
 import com.racketmatch.presentation.viewmodel.ProfileSetupViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.ui.common.rememberImagePickerLauncher
+import com.racketmatch.util.kmpViewModel
+import kotlinx.datetime.toLocalDateTime
 
 class ProfileSetupScreen : Screen {
     @Composable
     override fun Content() {
-        val viewModel: ProfileSetupViewModel = koinViewModel()
+        val viewModel: ProfileSetupViewModel = kmpViewModel()
         val navigator = LocalNavigator.currentOrThrow
         val isSaving by viewModel.isSaving.collectAsState()
 
         var step by remember { mutableStateOf(1) }
         var bio by remember { mutableStateOf("") }
         var dateOfBirth by remember { mutableStateOf("") }
+        var avatarBytes by remember { mutableStateOf<ByteArray?>(null) }
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
@@ -50,7 +57,7 @@ class ProfileSetupScreen : Screen {
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).imePadding()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -111,7 +118,12 @@ class ProfileSetupScreen : Screen {
                     }
                 ) { currentStep ->
                     when (currentStep) {
-                        1 -> AvatarStep(onNext = { step = 2 }, onSkip = { step = 2 })
+                        1 -> AvatarStep(
+                            avatarBytes = avatarBytes,
+                            onAvatarPicked = { avatarBytes = it },
+                            onNext = { viewModel.uploadAvatarAndNext(avatarBytes) { step = 2 } },
+                            onSkip = { step = 2 }
+                        )
                         2 -> BioStep(
                             bio = bio,
                             onBioChange = { bio = it },
@@ -135,7 +147,14 @@ class ProfileSetupScreen : Screen {
 }
 
 @Composable
-private fun AvatarStep(onNext: () -> Unit, onSkip: () -> Unit) {
+private fun AvatarStep(
+    avatarBytes: ByteArray?,
+    onAvatarPicked: (ByteArray) -> Unit,
+    onNext: () -> Unit,
+    onSkip: () -> Unit
+) {
+    val imagePicker = rememberImagePickerLauncher { onAvatarPicked(it) }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
         Text(
             "Twoje zdjęcie profilowe",
@@ -150,28 +169,39 @@ private fun AvatarStep(onNext: () -> Unit, onSkip: () -> Unit) {
         )
         Spacer(Modifier.height(32.dp))
 
-        // Avatar preview (letter-based, as used throughout the app)
         Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape)
-                .background(ProCircuit.SurfaceHigh),
+            modifier = Modifier.size(120.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
             contentAlignment = Alignment.Center
         ) {
-            Text("👤", fontSize = 48.sp)
+            if (avatarBytes != null) {
+                AsyncImage(
+                    model = avatarBytes,
+                    contentDescription = "Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text("👤", fontSize = 48.sp)
+            }
         }
         Spacer(Modifier.height(20.dp))
-
-        OutlinedButton(
-            onClick = { /* TODO: image picker */ },
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-            border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-        ) {
-            Text(
-                "Dodaj zdjęcie",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = { imagePicker.launchGallery() },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime.copy(alpha = 0.5f))
+            ) {
+                Text("Galeria", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+            OutlinedButton(
+                onClick = { imagePicker.launchCamera() },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
+                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime.copy(alpha = 0.5f))
+            ) {
+                Text("Aparat", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
         }
 
         Spacer(Modifier.height(32.dp))
@@ -231,6 +261,7 @@ private fun BioStep(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DobStep(
     dateOfBirth: String,
@@ -239,6 +270,46 @@ private fun DobStep(
     onFinish: () -> Unit,
     onSkip: () -> Unit
 ) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState()
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val millis = datePickerState.selectedDateMillis
+                    if (millis != null) {
+                        val instant = kotlinx.datetime.Instant.fromEpochMilliseconds(millis)
+                        val localDate = instant.
+                        toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date
+                        onDobChange("${localDate.year}-${localDate.monthNumber.toString().padStart(2, '0')}-${localDate.dayOfMonth.toString().padStart(2, '0')}")
+                    }
+                    showDatePicker = false
+                }) {
+                    Text("OK", fontFamily = AppBodyFontFamily, color = ProCircuit.Lime)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("ANULUJ", fontFamily = AppBodyFontFamily, color = ProCircuit.OnSurface)
+                }
+            },
+            colors = DatePickerDefaults.colors(containerColor = ProCircuit.SurfaceLow)
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = ProCircuit.SurfaceLow,
+                    selectedDayContainerColor = ProCircuit.Lime,
+                    selectedDayContentColor = ProCircuit.Bg,
+                    todayContentColor = ProCircuit.Lime,
+                    todayDateBorderColor = ProCircuit.Lime
+                )
+            )
+        }
+    }
+
     Column {
         Text(
             "Data urodzenia",
@@ -252,25 +323,19 @@ private fun DobStep(
         )
         Spacer(Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = dateOfBirth,
-            onValueChange = onDobChange,
-            placeholder = {
-                Text(
-                    "RRRR-MM-DD",
-                    fontFamily = AppBodyFontFamily, fontSize = 13.sp,
-                    color = ProCircuit.OnSurface.copy(alpha = 0.5f)
-                )
-            },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = ProCircuit.OnBg, unfocusedTextColor = ProCircuit.OnBg,
-                focusedBorderColor = ProCircuit.Lime, unfocusedBorderColor = ProCircuit.OnSurface.copy(alpha = 0.3f),
-                cursorColor = ProCircuit.Lime
-            ),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        )
+        Box(
+            modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(ProCircuit.SurfaceLow)
+                .clickable { showDatePicker = true }
+                .padding(horizontal = 16.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = if (dateOfBirth.isNotBlank()) dateOfBirth else "Wybierz datę urodzenia",
+                fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+                color = if (dateOfBirth.isNotBlank()) ProCircuit.OnBg else ProCircuit.OnSurface.copy(alpha = 0.5f)
+            )
+        }
 
         Spacer(Modifier.height(28.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

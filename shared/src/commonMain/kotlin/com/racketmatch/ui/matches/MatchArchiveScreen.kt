@@ -74,19 +74,19 @@ data class MatchArchiveScreen(
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Text(
-                            "←  BACK",
+                            "←  WRÓĆ",
                             fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                             fontSize = 11.sp, letterSpacing = 1.sp, color = ProCircuit.Lime
                         )
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "MATCH ARCHIVE",
+                        "ARCHIWUM MECZÓW",
                         fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                         fontSize = 28.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
                     )
                     Text(
-                        "${filtered.size} of ${history.size} matches",
+                        "${filtered.size} z ${history.size} meczów",
                         fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface
                     )
                 }
@@ -95,29 +95,29 @@ data class MatchArchiveScreen(
             // Sport filter
             item {
                 FilterRow(label = "SPORT") {
-                    FilterChip("All", sportFilter == null) { sportFilter = null }
-                    FilterChip("🎾 Tennis", sportFilter == Sport.TENNIS) { sportFilter = Sport.TENNIS }
+                    FilterChip("Wszystkie", sportFilter == null) { sportFilter = null }
+                    FilterChip("🎾 Tenis", sportFilter == Sport.TENNIS) { sportFilter = Sport.TENNIS }
                     FilterChip("🏸 Padel",  sportFilter == Sport.PADEL)  { sportFilter = Sport.PADEL  }
                 }
             }
 
             // Type filter
             item {
-                FilterRow(label = "TYPE") {
-                    FilterChip("All",    typeFilter == null)            { typeFilter = null }
-                    FilterChip("Ranked", typeFilter == MatchType.RANKED)  { typeFilter = MatchType.RANKED  }
-                    FilterChip("Casual", typeFilter == MatchType.CASUAL)  { typeFilter = MatchType.CASUAL  }
-                    FilterChip("Master", typeFilter == MatchType.MASTER)  { typeFilter = MatchType.MASTER  }
+                FilterRow(label = "TYP") {
+                    FilterChip("Wszystkie",   typeFilter == null)            { typeFilter = null }
+                    FilterChip("Rankingowy",  typeFilter == MatchType.RANKED)  { typeFilter = MatchType.RANKED  }
+                    FilterChip("Towarzyski",  typeFilter == MatchType.CASUAL)  { typeFilter = MatchType.CASUAL  }
+                    FilterChip("Masters",     typeFilter == MatchType.MASTER)  { typeFilter = MatchType.MASTER  }
                 }
             }
 
             // Result filter
             item {
-                FilterRow(label = "RESULT") {
-                    FilterChip("All",       resultFilter == null)                   { resultFilter = null }
-                    FilterChip("Won",       resultFilter == ResultFilter.WON)       { resultFilter = ResultFilter.WON }
-                    FilterChip("Lost",      resultFilter == ResultFilter.LOST)      { resultFilter = ResultFilter.LOST }
-                    FilterChip("Cancelled", resultFilter == ResultFilter.CANCELLED) { resultFilter = ResultFilter.CANCELLED }
+                FilterRow(label = "WYNIK") {
+                    FilterChip("Wszystkie",  resultFilter == null)                   { resultFilter = null }
+                    FilterChip("Wygrane",    resultFilter == ResultFilter.WON)       { resultFilter = ResultFilter.WON }
+                    FilterChip("Przegrane",  resultFilter == ResultFilter.LOST)      { resultFilter = ResultFilter.LOST }
+                    FilterChip("Anulowane",  resultFilter == ResultFilter.CANCELLED) { resultFilter = ResultFilter.CANCELLED }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -129,7 +129,7 @@ data class MatchArchiveScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "No matches match the selected filters.",
+                            "Brak meczów spełniających wybrane filtry.",
                             fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnSurface
                         )
                     }

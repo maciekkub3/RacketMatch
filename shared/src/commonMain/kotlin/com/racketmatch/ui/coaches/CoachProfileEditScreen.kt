@@ -20,17 +20,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import coil3.compose.AsyncImage
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.presentation.viewmodel.CoachProfileEditEffect
 import com.racketmatch.presentation.viewmodel.CoachProfileEditEvent
 import com.racketmatch.presentation.viewmodel.CoachProfileEditState
 import com.racketmatch.presentation.viewmodel.CoachProfileEditViewModel
 import com.racketmatch.ui.common.rememberImagePickerLauncher
-import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -61,12 +60,11 @@ object CoachProfileEditScreen : Screen {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = ProCircuit.Bg,
-            contentWindowInsets = WindowInsets(0),
             topBar = {
                 TopAppBar(
                     title = {
                         Text(
-                            "Profil trenera",
+                            "Edytuj profil",
                             fontFamily = AppFontFamily,
                             fontWeight = FontWeight.Black,
                             fontSize = 16.sp,
@@ -75,11 +73,7 @@ object CoachProfileEditScreen : Screen {
                     },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Wstecz",
-                                tint = ProCircuit.OnBg
-                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = ProCircuit.SurfaceLow)
@@ -88,13 +82,13 @@ object CoachProfileEditScreen : Screen {
         ) { padding ->
             when (val s = state) {
                 CoachProfileEditState.Loading -> Box(
-                    Modifier.fillMaxSize(),
+                    Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = ProCircuit.Lime)
                 }
                 CoachProfileEditState.Error -> Box(
-                    Modifier.fillMaxSize(),
+                    Modifier.fillMaxSize().padding(padding),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("Nie można załadować profilu", color = ProCircuit.OnSurface)
@@ -102,9 +96,7 @@ object CoachProfileEditScreen : Screen {
                 is CoachProfileEditState.Content -> CoachProfileEditContent(
                     state = s,
                     viewModel = viewModel,
-                    topPadding = padding.calculateTopPadding(),
-                    onOpenAvailability = { navigator.push(CoachAvailabilityScreen) },
-                    onOpenSettings = { navigator.push(SettingsScreen) }
+                    padding = padding
                 )
             }
         }
@@ -115,9 +107,7 @@ object CoachProfileEditScreen : Screen {
 private fun CoachProfileEditContent(
     state: CoachProfileEditState.Content,
     viewModel: CoachProfileEditViewModel,
-    topPadding: androidx.compose.ui.unit.Dp,
-    onOpenAvailability: () -> Unit = {},
-    onOpenSettings: () -> Unit = {}
+    padding: PaddingValues
 ) {
     val imagePicker = rememberImagePickerLauncher { bytes ->
         viewModel.onEvent(CoachProfileEditEvent.UploadAvatar(bytes))
@@ -127,98 +117,77 @@ private fun CoachProfileEditContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(top = topPadding, start = 24.dp, end = 24.dp)
+            .padding(padding)
+            .padding(horizontal = 24.dp)
     ) {
         Spacer(Modifier.height(24.dp))
 
         // Avatar
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
             Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .clip(CircleShape)
-                    .background(ProCircuit.SurfaceHigh),
+                modifier = Modifier.size(88.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
                 contentAlignment = Alignment.Center
             ) {
                 if (state.avatarUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = state.avatarUrl,
-                        contentDescription = "Avatar",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    AsyncImage(model = state.avatarUrl, contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 } else {
-                    Text(
-                        state.displayName.firstOrNull()?.uppercase() ?: "?",
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 36.sp,
-                        color = ProCircuit.Lime
-                    )
+                    Text(state.displayName.firstOrNull()?.uppercase() ?: "?",
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 36.sp, color = ProCircuit.Lime)
                 }
                 if (state.isUploadingAvatar) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.5f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = ProCircuit.Lime,
-                            modifier = Modifier.size(28.dp),
-                            strokeWidth = 2.dp
-                        )
+                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = ProCircuit.Lime, modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = { imagePicker.launchGallery() },
-                    enabled = !state.isUploadingAvatar,
+                OutlinedButton(onClick = { imagePicker.launchGallery() }, enabled = !state.isUploadingAvatar,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        ProCircuit.Lime.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Text("Galeria", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-                OutlinedButton(
-                    onClick = { imagePicker.launchCamera() },
-                    enabled = !state.isUploadingAvatar,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime.copy(alpha = 0.5f))
+                ) { Text("Galeria", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                OutlinedButton(onClick = { imagePicker.launchCamera() }, enabled = !state.isUploadingAvatar,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        ProCircuit.Lime.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Text("Aparat", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime.copy(alpha = 0.5f))
+                ) { Text("Aparat", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
             }
         }
 
         Spacer(Modifier.height(28.dp))
-        CoachEditSectionLabel("O TOBIE")
+        CoachEditSectionLabel("DANE PODSTAWOWE")
+        Spacer(Modifier.height(12.dp))
+        CoachEditField("Imię i nazwisko", state.displayName) { viewModel.onEvent(CoachProfileEditEvent.DisplayNameChanged(it)) }
+        Spacer(Modifier.height(12.dp))
+        CoachEditField("Miasto", state.city) { viewModel.onEvent(CoachProfileEditEvent.CityChanged(it)) }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Widoczne we wszystkich profilach",
+            fontFamily = AppBodyFontFamily,
+            fontSize = 11.sp,
+            color = ProCircuit.OnSurface.copy(alpha = 0.6f)
+        )
+
+        Spacer(Modifier.height(24.dp))
+        CoachEditSectionLabel("BIO TRENERA")
         Spacer(Modifier.height(12.dp))
 
         CoachEditField(
-            label = "Bio / O mnie",
+            label = "Opisz swoje doświadczenie i certyfikaty",
             value = state.bio,
             maxLines = 4,
             singleLine = false
         ) { viewModel.onEvent(CoachProfileEditEvent.BioChanged(it)) }
 
         Spacer(Modifier.height(24.dp))
-        CoachEditSectionLabel("SPORTY")
+        CoachEditSectionLabel("SPORTY KTÓRE TRENUJĘ")
         Spacer(Modifier.height(4.dp))
         Text(
-            "Wybierz sporty, które trenujesz.",
+            "Sporty w których prowadzisz zajęcia.",
             fontFamily = AppBodyFontFamily,
             fontSize = 12.sp,
             color = ProCircuit.OnSurface
@@ -301,19 +270,6 @@ private fun CoachProfileEditContent(
 
         Spacer(Modifier.height(24.dp))
 
-        OutlinedButton(
-            onClick = onOpenAvailability,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Lime),
-            border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Lime)
-        ) {
-            Text("GODZINY DOSTĘPNOŚCI", fontFamily = AppFontFamily,
-                fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, letterSpacing = 1.sp)
-        }
-
-        Spacer(Modifier.height(12.dp))
-
         Button(
             onClick = { viewModel.onEvent(CoachProfileEditEvent.Save) },
             enabled = !state.isSaving,
@@ -341,20 +297,6 @@ private fun CoachProfileEditContent(
                     letterSpacing = 1.sp
                 )
             }
-        }
-        Spacer(Modifier.height(8.dp))
-        TextButton(
-            onClick = onOpenSettings,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 0.dp),
-            contentPadding = PaddingValues(vertical = 14.dp)
-        ) {
-            Text(
-                "Ustawienia konta",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                fontSize = 13.sp, color = ProCircuit.OnSurface
-            )
         }
         Spacer(Modifier.height(16.dp))
     }

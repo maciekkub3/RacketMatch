@@ -26,9 +26,12 @@ services:
       DB_USER: racketmatch
       DB_PASS: devpassword
       JWT_SECRET: dev-secret-change-this-in-production-must-be-at-least-32-chars
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   pgdata:
+  uploads:

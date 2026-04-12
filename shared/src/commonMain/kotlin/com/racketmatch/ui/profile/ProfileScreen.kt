@@ -3,13 +3,14 @@ package com.racketmatch.ui.profile
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,41 +24,27 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.ui.payment.SubscriptionScreen
-import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.domain.model.EloPoint
 import com.racketmatch.domain.model.Match
 import com.racketmatch.domain.model.MatchStatus
+import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
-import com.racketmatch.presentation.viewmodel.ProfileEffect
 import com.racketmatch.presentation.viewmodel.ProfileState
 import com.racketmatch.presentation.viewmodel.ProfileViewModel
-import com.racketmatch.ui.auth.LoginScreen
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 object ProfileScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: ProfileViewModel = koinViewModel()
+        val viewModel: ProfileViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
-
-        LaunchedEffect(Unit) {
-            viewModel.effectFlow.collect { effect ->
-                when (effect) {
-                    is ProfileEffect.LoggedOut -> {
-                        var root = navigator
-                        while (root.parent != null) root = root.parent!!
-                        root.replaceAll(LoginScreen())
-                    }
-                }
-            }
-        }
 
         Scaffold(
             containerColor = ProCircuit.Bg,
@@ -81,15 +68,6 @@ object ProfileScreen : Screen {
                             )
                         }
                     },
-                    actions = {
-                        IconButton(onClick = { navigator.push(SettingsScreen) }) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = "Ustawienia",
-                                tint = ProCircuit.OnBg
-                            )
-                        }
-                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = ProCircuit.SurfaceLow
                     )
@@ -107,7 +85,7 @@ object ProfileScreen : Screen {
                     is ProfileState.Content -> ProfileContent(
                         state = s,
                         onSubscribeClick = { navigator.push(SubscriptionScreen) },
-                        onLogout = { viewModel.logout() }
+                        onEditProfile = { navigator.push(PlayerProfileEditScreen) }
                     )
                 }
             }
@@ -116,9 +94,30 @@ object ProfileScreen : Screen {
 }
 
 @Composable
-private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> Unit, onLogout: () -> Unit) {
+private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> Unit, onEditProfile: () -> Unit) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { ProfileHeader(user = state.user) }
+
+        item {
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onEditProfile,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ProCircuit.SurfaceLow,
+                    contentColor = ProCircuit.Lime
+                )
+            ) {
+                Text(
+                    "EDYTUJ PROFIL",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.sp
+                )
+            }
+        }
 
         if (!state.user.bio.isNullOrBlank()) {
             item {
@@ -138,7 +137,7 @@ private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> 
         if (state.user.sports.isNotEmpty()) {
             item {
                 Spacer(Modifier.height(8.dp))
-                SectionLabel("ELO PER SPORT")
+                SectionLabel("ELO NA SPORT")
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     state.user.sports.forEach { sport ->
@@ -157,7 +156,7 @@ private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> 
         if (state.eloHistory.isNotEmpty()) {
             item {
                 Spacer(Modifier.height(16.dp))
-                SectionLabel("MOMENTUM")
+                SectionLabel("MOMENTUM ELO")
                 Spacer(Modifier.height(12.dp))
                 EloSparkline(eloHistory = state.eloHistory.takeLast(10))
             }
@@ -172,19 +171,6 @@ private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> 
             items(state.recentMatches.take(5)) { MatchHistoryRow(it, state.user.id) }
         }
 
-        item {
-            Spacer(Modifier.height(24.dp))
-            OutlinedButton(
-                onClick = onLogout,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.5f))
-            ) {
-                Text("WYLOGUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 1.5.sp)
-            }
-            Spacer(Modifier.height(8.dp))
-        }
     }
 }
 
@@ -196,7 +182,7 @@ private fun ProfileHeader(user: User) {
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 24.dp, bottom = 8.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            // Dark green avatar block
+            // Avatar block
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -204,13 +190,22 @@ private fun ProfileHeader(user: User) {
                     .background(ProCircuit.Lime),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = user.displayName.take(2).uppercase(),
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 26.sp,
-                    color = ProCircuit.SurfaceLow
-                )
+                if (!user.avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = user.avatarUrl,
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize()
+                    )
+                } else {
+                    Text(
+                        text = user.displayName.take(2).uppercase(),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 26.sp,
+                        color = ProCircuit.SurfaceLow
+                    )
+                }
             }
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -258,7 +253,7 @@ private fun ProfileHeader(user: User) {
             StatDivider()
             StatItem("WIN%", winRate, color = if (totalMatches > 0 && user.wins * 100 / totalMatches >= 50) ProCircuit.Lime else ProCircuit.OnSurface)
             StatDivider()
-            StatItem("MATCHES", "$totalMatches")
+            StatItem("MECZE", "$totalMatches")
         }
     }
 }
@@ -291,7 +286,7 @@ private fun SportEloCard(sport: Sport, elo: Int, modifier: Modifier = Modifier) 
         Text(emoji, fontSize = 24.sp)
         Spacer(Modifier.height(6.dp))
         Text(text = "$elo", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 22.sp, color = ProCircuit.Lime)
-        Text(text = sport.name.uppercase(), fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
+        Text(text = if (sport == com.racketmatch.domain.model.Sport.TENNIS) "TENIS" else "PADEL", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
     }
 }
 
@@ -372,11 +367,11 @@ private fun MatchHistoryRow(match: Match, myId: String) {
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (opponentName.isNotEmpty()) "vs $opponentName" else match.type.name + " · " + match.sport.name,
+                text = if (opponentName.isNotEmpty()) "vs $opponentName" else match.type.typePl + " · " + match.sport.sportPl,
                 fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ProCircuit.OnBg
             )
             Text(
-                text = match.type.name + " · " + match.sport.name,
+                text = match.type.typePl + " · " + match.sport.sportPl,
                 fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Normal, fontSize = 11.sp, color = ProCircuit.OnSurface
             )
         }
@@ -416,7 +411,13 @@ private fun MatchHistoryRow(match: Match, myId: String) {
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = match.status.name,
+                    text = when (match.status) {
+                        MatchStatus.PENDING -> "OCZEKUJE"
+                        MatchStatus.SCHEDULED -> "ZAPLANOWANY"
+                        MatchStatus.RESULT_PROPOSED -> "WYNIK?"
+                        MatchStatus.COMPLETED -> "UKOŃCZONY"
+                        MatchStatus.CANCELLED -> "ANULOWANY"
+                    },
                     fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.sp,
                     color = if (match.status == MatchStatus.PENDING) ProCircuit.Tertiary else ProCircuit.OnSurface
                 )
@@ -424,3 +425,6 @@ private fun MatchHistoryRow(match: Match, myId: String) {
         }
     }
 }
+
+private val Sport.sportPl: String get() = when (this) { Sport.TENNIS -> "Tenis"; Sport.PADEL -> "Padel" }
+private val MatchType.typePl: String get() = when (this) { MatchType.CASUAL -> "Towarzyski"; MatchType.RANKED -> "Rankingowy"; MatchType.MASTER -> "Masters" }

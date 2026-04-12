@@ -2,12 +2,14 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.Conversation
 import com.racketmatch.domain.repository.DmRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 sealed class MessagesState {
@@ -20,7 +22,10 @@ sealed class MessagesEffect {
     data class OpenConversation(val conversation: Conversation) : MessagesEffect()
 }
 
-class MessagesViewModel(private val repo: DmRepository) : ViewModel() {
+class MessagesViewModel(
+    private val repo: DmRepository,
+    private val tokenStorage: TokenStorage,
+) : ViewModel() {
 
     private val _state = MutableStateFlow<MessagesState>(MessagesState.Loading)
     val stateFlow = _state.asStateFlow()
@@ -31,7 +36,12 @@ class MessagesViewModel(private val repo: DmRepository) : ViewModel() {
     val totalUnread: Int
         get() = (_state.value as? MessagesState.Content)?.conversations?.sumOf { it.unreadCount } ?: 0
 
-    init { load() }
+    init {
+        load()
+        viewModelScope.launch {
+            tokenStorage.dmVersionFlow.drop(1).collect { load() }
+        }
+    }
 
     fun load() {
         viewModelScope.launch {

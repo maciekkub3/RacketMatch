@@ -16,6 +16,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.http.content.OutgoingContent
 import kotlinx.serialization.json.Json
 
 object HttpClientFactory {
@@ -31,6 +32,11 @@ object HttpClientFactory {
                     if (response.status.value >= 400) {
                         val body = response.bodyAsText()
                         println("RacketMatch HTTP ${response.status.value} from ${response.request.url}: $body")
+                        if (response.status.value < 500) {
+                            throw io.ktor.client.plugins.ClientRequestException(response, body)
+                        } else {
+                            throw io.ktor.client.plugins.ServerResponseException(response, body)
+                        }
                     }
                 }
             }
@@ -46,6 +52,12 @@ object HttpClientFactory {
             val token = tokenStorage.accessToken
             if (!token.isNullOrBlank()) {
                 request.headers[HttpHeaders.Authorization] = "Bearer $token"
+            }
+            // DefaultRequest adds application/json for every request. For multipart bodies,
+            // remove it so the body's own Content-Type (with boundary) is used instead.
+            val bodyContentType = (request.body as? OutgoingContent)?.contentType
+            if (bodyContentType != null && bodyContentType.contentType == "multipart") {
+                request.headers.remove(HttpHeaders.ContentType)
             }
             execute(request)
         }

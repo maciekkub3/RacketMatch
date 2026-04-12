@@ -55,7 +55,7 @@ class MessagesViewModelTest {
     @Test
     fun `init loads conversations sorted by lastMessageAt descending`() = runTest {
         coEvery { repo.getConversations() } returns listOf(olderConversation, newerConversation)
-        viewModel = MessagesViewModel(repo = repo)
+        viewModel = MessagesViewModel(repo = repo, tokenStorage = com.racketmatch.data.remote.InMemoryTokenStorage())
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe MessagesState.Loading
@@ -69,7 +69,7 @@ class MessagesViewModelTest {
     @Test
     fun `load error sets Error state`() = runTest {
         coEvery { repo.getConversations() } throws Exception("Network error")
-        viewModel = MessagesViewModel(repo = repo)
+        viewModel = MessagesViewModel(repo = repo, tokenStorage = com.racketmatch.data.remote.InMemoryTokenStorage())
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe MessagesState.Loading
@@ -84,7 +84,7 @@ class MessagesViewModelTest {
         val conversationWithTwo = newerConversation.copy(unreadCount = 2)
         val conversationWithThree = olderConversation.copy(unreadCount = 3)
         coEvery { repo.getConversations() } returns listOf(conversationWithTwo, conversationWithThree)
-        viewModel = MessagesViewModel(repo = repo)
+        viewModel = MessagesViewModel(repo = repo, tokenStorage = com.racketmatch.data.remote.InMemoryTokenStorage())
         dispatcher.scheduler.advanceUntilIdle()
 
         viewModel.totalUnread shouldBe 5
@@ -93,7 +93,7 @@ class MessagesViewModelTest {
     @Test
     fun `openConversation emits OpenConversation effect`() = runTest {
         coEvery { repo.getConversations() } returns listOf(newerConversation)
-        viewModel = MessagesViewModel(repo = repo)
+        viewModel = MessagesViewModel(repo = repo, tokenStorage = com.racketmatch.data.remote.InMemoryTokenStorage())
         dispatcher.scheduler.advanceUntilIdle()
 
         viewModel.effectFlow.test {
@@ -107,7 +107,7 @@ class MessagesViewModelTest {
     @Test
     fun `init load success with empty list shows Content with empty list`() = runTest {
         coEvery { repo.getConversations() } returns emptyList()
-        viewModel = MessagesViewModel(repo = repo)
+        viewModel = MessagesViewModel(repo = repo, tokenStorage = com.racketmatch.data.remote.InMemoryTokenStorage())
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe MessagesState.Loading

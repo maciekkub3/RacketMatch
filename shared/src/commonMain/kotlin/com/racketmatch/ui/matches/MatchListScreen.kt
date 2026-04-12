@@ -28,11 +28,12 @@ import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.domain.model.Match
 import com.racketmatch.domain.model.MatchStatus
 import com.racketmatch.domain.model.MatchType
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.presentation.viewmodel.MatchEvent
 import com.racketmatch.presentation.viewmodel.MatchListState
 import com.racketmatch.presentation.viewmodel.MatchViewModel
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
@@ -41,27 +42,37 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.presentation.viewmodel.MatchEffect
 import com.racketmatch.ui.chat.ChatScreen
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 object MatchListScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: MatchViewModel = koinViewModel()
+        val viewModel: MatchViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         var resultDialogMatch by remember { mutableStateOf<Match?>(null) }
+        var disputeMatch by remember { mutableStateOf<Match?>(null) }
         val navigator = LocalNavigator.currentOrThrow
+        val snackbarHostState = remember { SnackbarHostState() }
 
         LaunchedEffect(Unit) {
             viewModel.onEvent(MatchEvent.LoadMatches)
             viewModel.effectFlow.collect { effect ->
-                if (effect is MatchEffect.OpenMatchChat) {
-                    navigator.push(ChatScreen(effect.matchId, effect.currentUserId, effect.otherUserName))
+                when (effect) {
+                    is MatchEffect.OpenMatchChat ->
+                        (navigator.parent?.parent ?: navigator).push(ChatScreen(effect.matchId, effect.currentUserId, effect.otherUserName))
+                    is MatchEffect.ShowError ->
+                        snackbarHostState.showSnackbar(effect.msg)
+                    else -> Unit
                 }
             }
         }
 
         Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
             when (val s = state) {
                 MatchListState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ProCircuit.Lime)
@@ -90,12 +101,12 @@ object MatchListScreen : Screen {
                         item {
                             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 28.dp, bottom = 8.dp)) {
                                 Text(
-                                    text = "Your Matches",
+                                    text = "Twoje Mecze",
                                     fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                                     fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
                                 )
                                 Text(
-                                    text = "Manage upcoming challenges and review your match history.",
+                                    text = "Zarządzaj wyzwaniami i przeglądaj historię meczów.",
                                     fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Normal,
                                     fontSize = 13.sp, color = ProCircuit.OnSurface, lineHeight = 19.sp
                                 )
@@ -107,7 +118,7 @@ object MatchListScreen : Screen {
                                             .padding(horizontal = 14.dp, vertical = 6.dp)
                                     ) {
                                         Text(
-                                            text = "${incomingPending.size} NEW CHALLENGE${if (incomingPending.size > 1) "S" else ""}",
+                                            text = "${incomingPending.size} NOWE WYZWANIE${if (incomingPending.size > 1) "A" else ""}",
                                             fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                                             fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.SurfaceLow
                                         )
@@ -117,7 +128,7 @@ object MatchListScreen : Screen {
                         }
 
                         if (incomingPending.isNotEmpty()) {
-                            item { SectionLabel("INCOMING CHALLENGES", incomingPending.size) }
+                            item { SectionLabel("PRZYCHODZĄCE WYZWANIA", incomingPending.size) }
                             items(incomingPending) { match ->
                                 IncomingChallengeCard(match = match, myId = myId, viewModel = viewModel)
                             }
@@ -125,7 +136,7 @@ object MatchListScreen : Screen {
                         }
 
                         if (outgoingPending.isNotEmpty()) {
-                            item { SectionLabel("SENT CHALLENGES", null) }
+                            item { SectionLabel("WYSŁANE WYZWANIA", null) }
                             items(outgoingPending) { match ->
                                 OutgoingChallengeCard(match = match, myId = myId, viewModel = viewModel)
                             }
@@ -133,19 +144,20 @@ object MatchListScreen : Screen {
                         }
 
                         if (resultProposed.isNotEmpty()) {
-                            item { SectionLabel("RESULT VERIFICATION", resultProposed.size) }
+                            item { SectionLabel("WERYFIKACJA WYNIKU", resultProposed.size) }
                             items(resultProposed) { match ->
                                 ResultProposedCard(
                                     match = match,
                                     myId = myId,
-                                    viewModel = viewModel
+                                    viewModel = viewModel,
+                                    onDispute = { disputeMatch = it }
                                 )
                             }
                             item { Spacer(Modifier.height(8.dp)) }
                         }
 
                         if (scheduled.isNotEmpty()) {
-                            item { SectionLabel("UPCOMING MATCHES", null) }
+                            item { SectionLabel("NADCHODZĄCE MECZE", null) }
                             items(scheduled) { match ->
                                 ScheduledMatchCard(
                                     match = match,
@@ -158,7 +170,7 @@ object MatchListScreen : Screen {
                         }
 
                         if (history.isNotEmpty()) {
-                            item { SectionLabel("MATCH HISTORY", null) }
+                            item { SectionLabel("HISTORIA MECZÓW", null) }
                             items(history.take(5)) { match ->
                                 HistoryMatchCard(match = match, myId = myId)
                             }
@@ -178,7 +190,7 @@ object MatchListScreen : Screen {
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Text(
-                                            "VIEW ALL ARCHIVE",
+                                            "POKAŻ CAŁE ARCHIWUM",
                                             fontFamily = AppFontFamily,
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 11.sp,
@@ -223,6 +235,20 @@ object MatchListScreen : Screen {
                     resultDialogMatch = null
                 },
                 onDismiss = { resultDialogMatch = null }
+            )
+        }
+
+        disputeMatch?.let { match ->
+            ProposeResultDialog(
+                match = match,
+                myId = (state as? MatchListState.Content)?.currentUserId ?: "",
+                prefillScoreChallenger = match.proposedScoreChallenger,
+                prefillScoreChallenged = match.proposedScoreChallenged,
+                onConfirm = { sc, sd ->
+                    viewModel.onEvent(MatchEvent.ProposeResult(match.id, sc, sd))
+                    disputeMatch = null
+                },
+                onDismiss = { disputeMatch = null }
             )
         }
     }
@@ -326,7 +352,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                     Text("ELO ${match.challengerElo}", fontFamily = AppFontFamily,
                         fontWeight = FontWeight.Black, fontSize = 13.sp, color = ProCircuit.Lime)
                     Text("·", fontFamily = AppFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface)
-                    Text(match.sport.name, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                    Text(match.sport.namePl, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 13.sp, color = ProCircuit.OnSurface)
                 }
             }
@@ -366,7 +392,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
             }
             if (theyProposed) {
                 Spacer(Modifier.height(6.dp))
-                Text("Make sure the court is reserved",
+                Text("Upewnij się, że kort jest zarezerwowany",
                     fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface)
             }
         }
@@ -473,7 +499,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 Text(match.challengedName, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                     fontSize = 15.sp, color = ProCircuit.OnBg)
                 Spacer(Modifier.height(2.dp))
-                Text("ELO ${match.challengedElo} · ${match.sport.name}",
+                Text("ELO ${match.challengedElo} · ${match.sport.namePl}",
                     fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface)
                 Spacer(Modifier.height(4.dp))
                 if (theyCountered) {
@@ -485,7 +511,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                     }
                 } else {
                     Text(
-                        if (iProposed) "Czekasz na akceptację" else "Waiting for reply",
+                        if (iProposed) "Czekasz na akceptację" else "Czekasz na odpowiedź",
                         fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
                     )
                 }
@@ -680,7 +706,7 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "ELO $opponentElo · ${match.sport.name} · ${match.type.name}",
+                    text = "ELO $opponentElo · ${match.sport.namePl}",
                     fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
                 )
                 if (!match.locationName.isNullOrBlank()) {
@@ -806,10 +832,10 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
         val theyProposedDetails = match.detailsProposedBy != null && match.detailsProposedBy != myId
 
         val detailsLabel = when {
-            !hasLocation && !hasTime -> "SET DETAILS"
-            !hasLocation             -> "SET COURT"
-            !hasTime                 -> "SET TIME"
-            else                     -> "EDIT DETAILS"
+            !hasLocation && !hasTime -> "USTAW SZCZEGÓŁY"
+            !hasLocation             -> "USTAW KORT"
+            !hasTime                 -> "USTAW CZAS"
+            else                     -> "EDYTUJ SZCZEGÓŁY"
         }
 
         if (theyProposedDetails) {
@@ -858,7 +884,7 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.Lime)
             ) {
-                Text("SET RESULT", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                Text("PODAJ WYNIK", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                     fontSize = 10.sp, letterSpacing = 1.sp)
             }
         } else {
@@ -889,26 +915,11 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
 
 // Result has been proposed — show different UI based on who proposed
 @Composable
-private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewModel) {
+private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewModel, onDispute: (Match) -> Unit) {
     val iProposed = match.proposedBy == myId
     val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
     val sc = match.proposedScoreChallenger ?: 0
     val sd = match.proposedScoreChallenged ?: 0
-    var showDisputeDialog by remember { mutableStateOf(false) }
-
-    if (showDisputeDialog) {
-        ProposeResultDialog(
-            match = match,
-            myId = myId,
-            prefillScoreChallenger = sc,
-            prefillScoreChallenged = sd,
-            onConfirm = { newSc, newSd ->
-                showDisputeDialog = false
-                viewModel.onEvent(MatchEvent.ProposeResult(match.id, newSc, newSd))
-            },
-            onDismiss = { showDisputeDialog = false }
-        )
-    }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
@@ -932,15 +943,15 @@ private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewM
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (iProposed) "Awaiting confirmation" else "Confirm result?",
+                    text = if (iProposed) "Oczekuje na potwierdzenie" else "Potwierdź wynik?",
                     fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                     fontSize = 15.sp,
                     color = if (iProposed) ProCircuit.OnSurface else ProCircuit.Tertiary
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = if (iProposed) "$opponentName hasn't confirmed yet"
-                           else "$opponentName proposed a score",
+                    text = if (iProposed) "$opponentName jeszcze nie potwierdził"
+                           else "$opponentName zaproponował wynik",
                     fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
                 )
             }
@@ -997,16 +1008,16 @@ private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewM
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
                 ) {
-                    Text("CONFIRM", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
+                    Text("POTWIERDŹ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
                 }
                 OutlinedButton(
-                    onClick = { showDisputeDialog = true },
+                    onClick = { onDispute(match) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
                     border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
                 ) {
-                    Text("DISPUTE", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp)
+                    Text("KWESTIONUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp)
                 }
             }
         }
@@ -1066,7 +1077,7 @@ internal fun HistoryMatchCard(match: Match, myId: String) {
                 fontSize = 14.sp, color = ProCircuit.OnBg
             )
             Text(
-                text = match.type.name + " · " + match.sport.name,
+                text = match.type.namePl + " · " + match.sport.namePl,
                 fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
             )
         }
@@ -1098,7 +1109,7 @@ internal fun HistoryMatchCard(match: Match, myId: String) {
                 Box(
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(ProCircuit.SurfaceHigh).padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text(text = "CANCELLED", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 8.sp, letterSpacing = 1.sp, color = ProCircuit.OnSurface)
+                    Text(text = "ANULOWANY", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 8.sp, letterSpacing = 1.sp, color = ProCircuit.OnSurface)
                 }
             }
         }
@@ -1108,9 +1119,9 @@ internal fun HistoryMatchCard(match: Match, myId: String) {
 @Composable
 private fun MatchTypeBadge(type: MatchType) {
     val (label, bg, fg) = when (type) {
-        MatchType.CASUAL  -> Triple("CASUAL",  ProCircuit.SurfaceHigh, ProCircuit.OnSurface)
-        MatchType.RANKED  -> Triple("RANKED",  ProCircuit.Lime.copy(alpha = 0.1f), ProCircuit.Lime)
-        MatchType.MASTER  -> Triple("MASTER",  ProCircuit.Tertiary.copy(alpha = 0.15f), ProCircuit.Tertiary)
+        MatchType.CASUAL  -> Triple("TOWARZYSKI",  ProCircuit.SurfaceHigh, ProCircuit.OnSurface)
+        MatchType.RANKED  -> Triple("RANKINGOWY",  ProCircuit.Lime.copy(alpha = 0.1f), ProCircuit.Lime)
+        MatchType.MASTER  -> Triple("MASTERS",  ProCircuit.Tertiary.copy(alpha = 0.15f), ProCircuit.Tertiary)
     }
     Box(
         modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(bg).padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1150,7 +1161,7 @@ private fun ProposeResultDialog(
         containerColor = ProCircuit.SurfaceLow,
         title = {
             Text(
-                text = "SET RESULT",
+                text = "PODAJ WYNIK",
                 fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                 fontSize = 16.sp, letterSpacing = 1.sp, color = ProCircuit.OnBg
             )
@@ -1158,7 +1169,7 @@ private fun ProposeResultDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(
-                    text = "vs $opponentName · ${match.sport.name}",
+                    text = "vs $opponentName · ${match.sport.namePl}",
                     fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1223,7 +1234,7 @@ private fun ProposeResultDialog(
                     }
                 }
                 Text(
-                    text = "The opponent will need to confirm this result.",
+                    text = "Przeciwnik będzie musiał potwierdzić ten wynik.",
                     fontFamily = AppBodyFontFamily, fontSize = 11.sp,
                     color = ProCircuit.OnSurface.copy(alpha = 0.6f), textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -1247,12 +1258,12 @@ private fun ProposeResultDialog(
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
             ) {
-                Text("PROPOSE", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
+                Text("WYŚLIJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCEL", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = ProCircuit.OnSurface)
+                Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = ProCircuit.OnSurface)
             }
         }
     )
@@ -1337,6 +1348,19 @@ private fun ProposeDetailsDialog(
         confirmButton = {}
     )
 }
+
+private val Sport.namePl: String
+    get() = when (this) {
+        Sport.TENNIS -> "Tenis"
+        Sport.PADEL  -> "Padel"
+    }
+
+private val MatchType.namePl: String
+    get() = when (this) {
+        MatchType.CASUAL  -> "Towarzyski"
+        MatchType.RANKED  -> "Rankingowy"
+        MatchType.MASTER  -> "Masters"
+    }
 
 private fun parseScheduledAt(s: String): Long? = runCatching {
     // Handle both "2025-04-01T14:00:00Z" (UTC from server) and "2025-04-01 14:00" (display format)

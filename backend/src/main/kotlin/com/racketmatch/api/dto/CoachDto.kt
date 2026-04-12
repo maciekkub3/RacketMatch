@@ -125,6 +125,8 @@ data class UpdateBookingSettingsRequest(
 )
 
 data class UpdateCoachProfileRequest(
+    val bio: String? = null,
+    val sports: List<String>? = null,
     val trainingLocations: List<String>? = null
 )
 

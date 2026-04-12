@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,29 +17,40 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.FeedEvent
 import com.racketmatch.domain.model.FeedEventType
 import com.racketmatch.presentation.viewmodel.FeedState
 import com.racketmatch.presentation.viewmodel.FeedViewModel
+import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 object FeedScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: FeedViewModel = koinViewModel()
+        val viewModel: FeedViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
+        val navigator = LocalNavigator.currentOrThrow
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            Text(
-                "Aktywność znajomych",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 26.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
-            )
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { navigator.pop() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
+                }
+                Text(
+                    "Aktywność znajomych",
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 22.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
+                )
+            }
 
             when (val s = state) {
                 FeedState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -80,16 +93,13 @@ private fun FeedEventCard(event: FeedEvent) {
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                event.actorName.take(1).uppercase(),
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 16.sp, color = ProCircuit.Lime
-            )
-        }
+        UserAvatar(
+            displayName = event.actorName,
+            avatarUrl = event.actorAvatarUrl,
+            size = 40.dp,
+            bgColor = ProCircuit.SurfaceHigh,
+            fontSize = 16.sp
+        )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -5,7 +5,7 @@ import com.racketmatch.domain.model.NotificationType
 import com.racketmatch.domain.repository.NotificationRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class MockNotificationRepository : NotificationRepository {
 

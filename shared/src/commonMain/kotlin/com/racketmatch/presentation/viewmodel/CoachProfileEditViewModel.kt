@@ -34,6 +34,8 @@ sealed class CoachProfileEditState {
 }
 
 sealed class CoachProfileEditEvent {
+    data class DisplayNameChanged(val value: String) : CoachProfileEditEvent()
+    data class CityChanged(val value: String) : CoachProfileEditEvent()
     data class BioChanged(val value: String) : CoachProfileEditEvent()
     data class SportToggled(val sport: Sport) : CoachProfileEditEvent()
     data class AvatarUrlChanged(val value: String) : CoachProfileEditEvent()
@@ -70,8 +72,8 @@ class CoachProfileEditViewModel(
                 _state.value = CoachProfileEditState.Content(
                     displayName = user.displayName,
                     city = user.city,
-                    bio = user.bio ?: "",
-                    sports = user.sports.toSet(),
+                    bio = coachProfile?.bio ?: "",
+                    sports = coachProfile?.sports?.toSet() ?: emptySet(),
                     avatarUrl = user.avatarUrl ?: "",
                     certifications = emptyList(),
                     availableCourts = courts,
@@ -86,6 +88,8 @@ class CoachProfileEditViewModel(
     fun onEvent(event: CoachProfileEditEvent) {
         val content = _state.value as? CoachProfileEditState.Content ?: return
         when (event) {
+            is CoachProfileEditEvent.DisplayNameChanged -> _state.value = content.copy(displayName = event.value)
+            is CoachProfileEditEvent.CityChanged -> _state.value = content.copy(city = event.value)
             is CoachProfileEditEvent.BioChanged -> _state.value = content.copy(bio = event.value)
             is CoachProfileEditEvent.AvatarUrlChanged -> _state.value = content.copy(avatarUrl = event.value)
             is CoachProfileEditEvent.UploadAvatar -> uploadAvatar(content, event.bytes)
@@ -126,15 +130,17 @@ class CoachProfileEditViewModel(
         viewModelScope.launch(dispatcher) {
             try {
                 profileRepository.updateProfile(
-                    displayName = content.displayName,
-                    city = content.city,
-                    bio = content.bio.trim().ifBlank { null },
-                    sports = content.sports.toList(),
+                    displayName = content.displayName.trim(),
+                    city = content.city.trim(),
+                    bio = null,
+                    sports = emptyList(),
                     password = null,
                     dateOfBirth = null,
                     avatarUrl = content.avatarUrl.trim().ifBlank { null }
                 )
                 coachRepository.updateMyCoachProfile(
+                    bio = content.bio.trim().ifBlank { null },
+                    sports = content.sports.toList(),
                     trainingLocations = content.selectedCourtNames.toList()
                 )
                 tokenStorage.incrementProfileVersion()

@@ -12,13 +12,13 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.ui.auth.LoginScreen
 import com.racketmatch.presentation.viewmodel.SplashViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 object SplashScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: SplashViewModel = koinViewModel()
+        val viewModel: SplashViewModel = kmpViewModel()
         val navigator = LocalNavigator.currentOrThrow
 
         LaunchedEffect(Unit) {

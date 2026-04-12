@@ -9,8 +9,8 @@ import dev.gitlive.firebase.firestore.firestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import dev.gitlive.firebase.firestore.Timestamp
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class FirestoreNotificationRepositoryImpl : NotificationRepository {
 
@@ -20,13 +20,11 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
         db.collection("notifications").document(userId).collection("items")
 
     override fun observeNotifications(userId: String): Flow<List<AppNotification>> {
-        println("RacketMatch Firestore observing path: notifications/$userId/items")
         return itemsCollection(userId)
             .orderBy("createdAt", Direction.DESCENDING)
             .limit(50)
             .snapshots()
             .map { snapshot ->
-                println("RacketMatch Firestore snapshot received, docs=${snapshot.documents.size}")
                 snapshot.documents.mapNotNull { doc ->
                     runCatching {
                         AppNotification(
@@ -45,10 +43,7 @@ class FirestoreNotificationRepositoryImpl : NotificationRepository {
                                 Instant.fromEpochSeconds(ts.seconds, ts.nanoseconds.toLong())
                             }.getOrDefault(Clock.System.now())
                         )
-                    }.getOrElse { e ->
-                        println("RacketMatch doc ${doc.id} parse error: $e")
-                        null
-                    }
+                    }.getOrElse { null }
                 }
             }
     }

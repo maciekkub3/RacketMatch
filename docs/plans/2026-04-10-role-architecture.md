@@ -896,6 +896,719 @@ git commit -m "feat(kmp): role management section in settings screen"
 
 ---
 
+---
+
+### Task 10: Backend — V19 migration (booking settings on coach_profiles)
+
+**Files:**
+- Create: `backend/src/main/resources/db/migration/V19__coach_booking_settings.sql`
+- Modify: `backend/src/main/kotlin/com/racketmatch/domain/entity/CoachProfileEntity.kt`
+- Modify: `backend/src/main/kotlin/com/racketmatch/api/dto/CoachDto.kt`
+
+**Context:** Coaches need three booking control settings:
+- `booking_lead_time_hours` — how far in advance a player must book (default 24h)
+- `booking_horizon_days` — how many days ahead bookings are open (default 30)
+- `buffer_minutes` — gap between consecutive bookings (default 0)
+
+Calendar events with `event_type = 'BLOCKED'` already exist in the schema and are already used to block slot generation via `calendarRepository.findInRange` — no new table needed for exceptions.
+
+**Step 1: Write V19 migration**
+
+```sql
+-- V19__coach_booking_settings.sql
+ALTER TABLE coach_profiles
+    ADD COLUMN booking_lead_time_hours INT NOT NULL DEFAULT 24,
+    ADD COLUMN booking_horizon_days    INT NOT NULL DEFAULT 30,
+    ADD COLUMN buffer_minutes          INT NOT NULL DEFAULT 0;
+```
+
+**Step 2: Update CoachProfileEntity**
+
+```kotlin
+@Column(name = "booking_lead_time_hours")
+var bookingLeadTimeHours: Int = 24,
+
+@Column(name = "booking_horizon_days")
+var bookingHorizonDays: Int = 30,
+
+@Column(name = "buffer_minutes")
+var bufferMinutes: Int = 0,
+```
+
+**Step 3: Update CoachProfileDto**
+
+In `backend/src/main/kotlin/com/racketmatch/api/dto/CoachDto.kt`, add to `CoachProfileDto`:
+```kotlin
+val bookingLeadTimeHours: Int = 24,
+val bookingHorizonDays: Int = 30,
+val bufferMinutes: Int = 0,
+```
+
+Update the `toDto()` extension in the same file to include these three fields.
+
+**Step 4: Rebuild backend**
+
+```bash
+cd backend && docker compose build --no-cache && docker compose up -d --force-recreate
+```
+
+Verify Flyway applies V19: `docker compose logs -f app`
+
+**Step 5: Commit**
+
+```bash
+git add backend/src/main/resources/db/migration/V19__coach_booking_settings.sql
+git add backend/src/main/kotlin/com/racketmatch/domain/entity/CoachProfileEntity.kt
+git add backend/src/main/kotlin/com/racketmatch/api/dto/CoachDto.kt
+git commit -m "feat(backend): add booking settings fields to coach_profiles (V19)"
+```
+
+---
+
+### Task 11: Backend — Exceptions CRUD + booking settings update + slot gen improvements
+
+**Files:**
+- Modify: `backend/src/main/kotlin/com/racketmatch/api/controller/CoachController.kt`
+- Modify: `backend/src/main/kotlin/com/racketmatch/api/dto/CoachDto.kt`
+- Modify: `backend/src/main/kotlin/com/racketmatch/domain/repository/CoachCalendarEventRepository.kt`
+
+**Context:** Exceptions are BLOCKED calendar events. `event_type = 'BLOCKED'` already exists in schema. Slot generation already calls `calendarRepository.findInRange` which picks them up automatically. We only need:
+1. CRUD for exceptions (POST/GET/DELETE BLOCKED events) on `/api/coaches/me/exceptions`
+2. PATCH endpoint for booking settings
+3. Update slot generation to respect `bookingLeadTimeHours`, `bookingHorizonDays`, `bufferMinutes`
+
+**Step 1: Add CoachExceptionDto to CoachDto.kt**
+
+```kotlin
+data class CoachExceptionDto(
+    val id: UUID,
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val label: String? = null
+)
+
+data class CreateExceptionRequest(
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val label: String? = null
+)
+
+data class UpdateBookingSettingsRequest(
+    val bookingLeadTimeHours: Int? = null,
+    val bookingHorizonDays: Int? = null,
+    val bufferMinutes: Int? = null
+)
+```
+
+**Step 2: Add exception endpoints to CoachController**
+
+Inject `SecurityContextHolder` / `userRepository` for current coach lookup (follow the pattern used in `UserController` — `authentication.name` → UUID).
+
+```kotlin
+@GetMapping("/me/exceptions")
+fun getMyExceptions(authentication: Authentication): List<CoachExceptionDto> {
+    val coachId = UUID.fromString(authentication.name)
+    return calendarRepository.findBlockedByCoachId(coachId).map {
+        CoachExceptionDto(id = it.id!!, startsAt = it.startsAt, endsAt = it.endsAt, label = it.title)
+    }
+}
+
+@PostMapping("/me/exceptions")
+@ResponseStatus(HttpStatus.CREATED)
+fun createException(authentication: Authentication, @RequestBody req: CreateExceptionRequest): CoachExceptionDto {
+    val coachId = UUID.fromString(authentication.name)
+    val coach = userRepository.findById(coachId)
+        .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+    val saved = calendarRepository.save(CoachCalendarEventEntity(
+        coach = coach, title = req.label, eventType = "BLOCKED",
+        startsAt = req.startsAt, endsAt = req.endsAt
+    ))
+    return CoachExceptionDto(id = saved.id!!, startsAt = saved.startsAt, endsAt = saved.endsAt, label = saved.title)
+}
+
+@DeleteMapping("/me/exceptions/{id}")
+@ResponseStatus(HttpStatus.NO_CONTENT)
+fun deleteException(authentication: Authentication, @PathVariable id: UUID) {
+    val coachId = UUID.fromString(authentication.name)
+    val event = calendarRepository.findById(id)
+        .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+    if (event.coach.id != coachId) throw ResponseStatusException(HttpStatus.FORBIDDEN)
+    calendarRepository.deleteById(id)
+}
+
+@PatchMapping("/me/booking-settings")
+fun updateBookingSettings(authentication: Authentication, @RequestBody req: UpdateBookingSettingsRequest): CoachProfileDto {
+    val coachId = UUID.fromString(authentication.name)
+    val profile = coachProfileRepository.findById(coachId)
+        .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+    req.bookingLeadTimeHours?.let { profile.bookingLeadTimeHours = it }
+    req.bookingHorizonDays?.let { profile.bookingHorizonDays = it }
+    req.bufferMinutes?.let { profile.bufferMinutes = it }
+    val saved = coachProfileRepository.save(profile)
+    val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId)
+    return saved.toDto(services)
+}
+```
+
+Also add `userRepository: UserRepository` to `CoachController` constructor and add import.
+
+**Step 3: Add findBlockedByCoachId to CoachCalendarEventRepository**
+
+```kotlin
+@Query("SELECT e FROM CoachCalendarEventEntity e WHERE e.coach.id = :coachId AND e.eventType = 'BLOCKED'")
+fun findBlockedByCoachId(@Param("coachId") coachId: UUID): List<CoachCalendarEventEntity>
+```
+
+**Step 4: Update slot generation to respect booking settings**
+
+In `CoachController.getAvailability()`, fetch the coach profile and apply:
+- `leadTime`: skip slots that start sooner than `now + leadTimeHours`
+- `horizon`: cap `to` at `now + horizonDays`
+- `buffer`: after marking a slot as busy due to a booking, mark the following `bufferMinutes` as busy too
+
+```kotlin
+val profile = coachProfileRepository.findById(id)
+    .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach not found") }
+val leadTimeEnd = now.plus(profile.bookingLeadTimeHours.toLong(), ChronoUnit.HOURS)
+val horizonEnd  = now.plus(profile.bookingHorizonDays.toLong(), ChronoUnit.DAYS)
+val effectiveTo = if (to.isBefore(horizonEnd)) to else horizonEnd
+
+// in the while loop, replace `cursor.isAfter(now)` with:
+cursor.isAfter(leadTimeEnd)
+
+// buffer: extend busy ranges by bufferMinutes
+val bufferDuration = Duration.ofMinutes(profile.bufferMinutes.toLong())
+val expandedBusyRanges = busyRanges.map { (s, e) -> s to e.plus(bufferDuration) }
+// then use expandedBusyRanges in the isBusy check
+```
+
+**Step 5: Rebuild backend and verify**
+
+```bash
+cd backend && docker compose build --no-cache && docker compose up -d --force-recreate
+```
+
+**Step 6: Commit**
+
+```bash
+git add backend/src/main/kotlin/com/racketmatch/api/controller/CoachController.kt
+git add backend/src/main/kotlin/com/racketmatch/api/dto/CoachDto.kt
+git add backend/src/main/kotlin/com/racketmatch/domain/repository/CoachCalendarEventRepository.kt
+git commit -m "feat(backend): exception CRUD, booking settings endpoint, slot gen improvements"
+```
+
+---
+
+### Task 12: KMP — CoachAvailabilityScreen redesign (3 sections)
+
+**Files:**
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachAvailabilityViewModel.kt`
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/CoachAvailabilityScreen.kt`
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/data/repository/CoachRepositoryImpl.kt` (add exception + settings API calls)
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/domain/repository/CoachRepository.kt`
+
+**Context:** The current screen is one flat list of day cards. Replace with three clearly labeled sections:
+1. **Booking settings** — lead time, horizon, buffer (pill pickers at top)
+2. **Weekly schedule** — existing day cards, but collapsed by default showing only the summary ("08:00–17:00"), expand on tap, each card has a "Skopiuj do..." button
+3. **Exceptions** — list of existing BLOCKED events + button to add new one (date picker + time range)
+
+The existing `DayCard`, `WindowRow`, `TimeStepPicker` composables can be reused but wrapped in an expandable card.
+
+**Step 1: Extend CoachAvailabilityState and events**
+
+```kotlin
+data class BookingSettings(
+    val leadTimeHours: Int = 24,
+    val horizonDays: Int = 30,
+    val bufferMinutes: Int = 0
+)
+
+data class CoachException(
+    val id: String,
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val label: String? = null
+)
+
+// Update Content state:
+data class Content(
+    val days: List<DayAvailability>,
+    val bookingSettings: BookingSettings = BookingSettings(),
+    val exceptions: List<CoachException> = emptyList()
+) : CoachAvailabilityState()
+
+// New events:
+data class SetLeadTime(val hours: Int) : CoachAvailabilityEvent()
+data class SetHorizon(val days: Int) : CoachAvailabilityEvent()
+data class SetBuffer(val minutes: Int) : CoachAvailabilityEvent()
+data class CopyDayTo(val fromDayOfWeek: Int, val toDays: Set<Int>) : CoachAvailabilityEvent()
+data class AddException(val startsAt: Instant, val endsAt: Instant, val label: String?) : CoachAvailabilityEvent()
+data class DeleteException(val id: String) : CoachAvailabilityEvent()
+object SaveSettings : CoachAvailabilityEvent()
+```
+
+**Step 2: Handle new events in ViewModel**
+
+`Save` event saves both availability AND settings. `AddException` / `DeleteException` call the new repository methods. `CopyDayTo` copies windows from one day to selected days.
+
+```kotlin
+is CoachAvailabilityEvent.CopyDayTo -> {
+    val source = current.days.first { it.dayOfWeek == event.fromDayOfWeek }
+    _state.value = current.copy(days = current.days.map { day ->
+        if (day.dayOfWeek in event.toDays)
+            day.copy(enabled = source.enabled, windows = source.windows.toList())
+        else day
+    })
+}
+is CoachAvailabilityEvent.SetLeadTime -> {
+    _state.value = current.copy(bookingSettings = current.bookingSettings.copy(leadTimeHours = event.hours))
+}
+// similar for SetHorizon, SetBuffer
+is CoachAvailabilityEvent.AddException -> {
+    viewModelScope.launch(dispatcher) {
+        try {
+            val created = coachRepository.createException(event.startsAt, event.endsAt, event.label)
+            _state.value = current.copy(exceptions = current.exceptions + created)
+        } catch (_: Exception) {
+            _effects.emit(CoachAvailabilityEffect.Error("Nie udało się dodać wyjątku"))
+        }
+    }
+}
+is CoachAvailabilityEvent.DeleteException -> {
+    viewModelScope.launch(dispatcher) {
+        try {
+            coachRepository.deleteException(event.id)
+            _state.value = current.copy(exceptions = current.exceptions.filter { it.id != event.id })
+        } catch (_: Exception) {
+            _effects.emit(CoachAvailabilityEffect.Error("Nie udało się usunąć wyjątku"))
+        }
+    }
+}
+```
+
+Save: after saving availability, also call `coachRepository.updateBookingSettings(...)`.
+
+**Step 3: Add repository methods**
+
+In `CoachRepository` interface:
+```kotlin
+suspend fun getMyExceptions(): List<CoachException>
+suspend fun createException(startsAt: Instant, endsAt: Instant, label: String?): CoachException
+suspend fun deleteException(id: String)
+suspend fun updateBookingSettings(leadTimeHours: Int, horizonDays: Int, bufferMinutes: Int)
+```
+
+Implement in `CoachRepositoryImpl` using `httpClient.get("/api/coaches/me/exceptions")` etc. Add corresponding DTOs (can be simple data classes in the dto package).
+
+**Step 4: Rewrite CoachAvailabilityScreen**
+
+Replace the current flat LazyColumn with 3 sections separated by section headers (`SectionHeader` composable):
+
+```
+SECTION 1: USTAWIENIA REZERWACJI
+  - Lead time picker (24h / 48h / 72h pills)
+  - Horizon picker (7 / 14 / 30 days pills)
+  - Buffer picker (0 / 15 / 30 min pills)
+
+SECTION 2: HARMONOGRAM TYGODNIOWY
+  - For each day: collapsed card showing day name + summary (e.g. "08:00–17:00")
+  - Tap to expand: shows WindowRows + Add window + Copy to days
+  - "Skopiuj do..." shows a row of day checkboxes, confirm button
+
+SECTION 3: WYJĄTKI
+  - List of existing exceptions (date, time range, optional label, delete icon)
+  - "Dodaj wyjątek" button → inline form: DatePicker + TimeStepPicker from + TimeStepPicker to + optional label + confirm
+```
+
+Section header composable:
+```kotlin
+@Composable
+fun SectionHeader(title: String) {
+    Text(title, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+        fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+}
+```
+
+Pill picker composable for booking settings:
+```kotlin
+@Composable
+fun PillPicker(options: List<Pair<String, Int>>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { (label, value) ->
+            val isSelected = selected == value
+            Box(
+                modifier = Modifier.clip(RoundedCornerShape(20.dp))
+                    .background(if (isSelected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                    .clickable { onSelect(value) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp, color = if (isSelected) ProCircuit.Bg else ProCircuit.OnBg)
+            }
+        }
+    }
+}
+```
+
+Expandable day card: use `var expanded by remember { mutableStateOf(false) }` per day.
+
+The top bar title changes to "Dostępność" (matching the tab).
+
+**Step 5: No double padding check**
+
+Scaffold uses `padding(padding)` on the LazyColumn. LazyColumn uses `contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)`. Items should NOT add their own horizontal padding on top of this — verify each item uses padding only for its own internal spacing.
+
+**Step 6: Compile check**
+
+```bash
+./gradlew :shared:compileKotlinJvm
+```
+
+**Step 7: Commit**
+
+```bash
+git add shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachAvailabilityViewModel.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/CoachAvailabilityScreen.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/data/repository/CoachRepositoryImpl.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/domain/repository/CoachRepository.kt
+git commit -m "feat(kmp): CoachAvailabilityScreen redesign — 3 sections (settings, schedule, exceptions)"
+```
+
+---
+
+### Task 13: KMP — ServiceBookingScreen month picker + filtered day scroll
+
+**Files:**
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/ServiceBookingScreen.kt`
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachDetailViewModel.kt`
+
+**Context:** Currently `ServiceBookingScreen` shows the next 7 days as horizontal day chips. Replace with:
+1. Month navigation header: `← KWIECIEŃ 2026 →` — tap arrows to move months
+2. Horizontal scroll of ALL days in the selected month
+3. Days that have no available slots for the selected service are greyed out and non-tappable
+
+The ViewModel already fetches slots for a date range. We need to fetch the whole month when the displayed month changes.
+
+**Step 1: Add month-scoped slot fetch to CoachDetailViewModel**
+
+In `CoachDetailViewModel`, slots are currently fetched for a 7-day window. Add a `loadSlotsForMonth` method:
+
+```kotlin
+fun loadSlotsForMonth(coachId: UUID, year: Int, month: Int) {
+    viewModelScope.launch(dispatcher) {
+        val zone = TimeZone.currentSystemDefault()
+        val first = LocalDate(year, month, 1)
+        val last  = first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
+        val from  = first.atStartOfDayIn(zone)
+        val to    = last.atTime(23, 59, 59).toInstant(zone)
+        // call coachRepository.getAvailability(coachId, from, to) and update slots in state
+    }
+}
+```
+
+Alternatively — since the viewmodel already has `loadSlots()` taking `from`/`to` — call `viewModel.onEvent(CoachDetailEvent.LoadSlots(from, to))` when the month changes. Check the existing `CoachDetailEvent` sealed class and add `LoadSlots` if it doesn't exist.
+
+**Step 2: Update ServiceBookingScreen state**
+
+Replace the fixed 7-day `days` list with month-based state:
+
+```kotlin
+var displayedYear  by remember { mutableStateOf(today.year) }
+var displayedMonth by remember { mutableStateOf(today.monthNumber) }
+```
+
+When `displayedYear` or `displayedMonth` changes, trigger a slot reload via the ViewModel for the full month range.
+
+Build `daysInMonth` from `LocalDate(displayedYear, displayedMonth, 1)` using `.plus(i, DateTimeUnit.DAY)` for i in `0 until daysInMonth`.
+
+```kotlin
+val daysInMonth = remember(displayedYear, displayedMonth) {
+    val first = LocalDate(displayedYear, displayedMonth, 1)
+    val count = first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY).dayOfMonth
+    (0 until count).map { first.plus(it, DateTimeUnit.DAY) }
+}
+```
+
+**Step 3: Determine which days have availability**
+
+```kotlin
+val daysWithAvailability = remember(allSlots, displayedYear, displayedMonth) {
+    allSlots.filter { it.isAvailable }
+        .map { it.startsAt.toLocalDateTime(TimeZone.currentSystemDefault()).date }
+        .toSet()
+}
+```
+
+Use this to grey out days: `val hasSlots = day in daysWithAvailability`.
+
+**Step 4: Replace date picker UI**
+
+Replace the fixed 7-day row with:
+
+```kotlin
+// Month navigation header
+Row(
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+) {
+    IconButton(onClick = {
+        val prev = LocalDate(displayedYear, displayedMonth, 1).minus(1, DateTimeUnit.MONTH)
+        displayedYear = prev.year; displayedMonth = prev.monthNumber
+    }) { Text("←", ...) }
+    
+    Text(
+        "${polishMonthName(displayedMonth)} $displayedYear",
+        fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, ...
+    )
+    
+    IconButton(onClick = {
+        val next = LocalDate(displayedYear, displayedMonth, 1).plus(1, DateTimeUnit.MONTH)
+        displayedYear = next.year; displayedMonth = next.monthNumber
+    }) { Text("→", ...) }
+}
+
+// Day scroll — all days in month
+Row(
+    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+) {
+    daysInMonth.forEach { day ->
+        val isSelected = day == selectedDay
+        val hasSlots = day in daysWithAvailability
+        val isToday = day == today
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(when {
+                    isSelected -> ProCircuit.Lime
+                    !hasSlots  -> ProCircuit.SurfaceHigh
+                    else       -> ProCircuit.SurfaceLow
+                })
+                .then(if (hasSlots) Modifier.clickable { selectedDay = day; selectedSlot = null } else Modifier)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(shortDayName(day.dayOfWeek), ...)
+            Spacer(Modifier.height(4.dp))
+            Text("${day.dayOfMonth}", ...)
+        }
+    }
+}
+```
+
+Add `polishMonthName(month: Int): String` and `shortDayName(dow: DayOfWeek): String` private helper functions (reuse existing polish month names from the old date picker row).
+
+**Step 5: Scroll to first available day on month load**
+
+Use `LazyRow` with `state = rememberLazyListState()` and `LaunchedEffect(daysWithAvailability)` to scroll to the first day with availability:
+
+```kotlin
+LaunchedEffect(daysWithAvailability, displayedMonth) {
+    val firstAvailable = daysInMonth.indexOfFirst { it in daysWithAvailability }
+    if (firstAvailable >= 0) scrollState.animateScrollToItem(firstAvailable)
+}
+```
+
+**Step 6: Trigger month reload on month change**
+
+```kotlin
+LaunchedEffect(displayedYear, displayedMonth) {
+    val zone = TimeZone.currentSystemDefault()
+    val first = LocalDate(displayedYear, displayedMonth, 1)
+    val last = first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY)
+    viewModel.onEvent(CoachDetailEvent.LoadSlots(
+        from = first.atStartOfDayIn(zone),
+        to = last.atTime(23, 59, 59).toInstant(zone)
+    ))
+}
+```
+
+If `CoachDetailEvent.LoadSlots` doesn't exist, add it and handle in ViewModel.
+
+**Step 7: Check for double padding**
+
+The `LazyColumn` in this screen uses `contentPadding = PaddingValues(bottom = 16.dp)` and each `item {}` handles its own horizontal padding via `Modifier.padding(horizontal = 20.dp)`. The Scaffold padding is applied via `.padding(padding)` on the LazyColumn itself. No double horizontal padding — verify this is still the case after changes.
+
+**Step 8: Compile check + commit**
+
+```bash
+./gradlew :shared:compileKotlinJvm
+git add shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/ServiceBookingScreen.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachDetailViewModel.kt
+git commit -m "feat(kmp): ServiceBookingScreen — month picker + all-days scroll with availability filter"
+```
+
+---
+
+### Task 14: KMP — CoachProfileEditScreen court picker from DB
+
+**Files:**
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachProfileEditViewModel.kt`
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/CoachProfileEditScreen.kt`
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/data/repository/CoachRepositoryImpl.kt`
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/domain/repository/CoachRepository.kt`
+
+**Context:** `CoachProfileEntity.trainingLocations` is a `MutableList<String>` of venue names. Currently `CoachProfileEditScreen` has a free-text input for locations. Replace it with a multi-select picker populated from `GET /api/courts?city=<coach city>`. The selected court names (from `CourtDto.name`) are stored as-is in `trainingLocations`.
+
+Backend already has `GET /api/courts` at `CourtController` returning `CourtDto` with `name`, `city`, `address`, `sports`. No backend change needed.
+
+**Step 1: Add courts fetch to CoachRepository**
+
+In `CoachRepository` interface:
+```kotlin
+suspend fun getCourts(city: String): List<Court>
+```
+
+Create `Court` domain model:
+```kotlin
+data class Court(val id: String, val name: String, val city: String, val address: String, val sports: List<String>)
+```
+
+In `CoachRepositoryImpl`:
+```kotlin
+override suspend fun getCourts(city: String): List<Court> =
+    httpClient.get("/api/courts") { parameter("city", city) }
+        .body<List<CourtDto>>()
+        .map { it.toDomain() }
+```
+
+Add `CourtDto` in `shared/src/commonMain/kotlin/com/racketmatch/data/remote/dto/CoachDto.kt`:
+```kotlin
+@Serializable
+data class CourtDto(
+    val id: String,
+    val name: String,
+    val city: String,
+    val address: String,
+    val sports: String = ""
+) {
+    fun toDomain() = Court(id = id, name = name, city = city, address = address,
+        sports = sports.split(",").filter { it.isNotBlank() })
+}
+```
+
+**Step 2: Update CoachProfileEditViewModel state**
+
+```kotlin
+data class CoachProfileEditState(
+    // ...existing fields...
+    val availableCourts: List<Court> = emptyList(),
+    val selectedCourtNames: Set<String> = emptySet()
+)
+```
+
+In `load()`, after fetching the profile, also call:
+```kotlin
+val courts = coachRepository.getCourts(profile.city ?: "Warszawa")
+_state.value = current.copy(
+    availableCourts = courts,
+    selectedCourtNames = profile.trainingLocations.toSet()
+)
+```
+
+Add event: `data class ToggleCourt(val name: String) : CoachProfileEditEvent()` — toggles selection.
+In `save()`, pass `selectedCourtNames.toList()` as `trainingLocations`.
+
+**Step 3: Replace location text field in CoachProfileEditScreen**
+
+Find the `trainingLocations` input section. Replace with a multi-select court grid.
+
+```kotlin
+// Court picker section
+Text("KORTY", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+    fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
+    modifier = Modifier.padding(horizontal = 16.dp))
+Spacer(Modifier.height(8.dp))
+state.availableCourts.forEach { court ->
+    val selected = court.name in state.selectedCourtNames
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+            .clickable { viewModel.onEvent(CoachProfileEditEvent.ToggleCourt(court.name)) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(court.name, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                fontSize = 14.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnBg)
+            Text(court.address, fontFamily = AppBodyFontFamily, fontSize = 11.sp,
+                color = if (selected) ProCircuit.Bg.copy(alpha = 0.7f) else ProCircuit.OnSurface)
+        }
+        if (selected) Text("✓", fontSize = 16.sp, color = ProCircuit.Bg)
+    }
+    Spacer(Modifier.height(8.dp))
+}
+```
+
+**Step 4: Compile check + commit**
+
+```bash
+./gradlew :shared:compileKotlinJvm
+git add shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachProfileEditViewModel.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/CoachProfileEditScreen.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/data/repository/CoachRepositoryImpl.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/domain/repository/CoachRepository.kt
+git commit -m "feat(kmp): replace coach location text input with court picker from API"
+```
+
+---
+
+### Task 15: KMP — CoachCalendarScreen: exceptions visible as grey blocks
+
+**Files:**
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachCalendarViewModel.kt`
+- Modify: `shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/CoachCalendarScreen.kt`
+
+**Context:** `CoachCalendarScreen` shows a weekly grid (Mon–Sun, 07:00–22:00). Calendar events are already fetched and displayed. Events with `eventType = "BLOCKED"` (exceptions) need to be rendered differently — as grey blocks, not the colored booking/client style. This is purely a UI distinction; the data layer already returns BLOCKED events since they're stored in `coach_calendar_events`.
+
+**Step 1: Check CalendarEventType enum**
+
+Read `shared/src/commonMain/kotlin/com/racketmatch/domain/model/CalendarEvent.kt`. It likely has `BOOKING`, `EXTERNAL_CLIENT`, `BLOCKED` types. If `BLOCKED` is missing from the enum, add it.
+
+**Step 2: Update event color in CoachCalendarScreen**
+
+Find where event blocks are drawn (the event rendering composable in the weekly grid). Add a case for `CalendarEventType.BLOCKED`:
+
+```kotlin
+val bgColor = when (event.type) {
+    CalendarEventType.BOOKING         -> ProCircuit.Lime.copy(alpha = 0.85f)
+    CalendarEventType.EXTERNAL_CLIENT -> ProCircuit.SurfaceHigh
+    CalendarEventType.BLOCKED         -> Color(0xFF444444)  // dark grey
+    else                              -> ProCircuit.SurfaceLow
+}
+val label = when (event.type) {
+    CalendarEventType.BLOCKED -> event.title ?: "Niedostępny"
+    else                      -> event.title ?: ""
+}
+```
+
+**Step 3: Hide "Add event" for BLOCKED events in the add sheet**
+
+The add event sheet (triggered by the FAB `+` button) creates `EXTERNAL_CLIENT` events — this is fine, no change needed. The coach manages exceptions via `CoachAvailabilityScreen` (Task 12), not the calendar FAB.
+
+**Step 4: Load current week + fetch exceptions via existing API path**
+
+Verify `CoachCalendarViewModel.load()` fetches events for the current week. BLOCKED events are returned by the existing `GET /api/coaches/{id}/calendar` or similar endpoint. Check the actual endpoint URL — if it's `GET /api/coaches/me/calendar`, ensure it returns all event types including BLOCKED.
+
+If the endpoint filters by type, update it to include BLOCKED. If events come from `CoachCalendarEventRepository.findInRange(coachId, from, to)` with no type filter, BLOCKED events are already included automatically.
+
+**Step 5: Compile check + commit**
+
+```bash
+./gradlew :shared:compileKotlinJvm
+git add shared/src/commonMain/kotlin/com/racketmatch/presentation/viewmodel/CoachCalendarViewModel.kt
+git add shared/src/commonMain/kotlin/com/racketmatch/ui/coaches/CoachCalendarScreen.kt
+git commit -m "feat(kmp): render BLOCKED calendar events as grey blocks in weekly view"
+```
+
+---
+
 ## Final Checks
 
 ```bash

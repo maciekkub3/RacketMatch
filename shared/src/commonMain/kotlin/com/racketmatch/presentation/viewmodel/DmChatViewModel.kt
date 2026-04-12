@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.random.Random
+import kotlin.time.Clock
 
 sealed class DmChatState {
     object Loading : DmChatState()
@@ -30,6 +31,7 @@ sealed class DmChatEffect {
 class DmChatViewModel(
     private val repo: DmRepository,
     private val conversationId: String,
+    private val currentUserId: String,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
@@ -79,9 +81,9 @@ class DmChatViewModel(
             val optimistic = DirectMessage(
                 id = "opt_${Random.nextLong()}",
                 conversationId = conversationId,
-                senderId = "me",
+                senderId = currentUserId,
                 text = text,
-                sentAt = System.currentTimeMillis()
+                sentAt = Clock.System.now().toEpochMilliseconds()
             )
             val current = _state.value
             if (current is DmChatState.Content) {

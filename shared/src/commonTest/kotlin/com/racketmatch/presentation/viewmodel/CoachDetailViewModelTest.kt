@@ -8,7 +8,6 @@ import com.racketmatch.domain.repository.CoachRepository
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
-import io.mockk.coJustRun
 import io.mockk.impl.annotations.MockK
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -28,11 +27,11 @@ class CoachDetailViewModelTest {
         displayName = "Marek Nowak",
         avatarUrl = null,
         bio = "Trener z 10-letnim doświadczeniem",
-        hourlyRate = 8000,
         sports = listOf(Sport.TENNIS),
         certifications = listOf("PTF Level 2"),
         city = "Kraków",
-        eloRating = 1600
+        eloRating = 1600,
+        lowestServicePriceCents = 8000
     )
     private val testSlot = BookingSlot(
         startsAt = Instant.fromEpochMilliseconds(1711267200000),
@@ -44,8 +43,11 @@ class CoachDetailViewModelTest {
     fun setUp() {
         MockKAnnotations.init(this)
         coEvery { coachRepository.getCoach(coachId) } returns testCoach
+        coEvery { coachRepository.getCoachServices(coachId) } returns emptyList()
         coEvery { coachRepository.getAvailability(coachId, any(), any()) } returns listOf(testSlot)
-        coJustRun { coachRepository.bookSlot(any(), any(), any()) }
+        coEvery { coachRepository.createBooking(any(), any(), any(), any(), any()) } returns
+            com.racketmatch.domain.model.CoachBooking("b1", coachId, "p1", "s1", null,
+                testSlot.startsAt, testSlot.endsAt, 60, "PENDING")
     }
 
     @Test
@@ -68,7 +70,7 @@ class CoachDetailViewModelTest {
 
         viewModel.effectFlow.test {
             viewModel.onEvent(
-                CoachDetailEvent.BookSlot(testSlot.startsAt, testSlot.endsAt)
+                CoachDetailEvent.BookSlot("s1", testSlot.startsAt, testSlot.endsAt, 60)
             )
             dispatcher.scheduler.advanceUntilIdle()
             awaitItem() shouldBe CoachDetailEffect.BookingConfirmed
@@ -77,13 +79,13 @@ class CoachDetailViewModelTest {
 
     @Test
     fun `booking failure emits ShowError effect`() = runTest {
-        coEvery { coachRepository.bookSlot(any(), any(), any()) } throws Exception("Slot taken")
+        coEvery { coachRepository.createBooking(any(), any(), any(), any(), any()) } throws Exception("Slot taken")
         viewModel = CoachDetailViewModel(coachRepository, coachId, dispatcher)
         dispatcher.scheduler.advanceUntilIdle()
 
         viewModel.effectFlow.test {
             viewModel.onEvent(
-                CoachDetailEvent.BookSlot(testSlot.startsAt, testSlot.endsAt)
+                CoachDetailEvent.BookSlot("s1", testSlot.startsAt, testSlot.endsAt, 60)
             )
             dispatcher.scheduler.advanceUntilIdle()
             awaitItem() shouldBe CoachDetailEffect.ShowError("Coś poszło nie tak. Spróbuj ponownie.")

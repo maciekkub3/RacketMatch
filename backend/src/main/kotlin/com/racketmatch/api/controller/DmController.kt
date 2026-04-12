@@ -11,6 +11,7 @@ import com.racketmatch.service.NotificationService
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import java.util.UUID
@@ -28,8 +29,13 @@ class DmController(
         val userId = UUID.fromString(authentication.name)
         val allMessages = dmRepository.findAllByUser(userId)
 
-        // Group by conversationId, pick the latest message per conversation
+        // Group by conversationId, pick the latest message per conversation.
+        // Filter out malformed conversationIds (both parts must be valid UUIDs).
         return allMessages
+            .filter { msg ->
+                val parts = msg.conversationId.split("_")
+                parts.size == 2 && parts.all { runCatching { UUID.fromString(it) }.isSuccess }
+            }
             .groupBy { it.conversationId }
             .map { (convId, msgs) ->
                 val latest = msgs.maxByOrNull { it.sentAt }!!
@@ -54,14 +60,13 @@ class DmController(
         @PathVariable conversationId: String
     ): List<DirectMessageDto> {
         val userId = UUID.fromString(authentication.name)
-        val messages = dmRepository.findByConversationIdOrderBySentAtAsc(conversationId)
-        // Verify user is a participant
-        if (messages.isNotEmpty()) {
-            val first = messages.first()
-            if (first.sender.id != userId && first.receiver.id != userId)
-                throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        val parts = conversationId.split("_")
+        if (parts.size != 2) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid conversationId")
+        val ids = runCatching { parts.map { UUID.fromString(it) } }.getOrElse {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid conversationId")
         }
-        return messages.map { it.toDto() }
+        if (userId !in ids) throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        return dmRepository.findByConversationIdOrderBySentAtAsc(conversationId).map { it.toDto() }
     }
 
     @PostMapping("/{conversationId}")
@@ -70,7 +75,7 @@ class DmController(
     fun sendMessage(
         authentication: Authentication,
         @PathVariable conversationId: String,
-        @RequestBody request: SendDmRequest
+        @RequestBody @Validated request: SendDmRequest
     ): DirectMessageDto {
         val senderId = UUID.fromString(authentication.name)
         val sender = userRepository.findById(senderId).orElseThrow {

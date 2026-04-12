@@ -23,7 +23,7 @@ interface CoachRepository {
 
     // Coach-facing — profile / booking settings
     suspend fun getMyCoachProfile(): CoachProfile
-    suspend fun updateMyCoachProfile(trainingLocations: List<String>): CoachProfile
+    suspend fun updateMyCoachProfile(bio: String? = null, sports: List<Sport>? = null, trainingLocations: List<String>): CoachProfile
     suspend fun getMyBookingSettings(): BookingSettings
     suspend fun updateBookingSettings(leadTimeHours: Int, horizonDays: Int, bufferMinutes: Int)
 

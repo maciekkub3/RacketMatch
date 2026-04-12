@@ -29,11 +29,11 @@ import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import kotlinx.coroutines.launch
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 import org.koin.core.parameter.parametersOf
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import kotlin.time.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 data class ChatScreen(
     val matchId: String,
@@ -44,7 +44,7 @@ data class ChatScreen(
 
     @Composable
     override fun Content() {
-        val viewModel: ChatViewModel = koinViewModel { parametersOf(matchId) }
+        val viewModel: ChatViewModel = kmpViewModel { parametersOf(matchId) }
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
@@ -64,7 +64,7 @@ data class ChatScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = ProCircuit.Bg
         ) { padding ->
-            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(modifier = Modifier.fillMaxSize().padding(padding).imePadding()) {
                 MatchChatHeader(name = otherUserName, onBack = { navigator.pop() })
                 HorizontalDivider(color = ProCircuit.SurfaceLow, thickness = 1.dp)
 
@@ -168,7 +168,9 @@ private fun MatchChatContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                                Instant.fromEpochMilliseconds(message.timestamp)
+                                    .toLocalDateTime(TimeZone.currentSystemDefault())
+                                    .let { "${it.hour.toString().padStart(2,'0')}:${it.minute.toString().padStart(2,'0')}" },
                                 fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
                             )
                         }

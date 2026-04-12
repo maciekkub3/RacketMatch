@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
@@ -35,6 +36,7 @@ import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreState
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.presentation.viewmodel.PostSessionDialogState
+import com.racketmatch.presentation.viewmodel.SUPPORTED_CITIES
 import com.racketmatch.presentation.viewmodel.SessionTimeFilter
 import com.racketmatch.ui.navigation.MatchesTab
 import com.racketmatch.ui.map.CityMap
@@ -42,19 +44,20 @@ import com.racketmatch.ui.onboarding.OnboardingAnchor
 import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.common.DateTimePickerRow
+import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.common.monthPl
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.ui.theme.ThemeState
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 object PlayersScreen : Screen {
     @Composable
     override fun Content() {
-        val viewModel: ExploreViewModel = koinViewModel()
+        val viewModel: ExploreViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val tabNavigator = LocalTabNavigator.current
         var joinedSession by remember { mutableStateOf<ExploreEffect.SessionJoined?>(null) }
@@ -156,6 +159,7 @@ private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
             courts = state.filteredCourts,
             sessionCountByCourt = state.sessionCountByCourt,
             onCourtTap = { court -> onEvent(ExploreEvent.SelectCourt(court.id)) },
+            city = state.selectedCity,
             isDark = ThemeState.isDark
         )
 
@@ -285,7 +289,7 @@ private fun ExploreContent(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
 
     // Challenge dialog
     if (state.challengeDialog != null) {
-        ChallengeDialog(dialogState = state.challengeDialog, onEvent = onEvent)
+        ChallengeDialog(dialogState = state.challengeDialog, courts = state.courts, onEvent = onEvent)
     }
 }
 
@@ -315,6 +319,14 @@ private fun FilterSheet(state: ExploreState, onEvent: (ExploreEvent) -> Unit) {
                 ) {
                     Text("Wyczyść", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 0.5.sp, color = ProCircuit.OnSurface)
                 }
+            }
+        }
+
+        // City
+        FilterSection(label = "MIASTO") {
+            SUPPORTED_CITIES.forEach { city ->
+                val selected = state.selectedCity == city
+                FilterChip(label = city, selected = selected) { onEvent(ExploreEvent.SwitchCity(city)) }
             }
         }
 
@@ -502,18 +514,22 @@ private fun SessionCard(session: OpenSession, isMySession: Boolean, onJoin: () -
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(ProCircuit.Lime.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-            Text(session.userName.firstOrNull()?.uppercase() ?: "?", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 16.sp, color = ProCircuit.Lime)
-        }
+        UserAvatar(
+            displayName = session.userName,
+            avatarUrl = session.userAvatarUrl,
+            size = 40.dp,
+            bgColor = ProCircuit.Lime.copy(alpha = 0.15f),
+            fontSize = 16.sp
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(session.userName, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = ProCircuit.OnBg)
+                Text(session.userName, modifier = Modifier.weight(1f, fill = false), fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = ProCircuit.OnBg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val typeColor = if (session.matchType == MatchType.RANKED) ProCircuit.Tertiary else ProCircuit.OnSurface.copy(alpha = 0.6f)
                 Box(
                     modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(typeColor.copy(alpha = 0.15f)).padding(horizontal = 5.dp, vertical = 2.dp)
                 ) {
-                    Text(session.matchType.name, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 8.sp, letterSpacing = 0.5.sp, color = typeColor)
+                    Text(session.matchType.name, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 8.sp, letterSpacing = 0.5.sp, color = typeColor, maxLines = 1)
                 }
             }
             Text("$timeStr · $sportLabel · ELO ${session.userElo}", fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface)
@@ -634,9 +650,15 @@ private fun PostSessionDialog(dialogState: PostSessionDialogState, courts: List<
 
 // ── Challenge Dialog ───────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChallengeDialog(dialogState: ChallengeDialogState, onEvent: (ExploreEvent) -> Unit) {
+private fun ChallengeDialog(dialogState: ChallengeDialogState, courts: List<Court>, onEvent: (ExploreEvent) -> Unit) {
     val availableSports = dialogState.availableSports.ifEmpty { listOf(Sport.TENNIS) }
+    val courtSuggestions = remember(dialogState.courtName, courts) {
+        if (dialogState.courtName.length < 2) emptyList()
+        else courts.filter { it.name.contains(dialogState.courtName, ignoreCase = true) }.take(5)
+    }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     AlertDialog(
         onDismissRequest = { onEvent(ExploreEvent.DismissChallengeDialog) },
@@ -646,7 +668,7 @@ private fun ChallengeDialog(dialogState: ChallengeDialogState, onEvent: (Explore
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Type
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(MatchType.CASUAL to "CASUAL", MatchType.RANKED to "RANKED").forEach { (type, label) ->
+                    listOf(MatchType.CASUAL to "TOWARZYSKI", MatchType.RANKED to "RANKINGOWY").forEach { (type, label) ->
                         val selected = dialogState.selectedType == type
                         Box(
                             modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
@@ -676,21 +698,70 @@ private fun ChallengeDialog(dialogState: ChallengeDialogState, onEvent: (Explore
                 Text("Opcjonalnie — możesz ustalić później",
                     fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                     fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
-                OutlinedTextField(
-                    value = dialogState.courtName,
-                    onValueChange = { onEvent(ExploreEvent.ChallengeCourtNameChanged(it)) },
-                    placeholder = { Text("Kort / miejsce", fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface.copy(alpha = 0.5f)) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = ProCircuit.OnBg,
-                        unfocusedTextColor = ProCircuit.OnBg,
-                        focusedBorderColor = ProCircuit.Lime,
-                        unfocusedBorderColor = ProCircuit.OnSurface.copy(alpha = 0.3f),
-                        cursorColor = ProCircuit.Lime
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column {
+                    OutlinedTextField(
+                        value = dialogState.courtName,
+                        onValueChange = { onEvent(ExploreEvent.ChallengeCourtNameChanged(it)) },
+                        placeholder = { Text("Wpisz nazwę kortu lub wybierz z listy", fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface.copy(alpha = 0.5f)) },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focusManager.clearFocus() }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = ProCircuit.OnBg,
+                            unfocusedTextColor = ProCircuit.OnBg,
+                            focusedBorderColor = ProCircuit.Lime,
+                            unfocusedBorderColor = ProCircuit.OnSurface.copy(alpha = 0.3f),
+                            cursorColor = ProCircuit.Lime
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (courtSuggestions.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(ProCircuit.SurfaceHigh)
+                        ) {
+                            courtSuggestions.forEach { court ->
+                                Text(
+                                    text = court.name,
+                                    fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnBg,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onEvent(ExploreEvent.ChallengeCourtNameChanged(court.name))
+                                            focusManager.clearFocus()
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                )
+                                HorizontalDivider(color = ProCircuit.SurfaceLow)
+                            }
+                        }
+                    } else if (courts.isNotEmpty() && dialogState.courtName.isBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("Dostępne korty:", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp, letterSpacing = 1.sp, color = ProCircuit.OnSurface)
+                        Spacer(Modifier.height(4.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(ProCircuit.SurfaceHigh)
+                        ) {
+                            courts.take(4).forEach { court ->
+                                Text(
+                                    text = court.name,
+                                    fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnBg,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onEvent(ExploreEvent.ChallengeCourtNameChanged(court.name)) }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                )
+                                HorizontalDivider(color = ProCircuit.SurfaceLow)
+                            }
+                        }
+                    }
+                }
                 // Date + Time picker
                 DateTimePickerRow(
                     selectedMillis = dialogState.startsAtMillis,
@@ -745,9 +816,6 @@ private fun PlayerListView(state: ExploreState, onEvent: (ExploreEvent) -> Unit)
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Space for the persistent top bar rendered above this overlay
-            Spacer(Modifier.statusBarsPadding().height(56.dp))
-
             // Player count sub-label
             if (state.nearbyPlayers.isNotEmpty())
                 Text(
@@ -1016,9 +1084,13 @@ private fun PlayerCard(player: User, myElo: Int, isPending: Boolean, onCardClick
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(ProCircuit.SurfaceLow).clickable(onClick = onCardClick).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(ProCircuit.Lime.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-            Text(player.displayName.firstOrNull()?.uppercase() ?: "?", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 20.sp, color = ProCircuit.Lime)
-        }
+        UserAvatar(
+            displayName = player.displayName,
+            avatarUrl = player.avatarUrl,
+            size = 48.dp,
+            bgColor = ProCircuit.Lime.copy(alpha = 0.12f),
+            fontSize = 20.sp
+        )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1036,7 +1108,7 @@ private fun PlayerCard(player: User, myElo: Int, isPending: Boolean, onCardClick
             Text(diffText, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = diffColor)
             if (isPending) {
                 Box(Modifier.clip(RoundedCornerShape(8.dp)).background(ProCircuit.Outline.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                    Text("PENDING", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.sp, color = ProCircuit.Outline)
+                    Text("WYSŁANO", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.sp, color = ProCircuit.Outline)
                 }
             } else {
                 Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(ProCircuit.Lime).clickable(onClick = onChallengeClick).padding(horizontal = 10.dp, vertical = 5.dp)) {

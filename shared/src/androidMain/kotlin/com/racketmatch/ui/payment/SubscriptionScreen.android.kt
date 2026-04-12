@@ -41,12 +41,12 @@ import com.stripe.android.paymentsheet.PaymentSheet
 import com.stripe.android.paymentsheet.PaymentSheetResult
 import com.stripe.android.paymentsheet.rememberPaymentSheet
 import kotlinx.coroutines.launch
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 actual fun SubscriptionContent() {
-    val viewModel: PaymentViewModel = koinViewModel()
+    val viewModel: PaymentViewModel = kmpViewModel()
     val state by viewModel.stateFlow.collectAsState()
     val navigator = LocalNavigator.currentOrThrow
     val snackbarHostState = remember { SnackbarHostState() }

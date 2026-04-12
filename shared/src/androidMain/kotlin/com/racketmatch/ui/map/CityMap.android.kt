@@ -8,9 +8,11 @@ import android.graphics.Typeface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.maps.android.clustering.Cluster
@@ -57,18 +59,31 @@ private const val NIGHT_STYLE = """[
   {"featureType":"landscape","stylers":[{"color":"#1a1a18"}]}
 ]"""
 
+private val CITY_CENTERS = mapOf(
+    "Warszawa" to LatLng(52.2297, 21.0122),
+    "Poznań"   to LatLng(52.4064, 16.9252),
+    "Wrocław"  to LatLng(51.1079, 17.0385),
+    "Szczecin" to LatLng(53.4285, 14.5528)
+)
+
 @Composable
 actual fun CityMap(
     modifier: Modifier,
     courts: List<Court>,
     sessionCountByCourt: Map<String, Int>,
     onCourtTap: (Court) -> Unit,
+    city: String,
     isDark: Boolean
 ) {
     val context = LocalContext.current
     val onCourtTapRef = rememberUpdatedState(onCourtTap)
+    val cityCenter = CITY_CENTERS[city] ?: LatLng(52.2297, 21.0122)
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(52.2297, 21.0122), 12f)
+        position = CameraPosition.fromLatLngZoom(cityCenter, 12f)
+    }
+
+    LaunchedEffect(city) {
+        cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(cityCenter, 12f))
     }
 
     val items = remember(courts, sessionCountByCourt) {
@@ -95,7 +110,7 @@ actual fun CityMap(
             val clusterManager = ClusterManager<CourtClusterItem>(context, map)
 
             clusterManager.algorithm = NonHierarchicalDistanceBasedAlgorithm<CourtClusterItem>().apply {
-                maxDistanceBetweenClusteredItems = 70
+                maxDistanceBetweenClusteredItems = 40
             }
 
             val renderer = object : DefaultClusterRenderer<CourtClusterItem>(context, map, clusterManager) {
@@ -142,6 +157,14 @@ actual fun CityMap(
                 true
             }
 
+            clusterManager.setOnClusterClickListener { cluster ->
+                val boundsBuilder = LatLngBounds.builder()
+                cluster.items.forEach { boundsBuilder.include(it.position) }
+                val bounds = boundsBuilder.build()
+                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 150))
+                true
+            }
+
             clusterManager.addItems(items)
             clusterManager.cluster()
         }
@@ -183,9 +206,9 @@ private fun clusterBitmap(sports: Set<Sport>, count: Int, hasSession: Boolean, i
 
 /** Single sport — one circle with emoji + optional count badge. */
 private fun singleCircleBitmap(emoji: String, count: Int, hasSession: Boolean, isDark: Boolean): Bitmap {
-    val r = 62f
-    val ringExtra = if (hasSession) 18f else 0f
-    val badgeR = 20f   // was 14f
+    val r = 38f
+    val ringExtra = if (hasSession) 24f else 0f
+    val badgeR = 13f
     val pad = badgeR
     val totalW = (r * 2 + pad + ringExtra).toInt()
     val totalH = (r * 2 + pad + ringExtra).toInt()
@@ -215,10 +238,10 @@ private fun singleCircleBitmap(emoji: String, count: Int, hasSession: Boolean, i
 
 /** Tennis + Padel — two overlapping circles + optional count badge. */
 private fun doubleCircleBitmap(count: Int, hasSession: Boolean, isDark: Boolean): Bitmap {
-    val r = 54f
+    val r = 33f
     val overlap = r * 0.55f
-    val badgeR = 20f   // was 14f
-    val ringExtra = if (hasSession) 18f else 0f
+    val badgeR = 13f
+    val ringExtra = if (hasSession) 24f else 0f
     val padTop = badgeR
     val leftCx = r + badgeR * 0.3f + ringExtra / 2f
     val rightCx = leftCx + r * 2f - overlap

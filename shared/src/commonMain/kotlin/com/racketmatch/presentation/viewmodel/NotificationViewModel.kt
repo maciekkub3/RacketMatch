@@ -47,15 +47,10 @@ class NotificationViewModel(
     val state = _state.asStateFlow()
 
     init {
-        println("RacketMatch NotificationViewModel init, userId='$userId'")
         viewModelScope.launch(dispatcher) {
             repo.observeNotifications(userId)
-                .catch { e ->
-                    println("RacketMatch NotificationViewModel error: $e")
-                    _state.value = _state.value.copy(loading = false)
-                }
+                .catch { _state.value = _state.value.copy(loading = false) }
                 .collect { items ->
-                    println("RacketMatch NotificationViewModel received ${items.size} notifications")
                 val unread = items.filter { !it.read }
                 _state.value = NotificationState(
                     notifications = items,

@@ -35,7 +35,7 @@ import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 private enum class RankingTab { LOCAL, MASTERS }
 
@@ -45,7 +45,7 @@ object RankingsScreen : Screen {
     @Composable
     override fun Content() {
         var activeTab by remember { mutableStateOf(RankingTab.MASTERS) }
-        val viewModel: RankingsViewModel = koinViewModel()
+        val viewModel: RankingsViewModel = kmpViewModel()
         val rankingsState by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
 
@@ -302,7 +302,7 @@ private fun RealRankingTable(players: List<User>, myId: String, sportFilter: Spo
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "%02d".format(index + 1),
+                    text = (index + 1).toString().padStart(2, '0'),
                     modifier = Modifier.width(32.dp),
                     fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic, fontSize = 14.sp,
                     color = when { isMe -> ProCircuit.Lime; index == 0 -> ProCircuit.Lime; else -> ProCircuit.Outline }

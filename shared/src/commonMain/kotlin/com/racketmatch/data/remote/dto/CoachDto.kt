@@ -136,6 +136,8 @@ data class UpdateBookingSettingsDto(
 
 @Serializable
 data class UpdateCoachProfileDto(
+    val bio: String? = null,
+    val sports: List<String>? = null,
     val trainingLocations: List<String>? = null
 )
 

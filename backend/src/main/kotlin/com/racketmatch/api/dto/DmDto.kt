@@ -1,6 +1,8 @@
 package com.racketmatch.api.dto
 
 import com.racketmatch.domain.entity.DirectMessageEntity
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import java.util.UUID
 
 data class DirectMessageDto(
@@ -31,4 +33,6 @@ data class ConversationDto(
     val unreadCount: Int
 )
 
-data class SendDmRequest(val text: String)
+data class SendDmRequest(
+    @field:NotBlank @field:Size(max = 2000) val text: String
+)

@@ -5,7 +5,7 @@ import com.racketmatch.data.remote.dto.toDomain
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.OpenSession
 import com.racketmatch.domain.repository.OpenSessionRepository
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 class OpenSessionRepositoryImpl(
     private val openSessionApi: OpenSessionApi,

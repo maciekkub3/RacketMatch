@@ -208,7 +208,7 @@ val mockRepositoryModule = module {
                 tokenStorage.currentUserId = MY_ID
                 return AuthResult("mock-access-token", "mock-refresh-token", MOCK_USER)
             }
-            override suspend fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, sports: List<Sport>): AuthResult {
+            override suspend fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, hasPlayerProfile: Boolean, sports: List<Sport>): AuthResult {
                 tokenStorage.saveTokens("mock-access-token", "mock-refresh-token")
                 tokenStorage.currentUserId = MY_ID
                 val eloMap = sports.associate { it.name to 1200 }
@@ -428,6 +428,8 @@ val mockRepositoryModule = module {
                 CoachBooking(bookingId, "me", "player", null, null, Instant.DISTANT_PAST, Instant.DISTANT_PAST, null, "CONFIRMED")
             override suspend fun declineBooking(bookingId: String): CoachBooking =
                 CoachBooking(bookingId, "me", "player", null, null, Instant.DISTANT_PAST, Instant.DISTANT_PAST, null, "DECLINED")
+            override suspend fun updateMyCoachProfile(bio: String?, sports: List<Sport>?, trainingLocations: List<String>): CoachProfile =
+                MOCK_COACHES.first().copy(trainingLocations = trainingLocations)
         }
     }
 
@@ -523,6 +525,13 @@ val mockRepositoryModule = module {
                 return currentProfile
             }
             override suspend fun uploadAvatar(imageBytes: ByteArray): String = ""
+            override suspend fun activateRole(activateCoach: Boolean?, activatePlayerProfile: Boolean?): User {
+                currentProfile = currentProfile.copy(
+                    isCoach = activateCoach ?: currentProfile.isCoach,
+                    hasPlayerProfile = activatePlayerProfile ?: currentProfile.hasPlayerProfile
+                )
+                return currentProfile
+            }
         }
     }
 

@@ -10,7 +10,7 @@ interface CoachProfileRepository : JpaRepository<CoachProfileEntity, UUID> {
 
     @Query("""
         SELECT c FROM CoachProfileEntity c
-        WHERE c.user.city = :city
+        WHERE :city = '' OR c.user.city = :city
     """)
     fun findByCity(@Param("city") city: String): List<CoachProfileEntity>
 }

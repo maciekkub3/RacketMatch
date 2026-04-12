@@ -1,6 +1,7 @@
 package com.racketmatch.ui.players
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -27,9 +28,14 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.domain.repository.FriendRepository
+import com.racketmatch.domain.repository.MatchRepository
+import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -43,17 +49,38 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val friendRepo: FriendRepository = koinInject()
+        val matchRepo: MatchRepository = koinInject()
+        val tokenStorage: TokenStorage = koinInject()
         var isFriend by remember { mutableStateOf(initialIsFriend) }
         var requestSent by remember { mutableStateOf(false) }
+        var showChallengeDialog by remember { mutableStateOf(false) }
+        var challengeSent by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
         LaunchedEffect(player.id) {
-            if (!initialIsFriend) {
-                try {
-                    val friends = friendRepo.getFriends()
-                    isFriend = friends.any { it.id == player.id }
-                } catch (_: Exception) {}
-            }
+            try {
+                val friends = friendRepo.getFriends()
+                isFriend = friends.any { it.id == player.id }
+                if (!isFriend) {
+                    val sent = friendRepo.getSentRequests()
+                    requestSent = sent.any { it.toUserId == player.id }
+                }
+            } catch (_: Exception) {}
+        }
+
+        if (showChallengeDialog) {
+            ProfileChallengeDialog(
+                playerName = player.displayName,
+                availableSports = player.sports.ifEmpty { listOf(Sport.TENNIS) },
+                onConfirm = { type, sport ->
+                    showChallengeDialog = false
+                    scope.launch {
+                        runCatching { matchRepo.sendChallenge(player.id, type, sport) }
+                        challengeSent = true
+                    }
+                },
+                onDismiss = { showChallengeDialog = false }
+            )
         }
 
         val total = player.wins + player.losses
@@ -94,15 +121,15 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
 
                     // Avatar
                     Box {
-                        Box(
-                            modifier = Modifier.size(88.dp).clip(RoundedCornerShape(24.dp))
-                                .background(ProCircuit.SurfaceHigh),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(player.displayName.take(1).uppercase(),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 36.sp, color = ProCircuit.Lime)
-                        }
+                        UserAvatar(
+                            displayName = player.displayName,
+                            avatarUrl = player.avatarUrl,
+                            size = 88.dp,
+                            shape = RoundedCornerShape(24.dp),
+                            bgColor = ProCircuit.SurfaceHigh,
+                            textColor = ProCircuit.Lime,
+                            fontSize = 36.sp
+                        )
                         if (player.isMaster) {
                             Box(modifier = Modifier.align(Alignment.BottomEnd)
                                 .clip(CircleShape).background(ProCircuit.Tertiary).padding(5.dp)) {
@@ -122,9 +149,11 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                     Text(player.city.uppercase(), fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
                     Spacer(Modifier.height(16.dp))
-                    when {
-                        isFriend -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(
+
+                    // Friend status row
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        when {
+                            isFriend -> Box(
                                 modifier = Modifier.clip(RoundedCornerShape(12.dp))
                                     .background(ProCircuit.SurfaceLow)
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -132,26 +161,70 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                                 Text("Znajomy ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp, color = ProCircuit.Lime)
                             }
+                            requestSent -> Box(
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(ProCircuit.SurfaceLow)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text("Zaproszenie wysłane ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp, color = ProCircuit.OnSurface)
+                            }
+                            else -> Button(
+                                onClick = {
+                                    scope.launch {
+                                        try { friendRepo.sendRequest(player.id); requestSent = true }
+                                        catch (_: Exception) {}
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime)
+                            ) {
+                                Text("+ Dodaj", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = ProCircuit.Bg)
+                            }
                         }
-                        requestSent -> Box(
-                            modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.SurfaceLow)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text("Zaproszenie wysłane ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp, color = ProCircuit.OnSurface)
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Action buttons row
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (challengeSent) {
+                            Box(
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(ProCircuit.SurfaceLow)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                Text("Wyzwanie wysłane ✓", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.Bold, fontSize = 12.sp, color = ProCircuit.Lime)
+                            }
+                        } else {
+                            Button(
+                                onClick = { showChallengeDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.OnBg)
+                            ) {
+                                Text("⚔ Wyzwij", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            }
                         }
-                        else -> Button(
-                            onClick = {
-                                scope.launch {
-                                    try { friendRepo.sendRequest(player.id); requestSent = true }
-                                    catch (_: Exception) {}
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime)
-                        ) {
-                            Text("+ Dodaj do znajomych", fontFamily = AppFontFamily,
-                                fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = ProCircuit.Bg)
+                        if (isFriend) {
+                            Button(
+                                onClick = {
+                                    val myId = tokenStorage.currentUserId ?: return@Button
+                                    val convId = minOf(myId, player.id) + "_" + maxOf(myId, player.id)
+                                    (navigator.parent?.parent ?: navigator).push(
+                                        DmChatScreen(
+                                            conversationId = convId,
+                                            currentUserId = myId,
+                                            otherUserName = player.displayName,
+                                            otherUserAvatarUrl = player.avatarUrl
+                                        )
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.OnBg)
+                            ) {
+                                Text("💬 Chat", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -181,7 +254,7 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
                     .clip(RoundedCornerShape(16.dp)).background(ProCircuit.SurfaceLow)
                     .padding(16.dp)) {
-                    Text("BIO", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                    Text("O MNIE", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                         fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
                     Spacer(Modifier.height(8.dp))
                     Text(player.bio!!, fontFamily = AppBodyFontFamily, fontSize = 13.sp,
@@ -192,7 +265,7 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
             // ELO per sport
             if (player.eloPerSport.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
-                Text("ELO PER SPORT", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                Text("ELO NA SPORT", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                     fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
                     modifier = Modifier.padding(horizontal = 24.dp))
                 Spacer(Modifier.height(10.dp))
@@ -228,7 +301,7 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                                 .background(ProCircuit.SurfaceHigh)
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text("$emoji ${sport.name}", fontFamily = AppFontFamily,
+                            Text("$emoji ${if (sport == Sport.TENNIS) "Tenis" else "Padel"}", fontFamily = AppFontFamily,
                                 fontWeight = FontWeight.Bold, fontSize = 11.sp, color = ProCircuit.OnBg)
                         }
                     }
@@ -239,6 +312,78 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
         }
         } // end Scaffold
     }
+}
+
+@Composable
+private fun ProfileChallengeDialog(
+    playerName: String,
+    availableSports: List<Sport>,
+    onConfirm: (MatchType, Sport) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedType by remember { mutableStateOf(MatchType.CASUAL) }
+    var selectedSport by remember { mutableStateOf(availableSports.firstOrNull() ?: Sport.TENNIS) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ProCircuit.SurfaceLow,
+        title = {
+            Text("Wyzwij $playerName", fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black, fontSize = 18.sp, color = ProCircuit.OnBg)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(MatchType.CASUAL to "TOWARZYSKI", MatchType.RANKED to "RANKINGOWY").forEach { (type, label) ->
+                        val selected = selectedType == type
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                                .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+                                .clickable { selectedType = type }
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                        ) {
+                            Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp, letterSpacing = 1.sp,
+                                color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
+                        }
+                    }
+                }
+                if (availableSports.size > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        availableSports.forEach { sport ->
+                            val label = when (sport) { Sport.TENNIS -> "🎾 Tenis"; Sport.PADEL -> "🏸 Padel" }
+                            val selected = selectedSport == sport
+                            Box(
+                                modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                                    .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+                                    .clickable { selectedSport = sport }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(selectedType, selectedSport) },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+            ) {
+                Text("WYŚLIJ WYZWANIE", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 12.sp, letterSpacing = 1.sp)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp, color = ProCircuit.OnSurface)
+            }
+        }
+    )
 }
 
 @Composable

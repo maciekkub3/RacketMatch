@@ -5,6 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import cafe.adriel.voyager.navigator.Navigator
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.network.ktor2.KtorNetworkFetcherFactory
 import com.racketmatch.android.BuildConfig
 import com.racketmatch.ui.navigation.SplashScreen
 import com.racketmatch.ui.theme.AppTheme
@@ -14,6 +17,8 @@ import com.racketmatch.di.apiModule
 import com.racketmatch.di.networkModule
 import com.racketmatch.di.repositoryModule
 import com.racketmatch.di.viewModelModule
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.defaultRequest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.getKoin
 import org.koin.android.ext.koin.androidContext
@@ -36,8 +41,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        SingletonImageLoader.setSafe { context ->
+            ImageLoader.Builder(context)
+                .components {
+                    add(KtorNetworkFetcherFactory(httpClient = {
+                        HttpClient {
+                            defaultRequest {
+                                headers.append("ngrok-skip-browser-warning", "true")
+                            }
+                        }
+                    }))
+                }
+                .build()
+        }
+
         val tokenStorage = getKoin().get<TokenStorage>()
         ThemeState.isDark = tokenStorage.isDarkTheme
+        getKoin().get<com.racketmatch.data.realtime.NotificationEventBus>().start()
         lifecycleScope.launch {
             tokenStorage.loginVersionFlow.collect { version ->
                 if (version > 0) registerFcmToken()

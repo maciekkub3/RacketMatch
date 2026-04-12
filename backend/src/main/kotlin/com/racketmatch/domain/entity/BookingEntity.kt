@@ -19,6 +19,13 @@ class BookingEntity(
     @JoinColumn(name = "player_id")
     val player: UserEntity,
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "service_id")
+    var service: CoachServiceEntity? = null,
+
+    @Column(name = "duration_minutes")
+    var durationMinutes: Int? = null,
+
     @Column(name = "starts_at", nullable = false)
     val startsAt: Instant,
 

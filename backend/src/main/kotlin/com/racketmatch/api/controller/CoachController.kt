@@ -151,6 +151,8 @@ class CoachController(
         val coachId = UUID.fromString(authentication.name)
         val profile = coachProfileRepository.findById(coachId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+        req.bio?.let { profile.bio = it.ifBlank { null } }
+        req.sports?.let { profile.sports = it.toMutableList() }
         req.trainingLocations?.let { profile.trainingLocations = it.toMutableList() }
         val saved = coachProfileRepository.save(profile)
         val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId)

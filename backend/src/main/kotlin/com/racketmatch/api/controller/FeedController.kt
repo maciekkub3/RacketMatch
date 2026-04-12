@@ -21,7 +21,8 @@ class FeedController(
     ): List<FeedEventDto> {
         val userId = UUID.fromString(authentication.name)
 
-        val friendIds = friendRequestRepository.findAcceptedByUser(userId).map { req ->
+        val friendRequests = friendRequestRepository.findAcceptedByUser(userId)
+        val friendIds = friendRequests.map { req ->
             if (req.fromUser.id == userId) req.toUser.id!! else req.fromUser.id!!
         }.toSet()
 
@@ -30,7 +31,7 @@ class FeedController(
         val events = mutableListOf<FeedEventDto>()
 
         // Add FRIEND_ADDED events for recently formed friendships
-        friendRequestRepository.findAcceptedByUser(userId).forEach { req ->
+        friendRequests.forEach { req ->
             val actor = if (req.fromUser.id == userId) req.toUser else req.fromUser
             val other = if (req.fromUser.id == userId) req.fromUser else req.toUser
             events.add(FeedEventDto(
@@ -47,7 +48,7 @@ class FeedController(
         // Add match events for friends' completed matches
         friendIds.forEach { friendId ->
             matchRepository.findRecentByUserId(friendId)
-                .filter { it.status == "COMPLETED" && it.scoreChallenger != null }
+                .filter { it.status == "COMPLETED" && it.scoreChallenger != null && it.scoreChallenged != null }
                 .forEach { match ->
                     val friendIsChallenger = match.challenger.id == friendId
                     val friendScore = if (friendIsChallenger) match.scoreChallenger!! else match.scoreChallenged!!

@@ -27,4 +27,6 @@ interface BookingRepository : JpaRepository<BookingEntity, UUID> {
         @Param("from") from: Instant,
         @Param("to") to: Instant
     ): List<BookingEntity>
+
+    fun findByCoachIdAndStatus(coachId: UUID, status: String): List<BookingEntity>
 }
