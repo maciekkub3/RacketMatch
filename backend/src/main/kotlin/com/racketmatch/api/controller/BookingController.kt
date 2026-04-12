@@ -136,6 +136,97 @@ class BookingController(
         return saved.toDto(viewerId = coachId)
     }
 
+    @PostMapping("/{id}/cancel")
+    @Transactional
+    fun cancelBooking(
+        authentication: Authentication,
+        @PathVariable id: UUID,
+        @RequestBody(required = false) request: CancelBookingRequest?
+    ): BookingDto {
+        val userId = UUID.fromString(authentication.name)
+        val booking = bookingRepository.findById(id)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found") }
+        if (booking.coach.id != userId && booking.player.id != userId)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not a participant")
+        if (booking.status !in setOf("PENDING", "CONFIRMED"))
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Booking cannot be cancelled in status ${booking.status}")
+
+        val now = Instant.now()
+        val cutoff = booking.startsAt.minusSeconds(24 * 60 * 60)
+        val isLate = now.isAfter(cutoff)
+        val reason = request?.reason?.takeIf { it.isNotBlank() }
+        if (isLate && reason == null)
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Reason required for late cancellation")
+
+        booking.status = "CANCELLED"
+        booking.cancelReason = reason
+        booking.lateCancel = isLate
+        booking.updatedAt = now
+        val saved = bookingRepository.save(booking)
+
+        val otherPartyId = if (userId == booking.player.id) booking.coach.id!! else booking.player.id!!
+        val actorName = if (userId == booking.player.id) booking.player.displayName else booking.coach.displayName
+        notificationService.send(
+            recipientId = otherPartyId,
+            type = "BOOKING_CANCELLED",
+            title = "Rezerwacja anulowana",
+            body = "$actorName anulował rezerwację",
+            data = mapOf("bookingId" to saved.id.toString())
+        )
+        return saved.toDto(viewerId = userId)
+    }
+
+    @PostMapping("/{id}/counter")
+    @Transactional
+    fun counterBooking(
+        authentication: Authentication,
+        @PathVariable id: UUID,
+        @RequestBody request: CounterBookingRequest
+    ): BookingDto {
+        val userId = UUID.fromString(authentication.name)
+        val old = bookingRepository.findById(id)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found") }
+        if (old.coach.id != userId && old.player.id != userId)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not a participant")
+        if (old.status != "PENDING")
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Only pending bookings can be countered")
+
+        val now = Instant.now()
+        old.status = "DECLINED"
+        old.declineReason = "countered"
+        old.updatedAt = now
+        bookingRepository.save(old)
+
+        val conversationId = old.conversationId
+            ?: dmService.conversationIdOf(old.player.id!!, old.coach.id!!)
+        val new = bookingRepository.save(
+            BookingEntity(
+                coach = old.coach,
+                player = old.player,
+                service = old.service,
+                startsAt = request.startsAt,
+                endsAt = request.endsAt,
+                durationMinutes = request.durationMinutes ?: old.durationMinutes,
+                playerNote = old.playerNote,
+                conversationId = conversationId,
+                previousBookingId = old.id,
+                updatedAt = now
+            )
+        )
+        dmService.sendBookingCard(conversationId, senderId = userId, bookingId = new.id!!)
+
+        val otherPartyId = if (userId == old.player.id) old.coach.id!! else old.player.id!!
+        val proposerName = if (userId == old.player.id) old.player.displayName else old.coach.displayName
+        notificationService.send(
+            recipientId = otherPartyId,
+            type = "BOOKING_COUNTER",
+            title = "Nowa propozycja terminu",
+            body = "$proposerName zaproponował inny termin",
+            data = mapOf("bookingId" to new.id.toString(), "previousBookingId" to old.id.toString())
+        )
+        return new.toDto(viewerId = userId)
+    }
+
     private fun findBookingForCoach(bookingId: UUID, userId: String): BookingEntity {
         val booking = bookingRepository.findById(bookingId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found") }
