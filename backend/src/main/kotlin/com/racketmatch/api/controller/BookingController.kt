@@ -72,7 +72,24 @@ class BookingController(
     @GetMapping("/me")
     fun getMyBookings(authentication: Authentication): List<BookingDto> {
         val userId = UUID.fromString(authentication.name)
-        return bookingRepository.findByUserId(userId).map { it.toDto() }
+        return bookingRepository.findByUserId(userId).map { it.toDto(viewerId = userId) }
+    }
+
+    @GetMapping
+    fun listBookings(
+        authentication: Authentication,
+        @RequestParam(required = false) segment: String?
+    ): List<BookingDto> {
+        val userId = UUID.fromString(authentication.name)
+        val now = Instant.now()
+        val items = when (segment?.lowercase()) {
+            "pending" -> bookingRepository.findPendingForUser(userId)
+            "confirmed" -> bookingRepository.findConfirmedUpcomingForUser(userId, now)
+            "history" -> bookingRepository.findHistoryForUser(userId, now)
+            null, "" -> bookingRepository.findByUserId(userId)
+            else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown segment: $segment")
+        }
+        return items.map { it.toDto(viewerId = userId) }
     }
 
     @GetMapping("/coach/pending")
