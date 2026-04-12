@@ -65,6 +65,7 @@ class NotificationEventBus(
         var bumpMatches = false
         var bumpFriends = false
         var bumpDm = false
+        var bumpBookings = false
         for (item in newItems) {
             when (item.type) {
                 NotificationType.CHALLENGE_RECEIVED,
@@ -82,11 +83,23 @@ class NotificationEventBus(
 
                 NotificationType.NEW_MESSAGE -> bumpDm = true
 
+                NotificationType.BOOKING_REQUEST,
+                NotificationType.BOOKING_CONFIRMED,
+                NotificationType.BOOKING_DECLINED,
+                NotificationType.BOOKING_COUNTER,
+                NotificationType.BOOKING_CANCELLED,
+                NotificationType.BOOKING_REMINDER -> {
+                    bumpBookings = true
+                    // BOOKING_CARD in DM re-renders off live booking state
+                    bumpDm = true
+                }
+
                 else -> {}
             }
         }
         if (bumpMatches) tokenStorage.incrementMatchesVersion()
         if (bumpFriends) tokenStorage.incrementFriendsVersion()
         if (bumpDm) tokenStorage.incrementDmVersion()
+        if (bumpBookings) tokenStorage.incrementBookingsVersion()
     }
 }

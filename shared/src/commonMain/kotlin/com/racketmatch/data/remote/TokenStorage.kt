@@ -17,11 +17,13 @@ interface TokenStorage {
     val profileVersionFlow: StateFlow<Int>
     val friendsVersionFlow: StateFlow<Int>
     val dmVersionFlow: StateFlow<Int>
+    val bookingsVersionFlow: StateFlow<Int>
     fun saveTokens(access: String, refresh: String)
     fun incrementMatchesVersion()
     fun incrementProfileVersion()
     fun incrementFriendsVersion()
     fun incrementDmVersion()
+    fun incrementBookingsVersion()
     fun clear()
 }
 
@@ -51,6 +53,9 @@ open class InMemoryTokenStorage : TokenStorage {
     private val _dmVersionFlow = kotlinx.coroutines.flow.MutableStateFlow(0)
     override val dmVersionFlow: StateFlow<Int> = _dmVersionFlow
 
+    private val _bookingsVersionFlow = kotlinx.coroutines.flow.MutableStateFlow(0)
+    override val bookingsVersionFlow: StateFlow<Int> = _bookingsVersionFlow
+
     override fun saveTokens(access: String, refresh: String) {
         accessToken = access
         refreshToken = refresh
@@ -71,6 +76,10 @@ open class InMemoryTokenStorage : TokenStorage {
 
     override fun incrementDmVersion() {
         _dmVersionFlow.value++
+    }
+
+    override fun incrementBookingsVersion() {
+        _bookingsVersionFlow.value++
     }
 
     override fun clear() {
