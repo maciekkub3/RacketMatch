@@ -1,12 +1,21 @@
 package com.racketmatch.data.repository
 
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.data.remote.api.CoachApi
 import com.racketmatch.data.remote.dto.*
 import com.racketmatch.domain.model.*
 import com.racketmatch.domain.repository.CoachRepository
 import kotlin.time.Instant
 
-class CoachRepositoryImpl(private val coachApi: CoachApi) : CoachRepository {
+class CoachRepositoryImpl(
+    private val coachApi: CoachApi,
+    private val tokenStorage: TokenStorage
+) : CoachRepository {
+
+    private fun bumpBookings() {
+        tokenStorage.incrementBookingsVersion()
+        tokenStorage.incrementDmVersion()
+    }
 
     // Player-facing
     override suspend fun getCoaches(city: String): List<CoachProfile> =
@@ -21,16 +30,20 @@ class CoachRepositoryImpl(private val coachApi: CoachApi) : CoachRepository {
     override suspend fun getAvailability(coachId: String, from: Instant, to: Instant): List<BookingSlot> =
         coachApi.getAvailability(coachId, from, to).map { it.toDomain() }
 
-    override suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int): CoachBooking =
-        coachApi.createBooking(
+    override suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?): CoachBooking {
+        val result = coachApi.createBooking(
             CreateBookingRequestDto(
                 coachId = coachId,
                 serviceId = serviceId,
                 startsAt = startsAt.toString(),
                 endsAt = endsAt.toString(),
-                durationMinutes = durationMinutes
+                durationMinutes = durationMinutes,
+                playerNote = playerNote
             )
         ).toDomain()
+        bumpBookings()
+        return result
+    }
 
     // Coach-facing — services
     override suspend fun getMyServices(): List<CoachService> =
@@ -78,11 +91,39 @@ class CoachRepositoryImpl(private val coachApi: CoachApi) : CoachRepository {
     override suspend fun getMyBookings(): List<CoachBooking> =
         coachApi.getMyBookings().map { it.toDomain() }
 
-    override suspend fun confirmBooking(bookingId: String): CoachBooking =
-        coachApi.confirmBooking(bookingId).toDomain()
+    override suspend fun listBookings(segment: String?): List<CoachBooking> =
+        coachApi.listBookings(segment).map { it.toDomain() }
 
-    override suspend fun declineBooking(bookingId: String): CoachBooking =
-        coachApi.declineBooking(bookingId).toDomain()
+    override suspend fun confirmBooking(bookingId: String): CoachBooking {
+        val result = coachApi.confirmBooking(bookingId).toDomain()
+        bumpBookings()
+        return result
+    }
+
+    override suspend fun declineBooking(bookingId: String, reason: String?): CoachBooking {
+        val result = coachApi.declineBooking(bookingId, reason).toDomain()
+        bumpBookings()
+        return result
+    }
+
+    override suspend fun cancelBooking(bookingId: String, reason: String?): CoachBooking {
+        val result = coachApi.cancelBooking(bookingId, reason).toDomain()
+        bumpBookings()
+        return result
+    }
+
+    override suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int?): CoachBooking {
+        val result = coachApi.counterBooking(
+            bookingId,
+            CounterBookingRequestDto(
+                startsAt = startsAt.toString(),
+                endsAt = endsAt.toString(),
+                durationMinutes = durationMinutes
+            )
+        ).toDomain()
+        bumpBookings()
+        return result
+    }
 
     // Coach-facing — profile / booking settings
     override suspend fun getMyCoachProfile(): CoachProfile =

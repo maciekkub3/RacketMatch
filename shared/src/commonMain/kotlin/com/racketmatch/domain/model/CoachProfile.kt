@@ -61,7 +61,20 @@ data class CoachBooking(
     val startsAt: Instant,
     val endsAt: Instant,
     val durationMinutes: Int?,
-    val status: String
+    val status: String,
+    val playerNote: String? = null,
+    val declineReason: String? = null,
+    val cancelReason: String? = null,
+    val lateCancel: Boolean = false,
+    val conversationId: String? = null,
+    val previousBookingId: String? = null,
+    val otherParty: UserSummary? = null
+)
+
+data class UserSummary(
+    val id: String,
+    val displayName: String,
+    val avatarUrl: String?
 )
 
 data class CoachWeeklyAvailability(

@@ -99,7 +99,7 @@ val repositoryModule = module {
     single<PlayerRepository> { PlayerRepositoryImpl(get()) }
     single<MatchRepository> { MatchRepositoryImpl(get(), get()) }
     single<ChatRepository> { ChatRepositoryImpl(get()) }
-    single<CoachRepository> { CoachRepositoryImpl(get()) }
+    single<CoachRepository> { CoachRepositoryImpl(get(), get()) }
     single<PaymentRepository> { PaymentRepositoryImpl(get()) }
     single<ProfileRepository> { ProfileRepositoryImpl(get()) }
     single<CourtRepository> { CourtRepositoryImpl(get()) }

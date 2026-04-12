@@ -86,11 +86,31 @@ class CoachApi(private val client: HttpClient) {
     suspend fun getMyBookings(): List<CoachBookingDto> =
         client.get("api/bookings/me").body()
 
-    suspend fun confirmBooking(bookingId: String): CoachBookingDto =
-        client.put("api/bookings/$bookingId/confirm").body()
+    suspend fun listBookings(segment: String? = null): List<CoachBookingDto> =
+        client.get("api/bookings") {
+            if (segment != null) parameter("segment", segment)
+        }.body()
 
-    suspend fun declineBooking(bookingId: String): CoachBookingDto =
-        client.put("api/bookings/$bookingId/decline").body()
+    suspend fun confirmBooking(bookingId: String): CoachBookingDto =
+        client.post("api/bookings/$bookingId/confirm").body()
+
+    suspend fun declineBooking(bookingId: String, reason: String? = null): CoachBookingDto =
+        client.post("api/bookings/$bookingId/decline") {
+            contentType(ContentType.Application.Json)
+            setBody(DeclineBookingRequestDto(reason))
+        }.body()
+
+    suspend fun cancelBooking(bookingId: String, reason: String? = null): CoachBookingDto =
+        client.post("api/bookings/$bookingId/cancel") {
+            contentType(ContentType.Application.Json)
+            setBody(CancelBookingRequestDto(reason))
+        }.body()
+
+    suspend fun counterBooking(bookingId: String, request: CounterBookingRequestDto): CoachBookingDto =
+        client.post("api/bookings/$bookingId/counter") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
 
     // Coach-facing — profile / booking settings
     suspend fun getMyCoachProfile(): CoachProfileDto =
