@@ -11,7 +11,9 @@ data class DirectMessageDto(
     val senderId: UUID,
     val text: String,
     val sentAt: Long,
-    val readAt: Long?
+    val readAt: Long?,
+    val messageType: String,
+    val refId: UUID?
 )
 
 fun DirectMessageEntity.toDto() = DirectMessageDto(
@@ -20,7 +22,9 @@ fun DirectMessageEntity.toDto() = DirectMessageDto(
     senderId = sender.id!!,
     text = text,
     sentAt = sentAt.toEpochMilli(),
-    readAt = readAt?.toEpochMilli()
+    readAt = readAt?.toEpochMilli(),
+    messageType = messageType,
+    refId = refId
 )
 
 data class ConversationDto(

@@ -29,5 +29,11 @@ class DirectMessageEntity(
     val sentAt: Instant = Instant.now(),
 
     @Column(name = "read_at")
-    var readAt: Instant? = null
+    var readAt: Instant? = null,
+
+    @Column(name = "message_type", nullable = false)
+    var messageType: String = "TEXT",
+
+    @Column(name = "ref_id")
+    var refId: UUID? = null
 )
