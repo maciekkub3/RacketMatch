@@ -9,12 +9,14 @@ import com.racketmatch.domain.repository.BookingRepository
 import com.racketmatch.domain.repository.CoachCalendarEventRepository
 import com.racketmatch.domain.repository.CoachServiceRepository
 import com.racketmatch.domain.repository.UserRepository
+import com.racketmatch.service.DmService
 import com.racketmatch.service.NotificationService
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import java.time.Instant
 import java.util.UUID
 
 @RestController
@@ -24,7 +26,8 @@ class BookingController(
     private val userRepository: UserRepository,
     private val coachServiceRepository: CoachServiceRepository,
     private val calendarRepository: CoachCalendarEventRepository,
-    private val notificationService: NotificationService
+    private val notificationService: NotificationService,
+    private val dmService: DmService
 ) {
 
     @PostMapping
@@ -38,6 +41,7 @@ class BookingController(
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach not found") }
         val service = coachServiceRepository.findById(request.serviceId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Service not found") }
+        val conversationId = dmService.conversationIdOf(playerId, request.coachId)
         val saved = bookingRepository.save(
             BookingEntity(
                 coach = coach,
@@ -45,9 +49,13 @@ class BookingController(
                 service = service,
                 startsAt = request.startsAt,
                 endsAt = request.endsAt,
-                durationMinutes = request.durationMinutes
+                durationMinutes = request.durationMinutes,
+                playerNote = request.playerNote?.takeIf { it.isNotBlank() },
+                conversationId = conversationId,
+                updatedAt = Instant.now()
             )
         )
+        dmService.sendBookingCard(conversationId, senderId = playerId, bookingId = saved.id!!)
         notificationService.send(
             recipientId = request.coachId,
             type = "BOOKING_REQUEST",
@@ -55,7 +63,7 @@ class BookingController(
             body = service.name,
             data = mapOf("bookingId" to saved.id.toString())
         )
-        return saved.toDto()
+        return saved.toDto(viewerId = playerId)
     }
 
     @GetMapping("/me")

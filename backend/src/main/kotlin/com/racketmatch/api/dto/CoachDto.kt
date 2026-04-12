@@ -60,7 +60,22 @@ data class CreateBookingRequest(
     val serviceId: UUID,
     val startsAt: Instant,
     val endsAt: Instant,
-    val durationMinutes: Int
+    val durationMinutes: Int,
+    val playerNote: String? = null
+)
+
+data class DeclineBookingRequest(
+    val reason: String? = null
+)
+
+data class CancelBookingRequest(
+    val reason: String? = null
+)
+
+data class CounterBookingRequest(
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val durationMinutes: Int? = null
 )
 
 data class BookingDto(
@@ -72,7 +87,20 @@ data class BookingDto(
     val startsAt: Instant,
     val endsAt: Instant,
     val durationMinutes: Int?,
-    val status: String
+    val status: String,
+    val playerNote: String?,
+    val declineReason: String?,
+    val cancelReason: String?,
+    val lateCancel: Boolean,
+    val conversationId: String?,
+    val previousBookingId: UUID?,
+    val otherParty: UserSummaryDto? = null
+)
+
+data class UserSummaryDto(
+    val id: UUID,
+    val displayName: String,
+    val avatarUrl: String?
 )
 
 data class CalendarEventDto(
@@ -156,17 +184,33 @@ fun CoachServiceEntity.toDto() = CoachServiceDto(
     isActive = isActive
 )
 
-fun BookingEntity.toDto() = BookingDto(
-    id = id!!,
-    coachId = coach.id!!,
-    playerId = player.id!!,
-    serviceId = service?.id,
-    serviceName = service?.name,
-    startsAt = startsAt,
-    endsAt = endsAt,
-    durationMinutes = durationMinutes,
-    status = status
-)
+fun BookingEntity.toDto(viewerId: UUID? = null): BookingDto {
+    val other = when (viewerId) {
+        coach.id -> player
+        player.id -> coach
+        else -> null
+    }
+    return BookingDto(
+        id = id!!,
+        coachId = coach.id!!,
+        playerId = player.id!!,
+        serviceId = service?.id,
+        serviceName = service?.name,
+        startsAt = startsAt,
+        endsAt = endsAt,
+        durationMinutes = durationMinutes,
+        status = status,
+        playerNote = playerNote,
+        declineReason = declineReason,
+        cancelReason = cancelReason,
+        lateCancel = lateCancel,
+        conversationId = conversationId,
+        previousBookingId = previousBookingId,
+        otherParty = other?.let {
+            UserSummaryDto(id = it.id!!, displayName = it.displayName, avatarUrl = it.avatarUrl)
+        }
+    )
+}
 
 fun CoachAvailabilityEntity.toDto() = CoachAvailabilityDto(
     dayOfWeek = dayOfWeek,
