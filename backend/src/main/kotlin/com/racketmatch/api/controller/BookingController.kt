@@ -1,7 +1,10 @@
 package com.racketmatch.api.controller
 
 import com.racketmatch.api.dto.BookingDto
+import com.racketmatch.api.dto.CancelBookingRequest
+import com.racketmatch.api.dto.CounterBookingRequest
 import com.racketmatch.api.dto.CreateBookingRequest
+import com.racketmatch.api.dto.DeclineBookingRequest
 import com.racketmatch.api.dto.toDto
 import com.racketmatch.domain.entity.BookingEntity
 import com.racketmatch.domain.entity.CoachCalendarEventEntity
@@ -78,13 +81,15 @@ class BookingController(
         return bookingRepository.findByCoachIdAndStatus(coachId, "PENDING").map { it.toDto() }
     }
 
-    @PutMapping("/{id}/confirm")
+    @PostMapping("/{id}/confirm")
     @Transactional
     fun confirmBooking(authentication: Authentication, @PathVariable id: UUID): BookingDto {
+        val coachId = UUID.fromString(authentication.name)
         val booking = findBookingForCoach(id, authentication.name)
         if (booking.status != "PENDING")
             throw ResponseStatusException(HttpStatus.CONFLICT, "Booking is not pending")
         booking.status = "CONFIRMED"
+        booking.updatedAt = Instant.now()
         val saved = bookingRepository.save(booking)
         calendarRepository.save(
             CoachCalendarEventEntity(
@@ -103,16 +108,23 @@ class BookingController(
             body = "${booking.service?.name ?: "Sesja"} — ${booking.coach.displayName}",
             data = mapOf("bookingId" to saved.id.toString())
         )
-        return saved.toDto()
+        return saved.toDto(viewerId = coachId)
     }
 
-    @PutMapping("/{id}/decline")
+    @PostMapping("/{id}/decline")
     @Transactional
-    fun declineBooking(authentication: Authentication, @PathVariable id: UUID): BookingDto {
+    fun declineBooking(
+        authentication: Authentication,
+        @PathVariable id: UUID,
+        @RequestBody(required = false) request: DeclineBookingRequest?
+    ): BookingDto {
+        val coachId = UUID.fromString(authentication.name)
         val booking = findBookingForCoach(id, authentication.name)
         if (booking.status != "PENDING")
             throw ResponseStatusException(HttpStatus.CONFLICT, "Booking is not pending")
         booking.status = "DECLINED"
+        booking.declineReason = request?.reason?.takeIf { it.isNotBlank() }
+        booking.updatedAt = Instant.now()
         val saved = bookingRepository.save(booking)
         notificationService.send(
             recipientId = booking.player.id!!,
@@ -121,19 +133,7 @@ class BookingController(
             body = "${booking.service?.name ?: "Sesja"} — ${booking.coach.displayName}",
             data = mapOf("bookingId" to saved.id.toString())
         )
-        return saved.toDto()
-    }
-
-    @DeleteMapping("/{id}/cancel")
-    @Transactional
-    fun cancelBooking(authentication: Authentication, @PathVariable id: UUID): BookingDto {
-        val userId = UUID.fromString(authentication.name)
-        val booking = bookingRepository.findById(id)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found") }
-        if (booking.coach.id != userId && booking.player.id != userId)
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not a participant")
-        booking.status = "CANCELLED"
-        return bookingRepository.save(booking).toDto()
+        return saved.toDto(viewerId = coachId)
     }
 
     private fun findBookingForCoach(bookingId: UUID, userId: String): BookingEntity {
