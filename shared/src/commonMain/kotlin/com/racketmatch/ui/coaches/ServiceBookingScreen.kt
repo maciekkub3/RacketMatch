@@ -25,6 +25,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.BookingSlot
 import com.racketmatch.domain.model.CoachService
 import com.racketmatch.domain.model.PricingType
+import com.racketmatch.presentation.viewmodel.CoachDetailEffect
 import com.racketmatch.presentation.viewmodel.CoachDetailEvent
 import com.racketmatch.presentation.viewmodel.CoachDetailState
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
@@ -60,6 +61,14 @@ data class ServiceBookingScreen(
         var selectedDay    by remember { mutableStateOf(today) }
         var selectedSlot   by remember { mutableStateOf<BookingSlot?>(null) }
         var selectedDuration by remember { mutableStateOf(60) }
+        var playerNote by remember { mutableStateOf("") }
+        var showSuccess by remember { mutableStateOf(false) }
+
+        LaunchedEffect(Unit) {
+            viewModel.effectFlow.collect { eff ->
+                if (eff is CoachDetailEffect.BookingConfirmed) showSuccess = true
+            }
+        }
 
         val daysInMonth = remember(displayedYear, displayedMonth) {
             val first = LocalDate(displayedYear, displayedMonth, 1)
@@ -138,8 +147,7 @@ data class ServiceBookingScreen(
                     onConfirm = {
                         val slot = selectedSlot ?: return@BottomBookingBar
                         val actualEndsAt = slot.startsAt + selectedDuration.minutes
-                        viewModel.onEvent(CoachDetailEvent.BookSlot(service.id, slot.startsAt, actualEndsAt, selectedDuration))
-                        navigator.pop()
+                        viewModel.onEvent(CoachDetailEvent.BookSlot(service.id, slot.startsAt, actualEndsAt, selectedDuration, playerNote.ifBlank { null }))
                     }
                 )
             }
@@ -377,7 +385,76 @@ data class ServiceBookingScreen(
                         )
                     }
                 }
+
+                // Player note
+                item {
+                    Spacer(Modifier.height(20.dp))
+                    Text("NOTKA DLA TRENERA (OPCJONALNIE)", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
+                        modifier = Modifier.padding(horizontal = 20.dp))
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = playerNote,
+                        onValueChange = { playerNote = it },
+                        placeholder = { Text("np. Chcę popracować nad backhandem", fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                        minLines = 3,
+                        maxLines = 5,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ProCircuit.Lime,
+                            unfocusedBorderColor = ProCircuit.SurfaceHigh,
+                            focusedTextColor = ProCircuit.OnBg,
+                            unfocusedTextColor = ProCircuit.OnBg,
+                            cursorColor = ProCircuit.Lime
+                        )
+                    )
+                }
             }
+        }
+
+        if (showSuccess) {
+            BookingSuccessSheet(
+                onDismiss = {
+                    showSuccess = false
+                    navigator.pop()
+                },
+                onOpenBookings = {
+                    showSuccess = false
+                    navigator.pop()
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookingSuccessSheet(onDismiss: () -> Unit, onOpenBookings: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ProCircuit.SurfaceLow) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 48.sp, color = ProCircuit.Lime)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Prośba o rezerwację wysłana",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 20.sp, color = ProCircuit.OnBg
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Trener potwierdzi lub zaproponuje inny termin. Powiadomimy Cię.",
+                fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnSurface
+            )
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = onOpenBookings,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("OK", fontFamily = AppFontFamily, fontWeight = FontWeight.Black) }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

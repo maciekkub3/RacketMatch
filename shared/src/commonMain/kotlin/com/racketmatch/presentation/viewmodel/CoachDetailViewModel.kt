@@ -30,7 +30,7 @@ sealed class CoachDetailState {
 }
 
 sealed class CoachDetailEvent {
-    data class BookSlot(val serviceId: String, val startsAt: Instant, val endsAt: Instant, val durationMinutes: Int) : CoachDetailEvent()
+    data class BookSlot(val serviceId: String, val startsAt: Instant, val endsAt: Instant, val durationMinutes: Int, val playerNote: String? = null) : CoachDetailEvent()
     data class LoadSlots(val from: Instant, val to: Instant) : CoachDetailEvent()
 }
 
@@ -55,7 +55,7 @@ class CoachDetailViewModel(
 
     fun onEvent(event: CoachDetailEvent) {
         when (event) {
-            is CoachDetailEvent.BookSlot -> bookSlot(event.serviceId, event.startsAt, event.endsAt, event.durationMinutes)
+            is CoachDetailEvent.BookSlot -> bookSlot(event.serviceId, event.startsAt, event.endsAt, event.durationMinutes, event.playerNote)
             is CoachDetailEvent.LoadSlots -> loadSlots(event.from, event.to)
         }
     }
@@ -90,10 +90,10 @@ class CoachDetailViewModel(
         }
     }
 
-    private fun bookSlot(serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int) {
+    private fun bookSlot(serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?) {
         viewModelScope.launch(dispatcher) {
             try {
-                coachRepository.createBooking(coachId, serviceId, startsAt, endsAt, durationMinutes)
+                coachRepository.createBooking(coachId, serviceId, startsAt, endsAt, durationMinutes, playerNote)
                 _effects.emit(CoachDetailEffect.BookingConfirmed)
             } catch (e: Exception) {
                 _effects.emit(CoachDetailEffect.ShowError(e.toUserMessage()))
