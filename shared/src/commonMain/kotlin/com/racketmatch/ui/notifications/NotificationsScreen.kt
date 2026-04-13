@@ -144,7 +144,10 @@ private fun NotificationType.icon() = when (this) {
     NotificationType.NEW_MESSAGE -> Icons.AutoMirrored.Filled.Message
     NotificationType.BOOKING_REQUEST,
     NotificationType.BOOKING_CONFIRMED,
-    NotificationType.BOOKING_DECLINED -> Icons.Default.CalendarMonth
+    NotificationType.BOOKING_DECLINED,
+    NotificationType.BOOKING_COUNTER,
+    NotificationType.BOOKING_CANCELLED,
+    NotificationType.BOOKING_REMINDER -> Icons.Default.CalendarMonth
     NotificationType.UNKNOWN -> Icons.Default.Notifications
 }
 

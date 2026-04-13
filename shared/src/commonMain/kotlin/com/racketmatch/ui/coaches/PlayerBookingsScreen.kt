@@ -39,6 +39,7 @@ object PlayerBookingsScreen : Screen {
 
         var cancelTarget by remember { mutableStateOf<CoachBooking?>(null) }
         var counterTarget by remember { mutableStateOf<CoachBooking?>(null) }
+        var declineTarget by remember { mutableStateOf<CoachBooking?>(null) }
 
         LaunchedEffect(Unit) { viewModel.onIntent(PlayerBookingsIntent.Refresh) }
 
@@ -95,6 +96,8 @@ object PlayerBookingsScreen : Screen {
                                     BookingCard(booking = booking) {
                                         PlayerActions(
                                             booking = booking,
+                                            onConfirm = { viewModel.onIntent(PlayerBookingsIntent.Confirm(booking.id)) },
+                                            onDecline = { declineTarget = booking },
                                             onCancel = { cancelTarget = booking },
                                             onCounter = { counterTarget = booking },
                                             onWrite = {
@@ -119,6 +122,18 @@ object PlayerBookingsScreen : Screen {
             }
         }
 
+        declineTarget?.let { b ->
+            ReasonSheet(
+                title = "Odrzuć kontrofertę",
+                placeholder = "Powód (opcjonalnie)",
+                requireReason = false,
+                onDismiss = { declineTarget = null },
+                onConfirm = { reason ->
+                    viewModel.onIntent(PlayerBookingsIntent.Decline(b.id, reason.ifBlank { null }))
+                    declineTarget = null
+                }
+            )
+        }
         cancelTarget?.let { b ->
             val isLate = Clock.System.now() >= (b.startsAt - 24.hours)
             ReasonSheet(
@@ -149,28 +164,66 @@ object PlayerBookingsScreen : Screen {
 @Composable
 private fun PlayerActions(
     booking: CoachBooking,
+    onConfirm: () -> Unit,
+    onDecline: () -> Unit,
     onCancel: () -> Unit,
     onCounter: () -> Unit,
     onWrite: () -> Unit
 ) {
     when (booking.status) {
         "PENDING" -> {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onCounter,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) { Text("KONTROFERTA", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
-                OutlinedButton(
-                    onClick = onWrite,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
-                OutlinedButton(
-                    onClick = onCancel,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+            val isCounter = booking.previousBookingId != null
+            if (isCounter) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "↩ Trener zaproponował inny termin",
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp, color = ProCircuit.Lime
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = onConfirm,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp) }
+                        OutlinedButton(
+                            onClick = onDecline,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onCounter,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("KONTROFERTA", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                        OutlinedButton(
+                            onClick = onWrite,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                    }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onCounter,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("KONTROFERTA", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                    OutlinedButton(
+                        onClick = onWrite,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                    OutlinedButton(
+                        onClick = onCancel,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                }
             }
         }
         "CONFIRMED" -> {

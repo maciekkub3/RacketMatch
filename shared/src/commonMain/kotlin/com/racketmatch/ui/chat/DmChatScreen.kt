@@ -182,9 +182,25 @@ private fun DmMessageList(
 
                 item(message.id) {
                     if (message.messageType == "BOOKING_CARD") {
-                        val booking = message.refId?.let { bookingsById[it] }
-                        if (booking != null) {
-                            com.racketmatch.ui.coaches.BookingCard(booking = booking)
+                        val rootId = message.refId
+                        // Walk the chain forward: if any booking has previousBookingId == current.id, follow it
+                        val leaf = rootId?.let { id ->
+                            var current = bookingsById[id]
+                            var next = bookingsById.values.firstOrNull { it.previousBookingId == current?.id }
+                            while (next != null) {
+                                current = next
+                                next = bookingsById.values.firstOrNull { it.previousBookingId == current?.id }
+                            }
+                            current
+                        }
+                        // Hide this card if a newer card in the chain was already posted separately
+                        val supersededByOtherMessage = rootId != null && messages.any { m ->
+                            m.id != message.id && m.messageType == "BOOKING_CARD" && m.refId == leaf?.id
+                        }
+                        if (supersededByOtherMessage) {
+                            // render nothing
+                        } else if (leaf != null) {
+                            com.racketmatch.ui.coaches.BookingCard(booking = leaf)
                         } else {
                             Box(
                                 Modifier.fillMaxWidth().padding(vertical = 6.dp),

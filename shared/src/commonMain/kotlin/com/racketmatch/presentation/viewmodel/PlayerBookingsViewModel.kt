@@ -32,6 +32,8 @@ sealed class PlayerBookingsState {
 
 sealed class PlayerBookingsIntent {
     data class SelectSegment(val segment: BookingSegment) : PlayerBookingsIntent()
+    data class Confirm(val bookingId: String) : PlayerBookingsIntent()
+    data class Decline(val bookingId: String, val reason: String? = null) : PlayerBookingsIntent()
     data class Cancel(val bookingId: String, val reason: String? = null) : PlayerBookingsIntent()
     data class Counter(
         val bookingId: String,
@@ -80,6 +82,8 @@ class PlayerBookingsViewModel(
                     load()
                 }
             }
+            is PlayerBookingsIntent.Confirm -> confirm(intent.bookingId)
+            is PlayerBookingsIntent.Decline -> decline(intent.bookingId, intent.reason)
             is PlayerBookingsIntent.Cancel -> cancel(intent.bookingId, intent.reason)
             is PlayerBookingsIntent.Counter -> counter(intent)
             PlayerBookingsIntent.Refresh -> load()
@@ -105,6 +109,28 @@ class PlayerBookingsViewModel(
                 )
             } catch (_: Exception) {
                 _state.value = PlayerBookingsState.Error
+            }
+        }
+    }
+
+    private fun confirm(bookingId: String) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                coachRepository.confirmBooking(bookingId)
+                load()
+            } catch (_: Exception) {
+                _effects.tryEmit(PlayerBookingsEffect.ShowError("Nie udało się potwierdzić."))
+            }
+        }
+    }
+
+    private fun decline(bookingId: String, reason: String?) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                coachRepository.declineBooking(bookingId, reason)
+                load()
+            } catch (_: Exception) {
+                _effects.tryEmit(PlayerBookingsEffect.ShowError("Nie udało się odrzucić."))
             }
         }
     }

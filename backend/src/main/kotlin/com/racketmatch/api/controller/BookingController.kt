@@ -101,8 +101,8 @@ class BookingController(
     @PostMapping("/{id}/confirm")
     @Transactional
     fun confirmBooking(authentication: Authentication, @PathVariable id: UUID): BookingDto {
-        val coachId = UUID.fromString(authentication.name)
-        val booking = findBookingForCoach(id, authentication.name)
+        val userId = UUID.fromString(authentication.name)
+        val booking = findBookingForParticipant(id, authentication.name)
         if (booking.status != "PENDING")
             throw ResponseStatusException(HttpStatus.CONFLICT, "Booking is not pending")
         booking.status = "CONFIRMED"
@@ -118,14 +118,15 @@ class BookingController(
                 booking = saved
             )
         )
+        val otherId = if (userId == booking.player.id) booking.coach.id!! else booking.player.id!!
         notificationService.send(
-            recipientId = booking.player.id!!,
+            recipientId = otherId,
             type = "BOOKING_CONFIRMED",
             title = "Rezerwacja potwierdzona!",
-            body = "${booking.service?.name ?: "Sesja"} — ${booking.coach.displayName}",
+            body = "${booking.service?.name ?: "Sesja"}",
             data = mapOf("bookingId" to saved.id.toString())
         )
-        return saved.toDto(viewerId = coachId)
+        return saved.toDto(viewerId = userId)
     }
 
     @PostMapping("/{id}/decline")
@@ -135,22 +136,23 @@ class BookingController(
         @PathVariable id: UUID,
         @RequestBody(required = false) request: DeclineBookingRequest?
     ): BookingDto {
-        val coachId = UUID.fromString(authentication.name)
-        val booking = findBookingForCoach(id, authentication.name)
+        val userId = UUID.fromString(authentication.name)
+        val booking = findBookingForParticipant(id, authentication.name)
         if (booking.status != "PENDING")
             throw ResponseStatusException(HttpStatus.CONFLICT, "Booking is not pending")
         booking.status = "DECLINED"
         booking.declineReason = request?.reason?.takeIf { it.isNotBlank() }
         booking.updatedAt = Instant.now()
         val saved = bookingRepository.save(booking)
+        val otherId = if (userId == booking.player.id) booking.coach.id!! else booking.player.id!!
         notificationService.send(
-            recipientId = booking.player.id!!,
+            recipientId = otherId,
             type = "BOOKING_DECLINED",
             title = "Rezerwacja odrzucona",
-            body = "${booking.service?.name ?: "Sesja"} — ${booking.coach.displayName}",
+            body = "${booking.service?.name ?: "Sesja"}",
             data = mapOf("bookingId" to saved.id.toString())
         )
-        return saved.toDto(viewerId = coachId)
+        return saved.toDto(viewerId = userId)
     }
 
     @PostMapping("/{id}/cancel")
@@ -230,8 +232,6 @@ class BookingController(
                 updatedAt = now
             )
         )
-        dmService.sendBookingCard(conversationId, senderId = userId, bookingId = new.id!!)
-
         val otherPartyId = if (userId == old.player.id) old.coach.id!! else old.player.id!!
         val proposerName = if (userId == old.player.id) old.player.displayName else old.coach.displayName
         notificationService.send(
@@ -244,11 +244,12 @@ class BookingController(
         return new.toDto(viewerId = userId)
     }
 
-    private fun findBookingForCoach(bookingId: UUID, userId: String): BookingEntity {
+    private fun findBookingForParticipant(bookingId: UUID, userId: String): BookingEntity {
         val booking = bookingRepository.findById(bookingId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found") }
-        if (booking.coach.id != UUID.fromString(userId))
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only the coach can perform this action")
+        val uid = UUID.fromString(userId)
+        if (booking.coach.id != uid && booking.player.id != uid)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not a participant")
         return booking
     }
 }

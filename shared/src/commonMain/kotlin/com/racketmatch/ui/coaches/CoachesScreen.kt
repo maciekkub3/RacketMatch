@@ -47,7 +47,7 @@ object CoachesScreen : Screen {
         var selectedTab by remember { mutableStateOf(0) }
 
         LaunchedEffect(selectedTab) {
-            if (selectedTab == 1) bookingsVm.refresh()
+            if (selectedTab == 1) bookingsVm.onIntent(com.racketmatch.presentation.viewmodel.PlayerBookingsIntent.Refresh)
         }
 
         Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
@@ -166,7 +166,7 @@ private fun PlayerBookingsList(state: PlayerBookingsState) {
                 }
             }
             is PlayerBookingsState.Content -> {
-                val allEmpty = state.pending.isEmpty() && state.upcoming.isEmpty() && state.history.isEmpty()
+                val allEmpty = state.pending.isEmpty() && state.confirmed.isEmpty() && state.history.isEmpty()
                 if (allEmpty) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
@@ -192,9 +192,9 @@ private fun PlayerBookingsList(state: PlayerBookingsState) {
                     item { BookingGroupHeader("OCZEKUJĄCE") }
                     items(state.pending) { PlayerBookingCard(it) }
                 }
-                if (state.upcoming.isNotEmpty()) {
+                if (state.confirmed.isNotEmpty()) {
                     item { BookingGroupHeader("NADCHODZĄCE") }
-                    items(state.upcoming) { PlayerBookingCard(it) }
+                    items(state.confirmed) { PlayerBookingCard(it) }
                 }
                 if (state.history.isNotEmpty()) {
                     item { BookingGroupHeader("HISTORIA") }
