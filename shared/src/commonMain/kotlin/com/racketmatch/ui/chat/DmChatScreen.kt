@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.domain.model.CoachBooking
 import com.racketmatch.domain.model.DirectMessage
 import com.racketmatch.presentation.viewmodel.DmChatEffect
 import com.racketmatch.presentation.viewmodel.DmChatEvent
@@ -81,6 +82,7 @@ data class DmChatScreen(
 
                     is DmChatState.Content -> DmMessageList(
                         messages = s.messages,
+                        bookingsById = s.bookingsById,
                         currentUserId = currentUserId,
                         onSend = { viewModel.onEvent(DmChatEvent.Send(it)) },
                         otherUserName = otherUserName,
@@ -133,6 +135,7 @@ private fun DmChatHeader(name: String, onBack: () -> Unit) {
 @Composable
 private fun DmMessageList(
     messages: List<DirectMessage>,
+    bookingsById: Map<String, CoachBooking>,
     currentUserId: String,
     onSend: (String) -> Unit,
     otherUserName: String,
@@ -178,13 +181,32 @@ private fun DmMessageList(
                 }
 
                 item(message.id) {
-                    DmBubble(
-                        message = message,
-                        isOwn = isOwn,
-                        isGrouped = isGrouped,
-                        isLastInGroup = isLastInGroup,
-                        otherInitial = otherUserName.take(1).uppercase()
-                    )
+                    if (message.messageType == "BOOKING_CARD") {
+                        val booking = message.refId?.let { bookingsById[it] }
+                        if (booking != null) {
+                            com.racketmatch.ui.coaches.BookingCard(booking = booking)
+                        } else {
+                            Box(
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "📅 Rezerwacja",
+                                    fontFamily = AppBodyFontFamily,
+                                    fontSize = 12.sp,
+                                    color = ProCircuit.OnSurface
+                                )
+                            }
+                        }
+                    } else {
+                        DmBubble(
+                            message = message,
+                            isOwn = isOwn,
+                            isGrouped = isGrouped,
+                            isLastInGroup = isLastInGroup,
+                            otherInitial = otherUserName.take(1).uppercase()
+                        )
+                    }
                 }
             }
         }

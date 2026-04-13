@@ -11,7 +11,9 @@ data class DirectMessageDto(
     val senderId: String,
     val text: String,
     val sentAt: Long,
-    val readAt: Long? = null
+    val readAt: Long? = null,
+    val messageType: String = "TEXT",
+    val refId: String? = null
 )
 
 fun DirectMessageDto.toDomain() = DirectMessage(
@@ -20,7 +22,9 @@ fun DirectMessageDto.toDomain() = DirectMessage(
     senderId = senderId,
     text = text,
     sentAt = sentAt,
-    readAt = readAt
+    readAt = readAt,
+    messageType = messageType,
+    refId = refId
 )
 
 @Serializable

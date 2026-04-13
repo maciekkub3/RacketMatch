@@ -113,7 +113,7 @@ val repositoryModule = module {
 
 val viewModelModule = module {
     factory { (matchId: String) -> ChatViewModel(get(), matchId) }
-    factory { (conversationId: String, currentUserId: String) -> DmChatViewModel(get(), conversationId, currentUserId) }
+    factory { (conversationId: String, currentUserId: String) -> DmChatViewModel(get(), get(), get(), conversationId, currentUserId) }
     factory { LoginViewModel(get()) }
     factory { RegisterViewModel(get(), get()) }
     factory { ProfileSetupViewModel(get(), get()) }
