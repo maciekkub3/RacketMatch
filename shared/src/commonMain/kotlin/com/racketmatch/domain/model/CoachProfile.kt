@@ -68,7 +68,11 @@ data class CoachBooking(
     val lateCancel: Boolean = false,
     val conversationId: String? = null,
     val previousBookingId: String? = null,
-    val otherParty: UserSummary? = null
+    val proposedByCoach: Boolean = false,
+    val otherParty: UserSummary? = null,
+    val previousStartsAt: Instant? = null,
+    val previousEndsAt: Instant? = null,
+    val courtName: String? = null
 )
 
 data class UserSummary(

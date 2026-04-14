@@ -9,7 +9,7 @@ interface CoachRepository {
     suspend fun getCoach(coachId: String): CoachProfile
     suspend fun getCoachServices(coachId: String): List<CoachService>
     suspend fun getAvailability(coachId: String, from: Instant, to: Instant): List<BookingSlot>
-    suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String? = null): CoachBooking
+    suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String? = null, courtName: String? = null): CoachBooking
 
     // Coach-facing — services
     suspend fun getMyServices(): List<CoachService>
@@ -44,5 +44,5 @@ interface CoachRepository {
     suspend fun confirmBooking(bookingId: String): CoachBooking
     suspend fun declineBooking(bookingId: String, reason: String? = null): CoachBooking
     suspend fun cancelBooking(bookingId: String, reason: String? = null): CoachBooking
-    suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int? = null): CoachBooking
+    suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int? = null, courtName: String? = null): CoachBooking
 }

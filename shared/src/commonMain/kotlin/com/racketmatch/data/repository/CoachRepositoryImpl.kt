@@ -30,7 +30,7 @@ class CoachRepositoryImpl(
     override suspend fun getAvailability(coachId: String, from: Instant, to: Instant): List<BookingSlot> =
         coachApi.getAvailability(coachId, from, to).map { it.toDomain() }
 
-    override suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?): CoachBooking {
+    override suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?, courtName: String?): CoachBooking {
         val result = coachApi.createBooking(
             CreateBookingRequestDto(
                 coachId = coachId,
@@ -38,7 +38,8 @@ class CoachRepositoryImpl(
                 startsAt = startsAt.toString(),
                 endsAt = endsAt.toString(),
                 durationMinutes = durationMinutes,
-                playerNote = playerNote
+                playerNote = playerNote,
+                courtName = courtName
             )
         ).toDomain()
         bumpBookings()
@@ -112,13 +113,14 @@ class CoachRepositoryImpl(
         return result
     }
 
-    override suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int?): CoachBooking {
+    override suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int?, courtName: String?): CoachBooking {
         val result = coachApi.counterBooking(
             bookingId,
             CounterBookingRequestDto(
                 startsAt = startsAt.toString(),
                 endsAt = endsAt.toString(),
-                durationMinutes = durationMinutes
+                durationMinutes = durationMinutes,
+                courtName = courtName
             )
         ).toDomain()
         bumpBookings()

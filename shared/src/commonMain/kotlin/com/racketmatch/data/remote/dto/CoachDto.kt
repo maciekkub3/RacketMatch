@@ -93,7 +93,11 @@ data class CoachBookingDto(
     val lateCancel: Boolean = false,
     val conversationId: String? = null,
     val previousBookingId: String? = null,
-    val otherParty: UserSummaryDto? = null
+    val proposedByCoach: Boolean = false,
+    val otherParty: UserSummaryDto? = null,
+    val previousStartsAt: String? = null,
+    val previousEndsAt: String? = null,
+    val courtName: String? = null
 )
 
 @Serializable
@@ -124,7 +128,8 @@ data class CreateBookingRequestDto(
     val startsAt: String,
     val endsAt: String,
     val durationMinutes: Int,
-    val playerNote: String? = null
+    val playerNote: String? = null,
+    val courtName: String? = null
 )
 
 @Serializable
@@ -137,7 +142,8 @@ data class CancelBookingRequestDto(val reason: String? = null)
 data class CounterBookingRequestDto(
     val startsAt: String,
     val endsAt: String,
-    val durationMinutes: Int? = null
+    val durationMinutes: Int? = null,
+    val courtName: String? = null
 )
 
 @Serializable
@@ -231,7 +237,11 @@ fun CoachBookingDto.toDomain() = CoachBooking(
     lateCancel = lateCancel,
     conversationId = conversationId,
     previousBookingId = previousBookingId,
-    otherParty = otherParty?.toDomain()
+    proposedByCoach = proposedByCoach,
+    otherParty = otherParty?.toDomain(),
+    previousStartsAt = previousStartsAt?.let { Instant.parse(it) },
+    previousEndsAt = previousEndsAt?.let { Instant.parse(it) },
+    courtName = courtName
 )
 
 fun UserSummaryDto.toDomain() = UserSummary(
