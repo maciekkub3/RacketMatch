@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 sealed class DmChatState {
     object Loading : DmChatState()
@@ -29,6 +30,10 @@ sealed class DmChatState {
 
 sealed class DmChatEvent {
     data class Send(val text: String) : DmChatEvent()
+    data class ConfirmBooking(val bookingId: String) : DmChatEvent()
+    data class DeclineBooking(val bookingId: String, val reason: String? = null) : DmChatEvent()
+    data class CancelBooking(val bookingId: String, val reason: String? = null) : DmChatEvent()
+    data class CounterBooking(val bookingId: String, val startsAt: Instant, val endsAt: Instant, val courtName: String? = null) : DmChatEvent()
 }
 
 sealed class DmChatEffect {
@@ -59,6 +64,27 @@ class DmChatViewModel(
     fun onEvent(event: DmChatEvent) {
         when (event) {
             is DmChatEvent.Send -> send(event.text)
+            is DmChatEvent.ConfirmBooking -> bookingAction { coachRepository.confirmBooking(event.bookingId) }
+            is DmChatEvent.DeclineBooking -> bookingAction { coachRepository.declineBooking(event.bookingId, event.reason) }
+            is DmChatEvent.CancelBooking -> bookingAction { coachRepository.cancelBooking(event.bookingId, event.reason) }
+            is DmChatEvent.CounterBooking -> bookingAction {
+                coachRepository.counterBooking(event.bookingId, event.startsAt, event.endsAt, null, event.courtName)
+            }
+        }
+    }
+
+    private fun bookingAction(action: suspend () -> Unit) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                action()
+                val updated = loadBookings()
+                val current = _state.value
+                if (current is DmChatState.Content) {
+                    _state.value = current.copy(bookingsById = updated)
+                }
+            } catch (e: Exception) {
+                _effects.emit(DmChatEffect.ShowError(e.toUserMessage()))
+            }
         }
     }
 

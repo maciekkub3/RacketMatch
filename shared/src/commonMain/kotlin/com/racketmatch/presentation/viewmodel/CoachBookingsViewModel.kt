@@ -37,7 +37,8 @@ sealed class CoachBookingsIntent {
         val bookingId: String,
         val startsAt: Instant,
         val endsAt: Instant,
-        val durationMinutes: Int? = null
+        val durationMinutes: Int? = null,
+        val courtName: String? = null
     ) : CoachBookingsIntent()
     object Refresh : CoachBookingsIntent()
 }
@@ -91,7 +92,9 @@ class CoachBookingsViewModel(
 
     private fun load() {
         viewModelScope.launch(dispatcher) {
-            _state.value = CoachBookingsState.Loading
+            if (_state.value !is CoachBookingsState.Content) {
+                _state.value = CoachBookingsState.Loading
+            }
             try {
                 val all = coachRepository.listBookings()
                 val now = clock()
@@ -158,7 +161,8 @@ class CoachBookingsViewModel(
                     bookingId = intent.bookingId,
                     startsAt = intent.startsAt,
                     endsAt = intent.endsAt,
-                    durationMinutes = intent.durationMinutes
+                    durationMinutes = intent.durationMinutes,
+                    courtName = intent.courtName
                 )
                 load()
             } catch (_: Exception) {
