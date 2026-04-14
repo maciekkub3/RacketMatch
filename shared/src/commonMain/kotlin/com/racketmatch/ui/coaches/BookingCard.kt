@@ -109,7 +109,7 @@ fun BookingCard(
                             color = ProCircuit.OnSurface
                         )
                     }
-                    if (!booking.courtName.isNullOrBlank()) {
+                    if (!booking.courtName.isNullOrBlank() && prevStart == null) {
                         Text(
                             "🏟️ ${booking.courtName}",
                             fontFamily = AppBodyFontFamily,
@@ -158,6 +158,14 @@ fun BookingCard(
                                 fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp, color = ProCircuit.Lime
                             )
+                            if (!booking.courtName.isNullOrBlank()) {
+                                Text(
+                                    "🏟️ ${booking.courtName}",
+                                    fontFamily = AppBodyFontFamily,
+                                    fontSize = 11.sp,
+                                    color = ProCircuit.OnSurface
+                                )
+                            }
                         }
                     }
                 } else if (isWaitingCounter) {
@@ -182,6 +190,14 @@ fun BookingCard(
                                 fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp, color = ProCircuit.Lime
                             )
+                            if (!booking.courtName.isNullOrBlank()) {
+                                Text(
+                                    "🏟️ ${booking.courtName}",
+                                    fontFamily = AppBodyFontFamily,
+                                    fontSize = 11.sp,
+                                    color = ProCircuit.OnSurface
+                                )
+                            }
                         }
                     }
                 } else {
