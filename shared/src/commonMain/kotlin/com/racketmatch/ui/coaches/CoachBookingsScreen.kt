@@ -368,10 +368,14 @@ fun CounterSlotSheet(
                 last.atTime(23, 59).toInstant(tz)
             )
         } catch (_: Exception) { }
+        // The booking itself blocks the slot — mark it available since counter will decline it
+        allSlots = allSlots.map { slot ->
+            if (slot.startsAt == booking.startsAt) slot.copy(isAvailable = true) else slot
+        }
         isLoading = false
         // Pre-select the slot matching the current booking time
         if (selectedSlot == null) {
-            selectedSlot = allSlots.firstOrNull { it.startsAt == booking.startsAt && it.isAvailable }
+            selectedSlot = allSlots.firstOrNull { it.startsAt == booking.startsAt }
         }
     }
 
