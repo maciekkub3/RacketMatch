@@ -4,11 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,6 +25,7 @@ import com.racketmatch.presentation.viewmodel.PlayerBookingsIntent
 import com.racketmatch.presentation.viewmodel.PlayerBookingsState
 import com.racketmatch.presentation.viewmodel.PlayerBookingsViewModel
 import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
@@ -40,8 +44,13 @@ object PlayerBookingsScreen : Screen {
         var cancelTarget by remember { mutableStateOf<CoachBooking?>(null) }
         var counterTarget by remember { mutableStateOf<CoachBooking?>(null) }
         var declineTarget by remember { mutableStateOf<CoachBooking?>(null) }
+        var isRefreshing by remember { mutableStateOf(false) }
 
         LaunchedEffect(Unit) { viewModel.onIntent(PlayerBookingsIntent.Refresh) }
+
+        LaunchedEffect(state) {
+            if (state !is PlayerBookingsState.Loading) isRefreshing = false
+        }
 
         LaunchedEffect(Unit) {
             viewModel.effects.collect { eff ->
@@ -52,6 +61,7 @@ object PlayerBookingsScreen : Screen {
             }
         }
 
+        @OptIn(ExperimentalMaterial3Api::class)
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             containerColor = ProCircuit.Bg
@@ -66,53 +76,71 @@ object PlayerBookingsScreen : Screen {
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
                 )
 
-                when (val s = state) {
-                    PlayerBookingsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = ProCircuit.Lime)
-                    }
-                    PlayerBookingsState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Błąd ładowania rezerwacji", color = ProCircuit.OnSurface)
-                    }
-                    is PlayerBookingsState.Content -> {
-                        BookingSegmentedControl(
-                            selected = s.segment,
-                            pendingCount = s.pending.size,
-                            confirmedCount = s.confirmed.size,
-                            historyCount = s.history.size,
-                            onSelect = { viewModel.onIntent(PlayerBookingsIntent.SelectSegment(it)) }
-                        )
-                        val list = when (s.segment) {
-                            BookingSegment.PENDING -> s.pending
-                            BookingSegment.CONFIRMED -> s.confirmed
-                            BookingSegment.HISTORY -> s.history
+                @OptIn(ExperimentalMaterial3Api::class)
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        viewModel.onIntent(PlayerBookingsIntent.Refresh)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    when (val s = state) {
+                        PlayerBookingsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = ProCircuit.Lime)
                         }
-                        if (list.isEmpty()) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Brak rezerwacji", color = ProCircuit.OnSurface, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            LazyColumn(contentPadding = PaddingValues(bottom = 32.dp)) {
-                                items(list, key = { it.id }) { booking ->
-                                    BookingCard(booking = booking) {
-                                        PlayerActions(
-                                            booking = booking,
-                                            onConfirm = { viewModel.onIntent(PlayerBookingsIntent.Confirm(booking.id)) },
-                                            onDecline = { declineTarget = booking },
-                                            onCancel = { cancelTarget = booking },
-                                            onCounter = { counterTarget = booking },
-                                            onWrite = {
-                                                val conv = booking.conversationId ?: return@PlayerActions
-                                                val other = booking.otherParty
-                                                navigator.push(
-                                                    DmChatScreen(
-                                                        conversationId = conv,
-                                                        currentUserId = booking.playerId,
-                                                        otherUserName = other?.displayName ?: "Trener",
-                                                        otherUserAvatarUrl = other?.avatarUrl
-                                                    )
+                        PlayerBookingsState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Błąd ładowania rezerwacji", color = ProCircuit.OnSurface)
+                        }
+                        is PlayerBookingsState.Content -> {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                BookingSegmentedControl(
+                                    selected = s.segment,
+                                    pendingCount = s.pending.size,
+                                    confirmedCount = s.confirmed.size,
+                                    historyCount = s.history.size,
+                                    onSelect = { viewModel.onIntent(PlayerBookingsIntent.SelectSegment(it)) }
+                                )
+                                val list = when (s.segment) {
+                                    BookingSegment.PENDING -> s.pending
+                                    BookingSegment.CONFIRMED -> s.confirmed
+                                    BookingSegment.HISTORY -> s.history
+                                }
+                                if (list.isEmpty()) {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Text("Brak rezerwacji", color = ProCircuit.OnSurface, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(bottom = 32.dp)
+                                    ) {
+                                        items(list, key = { it.id }) { booking ->
+                                            BookingCard(
+                                                booking = booking,
+                                                requiresAction = booking.status == "PENDING" && booking.proposedByCoach
+                                            ) {
+                                                PlayerActions(
+                                                    booking = booking,
+                                                    onConfirm = { viewModel.onIntent(PlayerBookingsIntent.Confirm(booking.id)) },
+                                                    onDecline = { declineTarget = booking },
+                                                    onCancel = { cancelTarget = booking },
+                                                    onCounter = { counterTarget = booking },
+                                                    onWrite = {
+                                                        val conv = booking.conversationId ?: return@PlayerActions
+                                                        val other = booking.otherParty
+                                                        (navigator.parent?.parent ?: navigator).push(
+                                                            DmChatScreen(
+                                                                conversationId = conv,
+                                                                currentUserId = booking.playerId,
+                                                                otherUserName = other?.displayName ?: "Trener",
+                                                                otherUserAvatarUrl = other?.avatarUrl
+                                                            )
+                                                        )
+                                                    }
                                                 )
                                             }
-                                        )
+                                        }
                                     }
                                 }
                             }
@@ -148,12 +176,11 @@ object PlayerBookingsScreen : Screen {
             )
         }
         counterTarget?.let { b ->
-            CounterSheet(
-                initialStart = b.startsAt,
-                initialEnd = b.endsAt,
+            CounterSlotSheet(
+                booking = b,
                 onDismiss = { counterTarget = null },
-                onConfirm = { starts, ends ->
-                    viewModel.onIntent(PlayerBookingsIntent.Counter(b.id, starts, ends))
+                onConfirm = { starts, ends, court ->
+                    viewModel.onIntent(PlayerBookingsIntent.Counter(b.id, starts, ends, courtName = court))
                     counterTarget = null
                 }
             )
@@ -162,7 +189,7 @@ object PlayerBookingsScreen : Screen {
 }
 
 @Composable
-private fun PlayerActions(
+internal fun PlayerActions(
     booking: CoachBooking,
     onConfirm: () -> Unit,
     onDecline: () -> Unit,
@@ -172,57 +199,54 @@ private fun PlayerActions(
 ) {
     when (booking.status) {
         "PENDING" -> {
-            val isCounter = booking.previousBookingId != null
+            val isCounter = booking.previousBookingId != null && booking.proposedByCoach
             if (isCounter) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "↩ Trener zaproponował inny termin",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp, color = ProCircuit.Lime
-                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = onConfirm,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
                             modifier = Modifier.weight(1f)
-                        ) { Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp) }
+                        ) { Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp) }
                         OutlinedButton(
                             onClick = onDecline,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+                            border = BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f)),
                             modifier = Modifier.weight(1f)
-                        ) { Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                        ) { Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = onCounter,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("KONTROFERTA", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
-                        OutlinedButton(
-                            onClick = onWrite,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
-                    }
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = onCounter,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("KONTROFERTA", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
-                    OutlinedButton(
-                        onClick = onWrite,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
-                    OutlinedButton(
-                        onClick = onCancel,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+                        border = BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
+                    ) { Text("ZAPROPONUJ KONTRĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "⏳ Czekasz na odpowiedź trenera",
+                        fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onWrite,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+                            border = BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f)),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
+                        OutlinedButton(
+                            onClick = onCancel,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+                            border = BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f)),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
+                    }
                 }
             }
         }
@@ -230,14 +254,18 @@ private fun PlayerActions(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = onWrite,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+                    border = BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f)),
                     modifier = Modifier.weight(1f)
-                ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
                 OutlinedButton(
                     onClick = onCancel,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+                    border = BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f)),
                     modifier = Modifier.weight(1f)
-                ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, color = ProCircuit.OnBg) }
+                ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
             }
         }
         else -> { /* history — no actions */ }

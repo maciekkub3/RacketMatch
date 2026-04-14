@@ -1,6 +1,7 @@
 package com.racketmatch.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,12 +27,17 @@ import com.racketmatch.presentation.viewmodel.DmChatEffect
 import com.racketmatch.presentation.viewmodel.DmChatEvent
 import com.racketmatch.presentation.viewmodel.DmChatState
 import com.racketmatch.presentation.viewmodel.DmChatViewModel
+import com.racketmatch.ui.coaches.BookingCard
+import com.racketmatch.ui.coaches.CounterSlotSheet
+import com.racketmatch.ui.coaches.ReasonSheet
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import kotlinx.coroutines.launch
 import com.racketmatch.util.kmpViewModel
 import org.koin.core.parameter.parametersOf
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -50,6 +56,10 @@ data class DmChatScreen(
         val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
+
+        var cancelTarget by remember { mutableStateOf<CoachBooking?>(null) }
+        var declineTarget by remember { mutableStateOf<CoachBooking?>(null) }
+        var counterTarget by remember { mutableStateOf<CoachBooking?>(null) }
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
@@ -85,11 +95,53 @@ data class DmChatScreen(
                         bookingsById = s.bookingsById,
                         currentUserId = currentUserId,
                         onSend = { viewModel.onEvent(DmChatEvent.Send(it)) },
+                        onConfirmBooking = { viewModel.onEvent(DmChatEvent.ConfirmBooking(it)) },
+                        onDeclineBooking = { b -> declineTarget = b },
+                        onCancelBooking = { b -> cancelTarget = b },
+                        onCounterBooking = { b -> counterTarget = b },
                         otherUserName = otherUserName,
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
+        }
+
+        declineTarget?.let { b ->
+            ReasonSheet(
+                title = "Odrzuć kontrofertę",
+                placeholder = "Powód (opcjonalnie)",
+                requireReason = false,
+                onDismiss = { declineTarget = null },
+                onConfirm = { reason ->
+                    viewModel.onEvent(DmChatEvent.DeclineBooking(b.id, reason.ifBlank { null }))
+                    declineTarget = null
+                }
+            )
+        }
+        cancelTarget?.let { b ->
+            val isLate = Clock.System.now() >= (b.startsAt - 24.hours)
+            ReasonSheet(
+                title = "Anuluj rezerwację",
+                placeholder = if (isLate) "Powód (wymagany — mniej niż 24h)" else "Powód (opcjonalnie)",
+                requireReason = isLate,
+                onDismiss = { cancelTarget = null },
+                onConfirm = { reason ->
+                    viewModel.onEvent(DmChatEvent.CancelBooking(b.id, reason.ifBlank { null }))
+                    cancelTarget = null
+                }
+            )
+        }
+        counterTarget?.let { b ->
+            val isCoach = currentUserId == b.coachId
+            CounterSlotSheet(
+                booking = b,
+                allowFreeform = isCoach,
+                onDismiss = { counterTarget = null },
+                onConfirm = { starts, ends, court ->
+                    viewModel.onEvent(DmChatEvent.CounterBooking(b.id, starts, ends, courtName = court))
+                    counterTarget = null
+                }
+            )
         }
     }
 }
@@ -138,6 +190,10 @@ private fun DmMessageList(
     bookingsById: Map<String, CoachBooking>,
     currentUserId: String,
     onSend: (String) -> Unit,
+    onConfirmBooking: (String) -> Unit,
+    onDeclineBooking: (CoachBooking) -> Unit,
+    onCancelBooking: (CoachBooking) -> Unit,
+    onCounterBooking: (CoachBooking) -> Unit,
     otherUserName: String,
     modifier: Modifier = Modifier
 ) {
@@ -183,24 +239,41 @@ private fun DmMessageList(
                 item(message.id) {
                     if (message.messageType == "BOOKING_CARD") {
                         val rootId = message.refId
-                        // Walk the chain forward: if any booking has previousBookingId == current.id, follow it
-                        val leaf = rootId?.let { id ->
-                            var current = bookingsById[id]
+                        // Walk the chain forward to find the leaf booking
+                        fun leafOf(startId: String?): CoachBooking? {
+                            if (startId == null) return null
+                            var current = bookingsById[startId]
                             var next = bookingsById.values.firstOrNull { it.previousBookingId == current?.id }
                             while (next != null) {
                                 current = next
                                 next = bookingsById.values.firstOrNull { it.previousBookingId == current?.id }
                             }
-                            current
+                            return current
                         }
-                        // Hide this card if a newer card in the chain was already posted separately
-                        val supersededByOtherMessage = rootId != null && messages.any { m ->
-                            m.id != message.id && m.messageType == "BOOKING_CARD" && m.refId == leaf?.id
-                        }
-                        if (supersededByOtherMessage) {
-                            // render nothing
+                        val leaf = leafOf(rootId)
+                        // Dedup: only render the FIRST card (by index) whose chain resolves to this leaf
+                        val firstForLeaf = leaf != null && messages.indexOfFirst { m ->
+                            m.messageType == "BOOKING_CARD" && leafOf(m.refId)?.id == leaf.id
+                        } == index
+                        if (leaf != null && !firstForLeaf) {
+                            // render nothing — an earlier message already covers this chain
                         } else if (leaf != null) {
-                            com.racketmatch.ui.coaches.BookingCard(booking = leaf)
+                            val isPlayer = currentUserId == leaf.playerId
+                            val requiresAction = leaf.status == "PENDING" &&
+                                if (isPlayer) leaf.proposedByCoach else !leaf.proposedByCoach
+                            BookingCard(
+                                booking = leaf,
+                                requiresAction = requiresAction
+                            ) {
+                                DmInlineBookingActions(
+                                    booking = leaf,
+                                    isPlayer = isPlayer,
+                                    onConfirm = { onConfirmBooking(leaf.id) },
+                                    onDecline = { onDeclineBooking(leaf) },
+                                    onCancel = { onCancelBooking(leaf) },
+                                    onCounter = { onCounterBooking(leaf) }
+                                )
+                            }
                         } else {
                             Box(
                                 Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -269,6 +342,92 @@ private fun DmMessageList(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DmInlineBookingActions(
+    booking: CoachBooking,
+    isPlayer: Boolean,
+    onConfirm: () -> Unit,
+    onDecline: () -> Unit,
+    onCancel: () -> Unit,
+    onCounter: () -> Unit
+) {
+    @Composable
+    fun subtleBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) = OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+        border = BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f)),
+        modifier = modifier
+    ) { Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
+
+    @Composable
+    fun dangerBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) = OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+        border = BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f)),
+        modifier = modifier
+    ) { Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
+
+    when (booking.status) {
+        "PENDING" -> {
+            if (isPlayer) {
+                val isCounter = booking.proposedByCoach
+                if (isCounter) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = onConfirm,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp) }
+                            dangerBtn("ODRZUĆ", onDecline, Modifier.weight(1f))
+                        }
+                        subtleBtn("ZAPROPONUJ KONTRĘ", onCounter, Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "⏳ Czekasz na odpowiedź trenera",
+                            fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            dangerBtn("ANULUJ", onCancel, Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            } else {
+                // coach view
+                if (booking.proposedByCoach) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "⏳ Oczekujesz na odpowiedź gracza",
+                            fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
+                        )
+                        dangerBtn("ANULUJ", onCancel, Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = onConfirm,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("POTWIERDŹ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp) }
+                            dangerBtn("ODRZUĆ", onDecline, Modifier.weight(1f))
+                        }
+                        subtleBtn("KONTROFERTA", onCounter, Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        }
+        "CONFIRMED" -> dangerBtn("ANULUJ", onCancel, Modifier.fillMaxWidth())
+        else -> { /* history — no actions */ }
     }
 }
 

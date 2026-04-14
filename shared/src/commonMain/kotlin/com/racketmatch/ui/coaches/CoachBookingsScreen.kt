@@ -182,8 +182,8 @@ object CoachBookingsScreen : Screen {
                 booking = b,
                 allowFreeform = true,
                 onDismiss = { counterTarget = null },
-                onConfirm = { starts, ends ->
-                    viewModel.onIntent(CoachBookingsIntent.Counter(b.id, starts, ends))
+                onConfirm = { starts, ends, court ->
+                    viewModel.onIntent(CoachBookingsIntent.Counter(b.id, starts, ends, courtName = court))
                     counterTarget = null
                 }
             )

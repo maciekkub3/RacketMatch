@@ -25,29 +25,39 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.CoachBooking
 import com.racketmatch.domain.model.CoachProfile
 import com.racketmatch.domain.model.Sport
+import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.CoachesState
 import com.racketmatch.presentation.viewmodel.CoachesViewModel
+import com.racketmatch.presentation.viewmodel.PlayerBookingsIntent
 import com.racketmatch.presentation.viewmodel.PlayerBookingsState
 import com.racketmatch.presentation.viewmodel.PlayerBookingsViewModel
+import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
-object CoachesScreen : Screen {
+data class CoachesScreen(val isCoachMode: Boolean = false) : Screen {
 
     @Composable
     override fun Content() {
         val coachesVm: CoachesViewModel = kmpViewModel()
         val bookingsVm: PlayerBookingsViewModel = kmpViewModel()
+        val badgeVm: ActionBadgeViewModel = kmpViewModel()
         val coachesState by coachesVm.stateFlow.collectAsState()
         val bookingsState by bookingsVm.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
 
         var selectedTab by remember { mutableStateOf(0) }
+        var cancelTarget by remember { mutableStateOf<CoachBooking?>(null) }
+        var declineTarget by remember { mutableStateOf<CoachBooking?>(null) }
+        var counterTarget by remember { mutableStateOf<CoachBooking?>(null) }
 
+        LaunchedEffect(Unit) { badgeVm.refresh() }
         LaunchedEffect(selectedTab) {
-            if (selectedTab == 1) bookingsVm.onIntent(com.racketmatch.presentation.viewmodel.PlayerBookingsIntent.Refresh)
+            if (selectedTab == 1) bookingsVm.onIntent(PlayerBookingsIntent.Refresh)
         }
 
         Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
@@ -66,54 +76,139 @@ object CoachesScreen : Screen {
                         fontSize = 24.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
                     )
                     Text(
-                        "Znajdź idealnego partnera na korcie",
+                        if (isCoachMode) "Przeglądaj trenerów w aplikacji" else "Znajdź idealnego partnera na korcie",
                         fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
                     )
                 }
             }
 
-            // Tab bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(ProCircuit.SurfaceLow)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                listOf("Trenerzy", "Rezerwacje").forEachIndexed { index, label ->
-                    val selected = selectedTab == index
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (selected) ProCircuit.Lime else Color.Transparent)
-                            .clickable { selectedTab = index }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            label,
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 12.sp, letterSpacing = 0.5.sp,
-                            color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface
-                        )
+            // Tab bar — hidden in coach mode (no bookings tab for coaches)
+            if (!isCoachMode) {
+                val bookingActionCount = (bookingsState as? PlayerBookingsState.Content)
+                    ?.pending?.count { it.proposedByCoach } ?: 0
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ProCircuit.SurfaceLow)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf("Trenerzy" to 0, "Rezerwacje" to bookingActionCount).forEachIndexed { index, (label, badge) ->
+                        val selected = selectedTab == index
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (selected) ProCircuit.Lime else Color.Transparent)
+                                .clickable { selectedTab = index }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    label,
+                                    fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp, letterSpacing = 0.5.sp,
+                                    color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface
+                                )
+                                if (badge > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .background(if (selected) ProCircuit.Bg else ProCircuit.Lime)
+                                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = badge.toString(),
+                                            fontFamily = AppFontFamily,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 10.sp,
+                                            color = if (selected) ProCircuit.Lime else ProCircuit.Bg
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             // Content
-            when (selectedTab) {
-                0 -> CoachesList(state = coachesState, onCoachClick = { navigator.push(CoachDetailScreen(it)) })
-                1 -> PlayerBookingsList(state = bookingsState)
+            when (if (isCoachMode) 0 else selectedTab) {
+                0 -> CoachesList(
+                    state = coachesState,
+                    isCoachMode = isCoachMode,
+                    onCoachClick = { navigator.push(CoachDetailScreen(coachId = it, isCoachMode = isCoachMode)) }
+                )
+                1 -> PlayerBookingsList(
+                    state = bookingsState,
+                    onConfirm = { bookingsVm.onIntent(PlayerBookingsIntent.Confirm(it)) },
+                    onDecline = { b -> declineTarget = b },
+                    onCancel = { b -> cancelTarget = b },
+                    onCounter = { b -> counterTarget = b },
+                    onWrite = { booking ->
+                        val conv = booking.conversationId ?: return@PlayerBookingsList
+                        val other = booking.otherParty
+                        navigator.push(
+                            DmChatScreen(
+                                conversationId = conv,
+                                currentUserId = booking.playerId,
+                                otherUserName = other?.displayName ?: "Trener",
+                                otherUserAvatarUrl = other?.avatarUrl
+                            )
+                        )
+                    }
+                )
             }
+        }
+
+        declineTarget?.let { b ->
+            ReasonSheet(
+                title = "Odrzuć kontrofertę",
+                placeholder = "Powód (opcjonalnie)",
+                requireReason = false,
+                onDismiss = { declineTarget = null },
+                onConfirm = { reason ->
+                    bookingsVm.onIntent(PlayerBookingsIntent.Decline(b.id, reason.ifBlank { null }))
+                    declineTarget = null
+                }
+            )
+        }
+        cancelTarget?.let { b ->
+            val isLate = Clock.System.now() >= (b.startsAt - 24.hours)
+            ReasonSheet(
+                title = "Anuluj rezerwację",
+                placeholder = if (isLate) "Powód (wymagany — mniej niż 24h)" else "Powód (opcjonalnie)",
+                requireReason = isLate,
+                onDismiss = { cancelTarget = null },
+                onConfirm = { reason ->
+                    bookingsVm.onIntent(PlayerBookingsIntent.Cancel(b.id, reason.ifBlank { null }))
+                    cancelTarget = null
+                }
+            )
+        }
+        counterTarget?.let { b ->
+            CounterSlotSheet(
+                booking = b,
+                allowFreeform = false,
+                onDismiss = { counterTarget = null },
+                onConfirm = { starts, ends, court ->
+                    bookingsVm.onIntent(PlayerBookingsIntent.Counter(b.id, starts, ends, courtName = court))
+                    counterTarget = null
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun CoachesList(state: CoachesState, onCoachClick: (String) -> Unit) {
+private fun CoachesList(state: CoachesState, isCoachMode: Boolean, onCoachClick: (String) -> Unit) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         when (state) {
             CoachesState.Loading -> item {
@@ -143,7 +238,7 @@ private fun CoachesList(state: CoachesState, onCoachClick: (String) -> Unit) {
                     }
                 } else {
                     items(state.coaches) { coach ->
-                        CoachCard(coach = coach, onClick = { onCoachClick(coach.userId) })
+                        CoachCard(coach = coach, isCoachMode = isCoachMode, onClick = { onCoachClick(coach.userId) })
                     }
                 }
             }
@@ -152,7 +247,14 @@ private fun CoachesList(state: CoachesState, onCoachClick: (String) -> Unit) {
 }
 
 @Composable
-private fun PlayerBookingsList(state: PlayerBookingsState) {
+private fun PlayerBookingsList(
+    state: PlayerBookingsState,
+    onConfirm: (String) -> Unit = {},
+    onDecline: (CoachBooking) -> Unit = {},
+    onCancel: (CoachBooking) -> Unit = {},
+    onCounter: (CoachBooking) -> Unit = {},
+    onWrite: (CoachBooking) -> Unit = {}
+) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         when (state) {
             PlayerBookingsState.Loading -> item {
@@ -190,15 +292,42 @@ private fun PlayerBookingsList(state: PlayerBookingsState) {
                 }
                 if (state.pending.isNotEmpty()) {
                     item { BookingGroupHeader("OCZEKUJĄCE") }
-                    items(state.pending) { PlayerBookingCard(it) }
+                    items(state.pending, key = { it.id }) { booking ->
+                        BookingCard(
+                            booking = booking,
+                            requiresAction = booking.status == "PENDING" && booking.proposedByCoach
+                        ) {
+                            PlayerActions(
+                                booking = booking,
+                                onConfirm = { onConfirm(booking.id) },
+                                onDecline = { onDecline(booking) },
+                                onCancel = { onCancel(booking) },
+                                onCounter = { onCounter(booking) },
+                                onWrite = { onWrite(booking) }
+                            )
+                        }
+                    }
                 }
                 if (state.confirmed.isNotEmpty()) {
                     item { BookingGroupHeader("NADCHODZĄCE") }
-                    items(state.confirmed) { PlayerBookingCard(it) }
+                    items(state.confirmed, key = { it.id }) { booking ->
+                        BookingCard(booking = booking) {
+                            PlayerActions(
+                                booking = booking,
+                                onConfirm = { onConfirm(booking.id) },
+                                onDecline = { onDecline(booking) },
+                                onCancel = { onCancel(booking) },
+                                onCounter = { onCounter(booking) },
+                                onWrite = { onWrite(booking) }
+                            )
+                        }
+                    }
                 }
                 if (state.history.isNotEmpty()) {
                     item { BookingGroupHeader("HISTORIA") }
-                    items(state.history) { PlayerBookingCard(it) }
+                    items(state.history, key = { it.id }) { booking ->
+                        BookingCard(booking = booking)
+                    }
                 }
             }
         }
@@ -216,64 +345,7 @@ private fun BookingGroupHeader(text: String) {
 }
 
 @Composable
-private fun PlayerBookingCard(booking: CoachBooking) {
-    val (chipBg, chipFg, chipLabel) = when (booking.status) {
-        "PENDING"   -> Triple(ProCircuit.SurfaceHigh, ProCircuit.Lime, "⏳ Oczekuje")
-        "CONFIRMED" -> Triple(ProCircuit.Lime.copy(alpha = 0.15f), ProCircuit.Lime, "✓ Potwierdzone")
-        "DECLINED"  -> Triple(Color.Red.copy(alpha = 0.12f), Color.Red, "Odrzucone")
-        "CANCELLED" -> Triple(ProCircuit.SurfaceHigh, ProCircuit.OnSurface, "Anulowane")
-        else        -> Triple(ProCircuit.SurfaceHigh, ProCircuit.OnSurface, booking.status)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(ProCircuit.SurfaceLow)
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    booking.serviceName ?: "Sesja treningowa",
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp, color = ProCircuit.OnBg
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    booking.startsAt.toString().take(16).replace("T", " • "),
-                    fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
-                )
-                booking.durationMinutes?.let {
-                    Text(
-                        "$it min",
-                        fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(chipBg)
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-            ) {
-                Text(
-                    chipLabel,
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp, color = chipFg
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CoachCard(coach: CoachProfile, onClick: () -> Unit) {
+private fun CoachCard(coach: CoachProfile, isCoachMode: Boolean, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -363,17 +435,19 @@ private fun CoachCard(coach: CoachProfile, onClick: () -> Unit) {
                         )
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(ProCircuit.Lime)
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        "ZAREZERWUJ",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 10.sp, letterSpacing = 0.5.sp, color = ProCircuit.Bg
-                    )
+                if (!isCoachMode) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(ProCircuit.Lime)
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            "ZAREZERWUJ",
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 10.sp, letterSpacing = 0.5.sp, color = ProCircuit.Bg
+                        )
+                    }
                 }
             }
         }
