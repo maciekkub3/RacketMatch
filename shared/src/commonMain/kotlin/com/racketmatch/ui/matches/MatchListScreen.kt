@@ -40,6 +40,7 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.MatchEffect
 import com.racketmatch.ui.chat.ChatScreen
 import com.racketmatch.util.kmpViewModel
@@ -49,6 +50,7 @@ object MatchListScreen : Screen {
     @Composable
     override fun Content() {
         val viewModel: MatchViewModel = kmpViewModel()
+        val badgeVm: ActionBadgeViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         var resultDialogMatch by remember { mutableStateOf<Match?>(null) }
         var disputeMatch by remember { mutableStateOf<Match?>(null) }
@@ -56,6 +58,7 @@ object MatchListScreen : Screen {
         val snackbarHostState = remember { SnackbarHostState() }
 
         LaunchedEffect(Unit) {
+            badgeVm.refresh()
             viewModel.onEvent(MatchEvent.LoadMatches)
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
@@ -330,8 +333,21 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(ProCircuit.SurfaceLow)
-            .padding(20.dp)
     ) {
+        if (!iWaited) {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .background(ProCircuit.Lime.copy(alpha = 0.10f))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(ProCircuit.Lime))
+                Spacer(Modifier.width(6.dp))
+                Text("TWOJA KOLEJ", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                    fontSize = 9.sp, letterSpacing = 1.sp, color = ProCircuit.Lime)
+            }
+        }
+        Column(modifier = Modifier.padding(20.dp)) {
         // Header row
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -454,6 +470,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 }
             }
         }
+        } // inner Column
     }
 }
 
@@ -482,8 +499,21 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(ProCircuit.SurfaceLow)
-            .padding(18.dp)
     ) {
+        if (theyCountered) {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .background(ProCircuit.Lime.copy(alpha = 0.10f))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(ProCircuit.Lime))
+                Spacer(Modifier.width(6.dp))
+                Text("TWOJA KOLEJ", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                    fontSize = 9.sp, letterSpacing = 1.sp, color = ProCircuit.Lime)
+            }
+        }
+        Column(modifier = Modifier.padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
@@ -522,11 +552,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
         // Details row
         if (hasDetails) {
             Spacer(Modifier.height(12.dp))
-            val detailLabelColor = when {
-                theyCountered -> ProCircuit.Tertiary
-                iProposed -> ProCircuit.Lime.copy(alpha = 0.7f)
-                else -> ProCircuit.OnSurface
-            }
+            val detailLabelColor = if (theyCountered) ProCircuit.Tertiary else ProCircuit.Lime.copy(alpha = 0.7f)
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
@@ -538,11 +564,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 if (!match.locationName.isNullOrBlank()) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            when {
-                                theyCountered -> "ICH PROPOZYCJA KORTU"
-                                iProposed -> "TWOJA PROPOZYCJA"
-                                else -> "PROPONOWANY KORT"
-                            },
+                            if (theyCountered) "ICH PROPOZYCJA" else "TWOJA PROPOZYCJA",
                             fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                             fontSize = 9.sp, letterSpacing = 1.5.sp, color = detailLabelColor
                         )
@@ -564,34 +586,36 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 
         Spacer(Modifier.height(14.dp))
         if (theyCountered) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { viewModel.onEvent(MatchEvent.AcceptMatch(match.id)) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-                ) {
-                    Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { viewModel.onEvent(MatchEvent.AcceptMatch(match.id)) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+                    ) {
+                        Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 10.sp, letterSpacing = 1.sp)
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.onEvent(MatchEvent.CancelChallenge(match.id)) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
+                    ) {
+                        Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp, letterSpacing = 1.sp)
+                    }
                 }
                 OutlinedButton(
                     onClick = { showProposeDialog = true },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
                     border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
                 ) {
-                    Text("KONTRA", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
-                }
-                OutlinedButton(
-                    onClick = { viewModel.onEvent(MatchEvent.CancelChallenge(match.id)) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
-                ) {
-                    Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                    Text("ZAPROPONUJ KONTRĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 10.sp, letterSpacing = 1.sp)
                 }
             }
@@ -619,6 +643,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 }
             }
         }
+        } // inner Column
     }
 }
 
