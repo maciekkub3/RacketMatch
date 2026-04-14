@@ -61,7 +61,8 @@ data class CreateBookingRequest(
     val startsAt: Instant,
     val endsAt: Instant,
     val durationMinutes: Int,
-    val playerNote: String? = null
+    val playerNote: String? = null,
+    val courtName: String? = null
 )
 
 data class DeclineBookingRequest(
@@ -75,7 +76,8 @@ data class CancelBookingRequest(
 data class CounterBookingRequest(
     val startsAt: Instant,
     val endsAt: Instant,
-    val durationMinutes: Int? = null
+    val durationMinutes: Int? = null,
+    val courtName: String? = null
 )
 
 data class BookingDto(
@@ -94,7 +96,11 @@ data class BookingDto(
     val lateCancel: Boolean,
     val conversationId: String?,
     val previousBookingId: UUID?,
-    val otherParty: UserSummaryDto? = null
+    val proposedByCoach: Boolean = false,
+    val otherParty: UserSummaryDto? = null,
+    val previousStartsAt: Instant? = null,
+    val previousEndsAt: Instant? = null,
+    val courtName: String? = null
 )
 
 data class UserSummaryDto(
@@ -184,7 +190,7 @@ fun CoachServiceEntity.toDto() = CoachServiceDto(
     isActive = isActive
 )
 
-fun BookingEntity.toDto(viewerId: UUID? = null): BookingDto {
+fun BookingEntity.toDto(viewerId: UUID? = null, previousBooking: BookingEntity? = null): BookingDto {
     val other = when (viewerId) {
         coach.id -> player
         player.id -> coach
@@ -206,9 +212,13 @@ fun BookingEntity.toDto(viewerId: UUID? = null): BookingDto {
         lateCancel = lateCancel,
         conversationId = conversationId,
         previousBookingId = previousBookingId,
+        proposedByCoach = proposedByCoach,
         otherParty = other?.let {
             UserSummaryDto(id = it.id!!, displayName = it.displayName, avatarUrl = it.avatarUrl)
-        }
+        },
+        previousStartsAt = previousBooking?.startsAt,
+        previousEndsAt = previousBooking?.endsAt,
+        courtName = courtName
     )
 }
 

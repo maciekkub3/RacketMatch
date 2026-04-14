@@ -55,7 +55,8 @@ class BookingController(
                 durationMinutes = request.durationMinutes,
                 playerNote = request.playerNote?.takeIf { it.isNotBlank() },
                 conversationId = conversationId,
-                updatedAt = Instant.now()
+                updatedAt = Instant.now(),
+                courtName = request.courtName?.takeIf { it.isNotBlank() }
             )
         )
         dmService.sendBookingCard(conversationId, senderId = playerId, bookingId = saved.id!!)
@@ -72,7 +73,8 @@ class BookingController(
     @GetMapping("/me")
     fun getMyBookings(authentication: Authentication): List<BookingDto> {
         val userId = UUID.fromString(authentication.name)
-        return bookingRepository.findByUserId(userId).map { it.toDto(viewerId = userId) }
+        val items = bookingRepository.findByUserId(userId)
+        return items.withPreviousBookings().map { (b, prev) -> b.toDto(viewerId = userId, previousBooking = prev) }
     }
 
     @GetMapping
@@ -89,7 +91,14 @@ class BookingController(
             null, "" -> bookingRepository.findByUserId(userId)
             else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown segment: $segment")
         }
-        return items.map { it.toDto(viewerId = userId) }
+        return items.withPreviousBookings().map { (b, prev) -> b.toDto(viewerId = userId, previousBooking = prev) }
+    }
+
+    private fun List<BookingEntity>.withPreviousBookings(): List<Pair<BookingEntity, BookingEntity?>> {
+        val prevIds = mapNotNull { it.previousBookingId }.toSet()
+        val prevMap = if (prevIds.isEmpty()) emptyMap()
+                      else bookingRepository.findAllById(prevIds).associateBy { it.id!! }
+        return map { it to prevMap[it.previousBookingId] }
     }
 
     @GetMapping("/coach/pending")
@@ -209,8 +218,12 @@ class BookingController(
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not a participant")
         if (old.status != "PENDING")
             throw ResponseStatusException(HttpStatus.CONFLICT, "Only pending bookings can be countered")
-
         val now = Instant.now()
+        if (request.startsAt.isBefore(now))
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Counter start time must be in the future")
+        if (!request.endsAt.isAfter(request.startsAt))
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "End must be after start")
+
         old.status = "DECLINED"
         old.declineReason = "countered"
         old.updatedAt = now
@@ -229,7 +242,9 @@ class BookingController(
                 playerNote = old.playerNote,
                 conversationId = conversationId,
                 previousBookingId = old.id,
-                updatedAt = now
+                proposedByCoach = (userId == old.coach.id),
+                updatedAt = now,
+                courtName = request.courtName?.takeIf { it.isNotBlank() } ?: old.courtName
             )
         )
         val otherPartyId = if (userId == old.player.id) old.coach.id!! else old.player.id!!
@@ -241,7 +256,7 @@ class BookingController(
             body = "$proposerName zaproponował inny termin",
             data = mapOf("bookingId" to new.id.toString(), "previousBookingId" to old.id.toString())
         )
-        return new.toDto(viewerId = userId)
+        return new.toDto(viewerId = userId, previousBooking = old)
     }
 
     private fun findBookingForParticipant(bookingId: UUID, userId: String): BookingEntity {
