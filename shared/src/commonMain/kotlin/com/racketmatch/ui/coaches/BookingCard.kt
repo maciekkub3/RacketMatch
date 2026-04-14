@@ -149,7 +149,7 @@ fun BookingCard(
                     ) {
                         Column {
                             Text(
-                                "ICH PROPOZYCJA TERMINU",
+                                "ICH PROPOZYCJA",
                                 fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                                 fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.Tertiary
                             )
