@@ -63,5 +63,11 @@ class BookingEntity(
     var updatedAt: Instant? = null,
 
     @Column(name = "reminder_sent", nullable = false)
-    var reminderSent: Boolean = false
+    var reminderSent: Boolean = false,
+
+    @Column(name = "proposed_by_coach", nullable = false)
+    val proposedByCoach: Boolean = false,
+
+    @Column(name = "court_name")
+    var courtName: String? = null
 )
