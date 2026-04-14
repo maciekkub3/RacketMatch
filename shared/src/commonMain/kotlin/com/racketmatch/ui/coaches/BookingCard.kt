@@ -69,6 +69,8 @@ fun BookingCard(
             val isActionableCounter = requiresAction && prevStart != null && prevEnd != null
             val isWaitingCounter = !requiresAction && booking.status == "PENDING" && prevStart != null && prevEnd != null
             val showPrevInHeader = isActionableCounter || isWaitingCounter
+            val timeChanged = booking.startsAt != prevStart || booking.endsAt != prevEnd
+            val courtChanged = !booking.courtName.isNullOrBlank() && booking.courtName != booking.previousCourtName
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -153,12 +155,14 @@ fun BookingCard(
                                 fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                                 fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.Tertiary
                             )
-                            Text(
-                                formatSlot(booking.startsAt, booking.endsAt),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp, color = ProCircuit.Lime
-                            )
-                            if (!booking.courtName.isNullOrBlank() && booking.courtName != booking.previousCourtName) {
+                            if (timeChanged) {
+                                Text(
+                                    formatSlot(booking.startsAt, booking.endsAt),
+                                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp, color = ProCircuit.Lime
+                                )
+                            }
+                            if (courtChanged) {
                                 Text(
                                     "🏟️ ${booking.courtName}",
                                     fontFamily = AppBodyFontFamily,
@@ -185,12 +189,14 @@ fun BookingCard(
                                 fontSize = 9.sp, letterSpacing = 1.5.sp,
                                 color = ProCircuit.Lime.copy(alpha = 0.7f)
                             )
-                            Text(
-                                formatSlot(booking.startsAt, booking.endsAt),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp, color = ProCircuit.Lime
-                            )
-                            if (!booking.courtName.isNullOrBlank() && booking.courtName != booking.previousCourtName) {
+                            if (timeChanged) {
+                                Text(
+                                    formatSlot(booking.startsAt, booking.endsAt),
+                                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp, color = ProCircuit.Lime
+                                )
+                            }
+                            if (courtChanged) {
                                 Text(
                                     "🏟️ ${booking.courtName}",
                                     fontFamily = AppBodyFontFamily,
