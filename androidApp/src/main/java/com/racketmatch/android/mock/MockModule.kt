@@ -402,8 +402,8 @@ val mockRepositoryModule = module {
             override suspend fun getMyServices(): List<CoachService> = emptyList()
             override suspend fun getCoachServices(coachId: String): List<CoachService> = emptyList()
             override suspend fun getAvailability(coachId: String, from: Instant, to: Instant) = MOCK_SLOTS
-            override suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?): CoachBooking =
-                CoachBooking("mock", coachId, "me", serviceId, null, startsAt, endsAt, durationMinutes, "PENDING", playerNote = playerNote)
+            override suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?, courtName: String?): CoachBooking =
+                CoachBooking("mock", coachId, "me", serviceId, null, startsAt, endsAt, durationMinutes, "PENDING", playerNote = playerNote, courtName = courtName)
             override suspend fun createService(name: String, description: String?, pricingType: String, priceCents: Int): CoachService =
                 CoachService("mock", "me", name, description, PricingType.valueOf(pricingType), priceCents, true)
             override suspend fun updateService(serviceId: String, name: String, description: String?, pricingType: String, priceCents: Int, isActive: Boolean): CoachService =
@@ -430,8 +430,8 @@ val mockRepositoryModule = module {
                 CoachBooking(bookingId, "me", "player", null, null, Instant.DISTANT_PAST, Instant.DISTANT_PAST, null, "DECLINED", declineReason = reason)
             override suspend fun cancelBooking(bookingId: String, reason: String?): CoachBooking =
                 CoachBooking(bookingId, "me", "player", null, null, Instant.DISTANT_PAST, Instant.DISTANT_PAST, null, "CANCELLED", cancelReason = reason)
-            override suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int?): CoachBooking =
-                CoachBooking(bookingId, "me", "player", null, null, startsAt, endsAt, durationMinutes, "PENDING")
+            override suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int?, courtName: String?): CoachBooking =
+                CoachBooking(bookingId, "me", "player", null, null, startsAt, endsAt, durationMinutes, "PENDING", courtName = courtName)
             override suspend fun listBookings(segment: String?): List<CoachBooking> = emptyList()
             override suspend fun updateMyCoachProfile(bio: String?, sports: List<Sport>?, trainingLocations: List<String>): CoachProfile =
                 MOCK_COACHES.first().copy(trainingLocations = trainingLocations)
