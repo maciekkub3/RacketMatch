@@ -25,6 +25,7 @@ import kotlinx.datetime.toLocalDateTime
 @Composable
 fun BookingCard(
     booking: CoachBooking,
+    requiresAction: Boolean = false,
     onAvatarClick: (() -> Unit)? = null,
     actions: @Composable () -> Unit = {}
 ) {
@@ -34,93 +35,223 @@ fun BookingCard(
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(ProCircuit.SurfaceLow)
-            .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
+        // "Your turn" header strip
+        if (requiresAction) {
+            Row(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(ProCircuit.SurfaceHigh)
-                    .then(if (onAvatarClick != null) Modifier.clickable { onAvatarClick() } else Modifier),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .background(ProCircuit.Lime.copy(alpha = 0.10f))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(ProCircuit.Lime)
+                )
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    booking.otherParty?.displayName?.firstOrNull()?.uppercase() ?: "?",
+                    "TWOJA KOLEJ",
                     fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    color = ProCircuit.OnBg
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 9.sp,
+                    letterSpacing = 1.sp,
+                    color = ProCircuit.Lime
                 )
             }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    booking.otherParty?.displayName ?: (booking.serviceName ?: "Rezerwacja"),
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = ProCircuit.OnBg
-                )
-                Text(
-                    formatWhen(booking),
-                    fontFamily = AppBodyFontFamily,
-                    fontSize = 12.sp,
-                    color = ProCircuit.OnSurface
-                )
-                booking.serviceName?.let {
+        }
+
+        Column(modifier = Modifier.padding(16.dp)) {
+            val prevStart = booking.previousStartsAt
+            val prevEnd = booking.previousEndsAt
+            val isActionableCounter = requiresAction && prevStart != null && prevEnd != null
+            val isWaitingCounter = !requiresAction && booking.status == "PENDING" && prevStart != null && prevEnd != null
+            val showPrevInHeader = isActionableCounter || isWaitingCounter
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(ProCircuit.SurfaceHigh)
+                        .then(if (onAvatarClick != null) Modifier.clickable { onAvatarClick() } else Modifier),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        it,
+                        booking.otherParty?.displayName?.firstOrNull()?.uppercase() ?: "?",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        color = ProCircuit.OnBg
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        booking.otherParty?.displayName ?: (booking.serviceName ?: "Rezerwacja"),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = ProCircuit.OnBg
+                    )
+                    Text(
+                        if (showPrevInHeader) formatSlot(prevStart!!, prevEnd!!) else formatWhen(booking),
                         fontFamily = AppBodyFontFamily,
                         fontSize = 12.sp,
                         color = ProCircuit.OnSurface
                     )
+                    booking.serviceName?.let {
+                        Text(
+                            it,
+                            fontFamily = AppBodyFontFamily,
+                            fontSize = 12.sp,
+                            color = ProCircuit.OnSurface
+                        )
+                    }
+                    if (!booking.courtName.isNullOrBlank()) {
+                        Text(
+                            "🏟️ ${booking.courtName}",
+                            fontFamily = AppBodyFontFamily,
+                            fontSize = 11.sp,
+                            color = ProCircuit.OnSurface
+                        )
+                    }
+                }
+                BookingStatusChip(booking.status)
+            }
+
+            if (prevStart != null && prevEnd != null) {
+                if (isActionableCounter) {
+                    Spacer(Modifier.height(12.dp))
+                    if (booking.proposedByCoach) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(ProCircuit.Lime.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "↩ KONTROFERTA TRENERA",
+                                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                                fontSize = 9.sp, letterSpacing = 0.5.sp, color = ProCircuit.Lime
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(ProCircuit.SurfaceHigh)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "ICH PROPOZYCJA TERMINU",
+                                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                                fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.Tertiary
+                            )
+                            Text(
+                                formatSlot(booking.startsAt, booking.endsAt),
+                                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp, color = ProCircuit.Lime
+                            )
+                        }
+                    }
+                } else if (isWaitingCounter) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(ProCircuit.SurfaceHigh)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "TWOJA PROPOZYCJA",
+                                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                                fontSize = 9.sp, letterSpacing = 1.5.sp,
+                                color = ProCircuit.Lime.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                formatSlot(booking.startsAt, booking.endsAt),
+                                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp, color = ProCircuit.Lime
+                            )
+                        }
+                    }
+                } else {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Poprzednio: ${formatSlot(prevStart, prevEnd)}",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 11.sp,
+                        color = ProCircuit.OnSurface
+                    )
                 }
             }
-            BookingStatusChip(booking.status)
+
+            if (!booking.playerNote.isNullOrBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "\u201C${booking.playerNote}\u201D",
+                    fontFamily = AppBodyFontFamily,
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface
+                )
+            }
+            if (booking.status == "CANCELLED" && !booking.cancelReason.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Anulowano: ${booking.cancelReason}",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp,
+                    color = ProCircuit.OnSurface
+                )
+            }
+            if (booking.status == "DECLINED" && !booking.declineReason.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Odrzucono: ${booking.declineReason}",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp,
+                    color = ProCircuit.OnSurface
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            actions()
         }
-        if (!booking.playerNote.isNullOrBlank()) {
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "\u201C${booking.playerNote}\u201D",
-                fontFamily = AppBodyFontFamily,
-                fontStyle = FontStyle.Italic,
-                fontSize = 13.sp,
-                color = ProCircuit.OnSurface
-            )
-        }
-        if (booking.status == "CANCELLED" && !booking.cancelReason.isNullOrBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Anulowano: ${booking.cancelReason}",
-                fontFamily = AppBodyFontFamily,
-                fontSize = 12.sp,
-                color = ProCircuit.OnSurface
-            )
-        }
-        if (booking.status == "DECLINED" && !booking.declineReason.isNullOrBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Odrzucono: ${booking.declineReason}",
-                fontFamily = AppBodyFontFamily,
-                fontSize = 12.sp,
-                color = ProCircuit.OnSurface
-            )
-        }
-        Spacer(Modifier.height(12.dp))
-        actions()
     }
 }
 
-private fun formatWhen(booking: CoachBooking): String {
+internal fun formatWhen(booking: CoachBooking): String {
     return try {
-        val ldt = booking.startsAt.toLocalDateTime(TimeZone.currentSystemDefault())
-        val hh = ldt.hour.toString().padStart(2, '0')
-        val mm = ldt.minute.toString().padStart(2, '0')
+        val tz = TimeZone.currentSystemDefault()
+        val ldt = booking.startsAt.toLocalDateTime(tz)
+        val edt = booking.endsAt.toLocalDateTime(tz)
         val d = ldt.dayOfMonth.toString().padStart(2, '0')
         val mo = ldt.monthNumber.toString().padStart(2, '0')
-        "$d.$mo ${ldt.year} • $hh:$mm"
+        "$d.$mo.${ldt.year} • ${ldt.hour.toString().padStart(2,'0')}:${ldt.minute.toString().padStart(2,'0')}–${edt.hour.toString().padStart(2,'0')}:${edt.minute.toString().padStart(2,'0')}"
     } catch (_: Throwable) {
         booking.startsAt.toString().take(16).replace("T", " ")
+    }
+}
+
+internal fun formatSlot(start: kotlin.time.Instant, end: kotlin.time.Instant): String {
+    return try {
+        val tz = TimeZone.currentSystemDefault()
+        val ldt = start.toLocalDateTime(tz)
+        val edt = end.toLocalDateTime(tz)
+        val d = ldt.dayOfMonth.toString().padStart(2, '0')
+        val mo = ldt.monthNumber.toString().padStart(2, '0')
+        "$d.$mo.${ldt.year} • ${ldt.hour.toString().padStart(2,'0')}:${ldt.minute.toString().padStart(2,'0')}–${edt.hour.toString().padStart(2,'0')}:${edt.minute.toString().padStart(2,'0')}"
+    } catch (_: Throwable) {
+        start.toString().take(16).replace("T", " ")
     }
 }
 
