@@ -320,9 +320,10 @@ fun CounterSlotSheet(
     // freeform mode — only available when allowFreeform = true
     var freeformMode by remember { mutableStateOf(false) }
 
-    var displayedYear  by remember { mutableStateOf(today.year) }
-    var displayedMonth by remember { mutableStateOf(today.monthNumber) }
-    var selectedDay    by remember { mutableStateOf(today) }
+    val bookingDay = remember { booking.startsAt.toLocalDateTime(tz).date }
+    var displayedYear  by remember { mutableStateOf(bookingDay.year) }
+    var displayedMonth by remember { mutableStateOf(bookingDay.monthNumber) }
+    var selectedDay    by remember { mutableStateOf(bookingDay) }
     var selectedSlot   by remember { mutableStateOf<BookingSlot?>(null) }
     var selectedDuration by remember { mutableStateOf(booking.durationMinutes ?: 60) }
     var allSlots       by remember { mutableStateOf<List<BookingSlot>>(emptyList()) }
@@ -368,6 +369,10 @@ fun CounterSlotSheet(
             )
         } catch (_: Exception) { }
         isLoading = false
+        // Pre-select the slot matching the current booking time
+        if (selectedSlot == null) {
+            selectedSlot = allSlots.firstOrNull { it.startsAt == booking.startsAt && it.isAvailable }
+        }
     }
 
     LaunchedEffect(daysWithAvailability, displayedMonth) {
