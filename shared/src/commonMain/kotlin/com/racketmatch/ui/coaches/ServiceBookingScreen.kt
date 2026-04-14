@@ -63,6 +63,15 @@ data class ServiceBookingScreen(
         var selectedDuration by remember { mutableStateOf(60) }
         var playerNote by remember { mutableStateOf("") }
         var showSuccess by remember { mutableStateOf(false) }
+        var selectedCourt by remember { mutableStateOf<String?>(null) }
+
+        val trainingLocations = remember(state) {
+            (state as? CoachDetailState.Content)?.coach?.trainingLocations ?: emptyList()
+        }
+
+        LaunchedEffect(trainingLocations) {
+            if (trainingLocations.size == 1) selectedCourt = trainingLocations.first()
+        }
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { eff ->
@@ -143,11 +152,12 @@ data class ServiceBookingScreen(
             bottomBar = {
                 BottomBookingBar(
                     totalCents = totalCents,
-                    enabled = selectedSlot != null,
+                    enabled = selectedSlot != null &&
+                        (trainingLocations.size <= 1 || selectedCourt != null),
                     onConfirm = {
                         val slot = selectedSlot ?: return@BottomBookingBar
                         val actualEndsAt = slot.startsAt + selectedDuration.minutes
-                        viewModel.onEvent(CoachDetailEvent.BookSlot(service.id, slot.startsAt, actualEndsAt, selectedDuration, playerNote.ifBlank { null }))
+                        viewModel.onEvent(CoachDetailEvent.BookSlot(service.id, slot.startsAt, actualEndsAt, selectedDuration, playerNote.ifBlank { null }, selectedCourt))
                     }
                 )
             }
@@ -366,23 +376,68 @@ data class ServiceBookingScreen(
                     }
                 }
 
-                // Meeting point
+                // Meeting point / court selector
                 item {
                     Spacer(Modifier.height(20.dp))
-                    Text("PUNKT SPOTKANIA", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                    Text(
+                        "PUNKT SPOTKANIA",
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                         fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
-                        modifier = Modifier.padding(horizontal = 20.dp))
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
                     Spacer(Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("📍", fontSize = 16.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            (state as? CoachDetailState.Content)?.coach?.city ?: "—",
-                            fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnBg
-                        )
+                    when {
+                        trainingLocations.isEmpty() -> {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("📍", fontSize = 16.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    (state as? CoachDetailState.Content)?.coach?.city ?: "—",
+                                    fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnBg
+                                )
+                            }
+                        }
+                        trainingLocations.size == 1 -> {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🏟️", fontSize = 16.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    trainingLocations.first(),
+                                    fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnBg
+                                )
+                            }
+                        }
+                        else -> {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                trainingLocations.forEach { court ->
+                                    val isSelected = selectedCourt == court
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isSelected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                                            .clickable { selectedCourt = court }
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            court,
+                                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = if (isSelected) ProCircuit.Bg else ProCircuit.OnBg
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
