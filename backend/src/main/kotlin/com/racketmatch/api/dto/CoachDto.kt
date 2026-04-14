@@ -100,7 +100,8 @@ data class BookingDto(
     val otherParty: UserSummaryDto? = null,
     val previousStartsAt: Instant? = null,
     val previousEndsAt: Instant? = null,
-    val courtName: String? = null
+    val courtName: String? = null,
+    val previousCourtName: String? = null
 )
 
 data class UserSummaryDto(
@@ -218,7 +219,8 @@ fun BookingEntity.toDto(viewerId: UUID? = null, previousBooking: BookingEntity? 
         },
         previousStartsAt = previousBooking?.startsAt,
         previousEndsAt = previousBooking?.endsAt,
-        courtName = courtName
+        courtName = courtName,
+        previousCourtName = previousBooking?.courtName
     )
 }
 

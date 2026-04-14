@@ -158,7 +158,7 @@ fun BookingCard(
                                 fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp, color = ProCircuit.Lime
                             )
-                            if (!booking.courtName.isNullOrBlank()) {
+                            if (!booking.courtName.isNullOrBlank() && booking.courtName != booking.previousCourtName) {
                                 Text(
                                     "🏟️ ${booking.courtName}",
                                     fontFamily = AppBodyFontFamily,
@@ -190,7 +190,7 @@ fun BookingCard(
                                 fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp, color = ProCircuit.Lime
                             )
-                            if (!booking.courtName.isNullOrBlank()) {
+                            if (!booking.courtName.isNullOrBlank() && booking.courtName != booking.previousCourtName) {
                                 Text(
                                     "🏟️ ${booking.courtName}",
                                     fontFamily = AppBodyFontFamily,

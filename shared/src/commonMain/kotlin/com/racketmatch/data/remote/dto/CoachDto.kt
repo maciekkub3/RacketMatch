@@ -97,7 +97,8 @@ data class CoachBookingDto(
     val otherParty: UserSummaryDto? = null,
     val previousStartsAt: String? = null,
     val previousEndsAt: String? = null,
-    val courtName: String? = null
+    val courtName: String? = null,
+    val previousCourtName: String? = null
 )
 
 @Serializable
@@ -241,7 +242,8 @@ fun CoachBookingDto.toDomain() = CoachBooking(
     otherParty = otherParty?.toDomain(),
     previousStartsAt = previousStartsAt?.let { Instant.parse(it) },
     previousEndsAt = previousEndsAt?.let { Instant.parse(it) },
-    courtName = courtName
+    courtName = courtName,
+    previousCourtName = previousCourtName
 )
 
 fun UserSummaryDto.toDomain() = UserSummary(

@@ -72,7 +72,8 @@ data class CoachBooking(
     val otherParty: UserSummary? = null,
     val previousStartsAt: Instant? = null,
     val previousEndsAt: Instant? = null,
-    val courtName: String? = null
+    val courtName: String? = null,
+    val previousCourtName: String? = null
 )
 
 data class UserSummary(
