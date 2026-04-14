@@ -1328,6 +1328,10 @@ private fun ProposeDetailsDialog(
     var courtName by remember { mutableStateOf(prefillLocation ?: "") }
     var selectedMillis by remember { mutableStateOf<Long?>(prefillMillis) }
 
+    val somethingChanged = courtName.trim() != (prefillLocation ?: "").trim() || selectedMillis != prefillMillis
+    val hasContent = courtName.isNotBlank() || selectedMillis != null
+    val canConfirm = somethingChanged && hasContent
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ProCircuit.SurfaceLow,
@@ -1361,9 +1365,13 @@ private fun ProposeDetailsDialog(
                 )
                 Button(
                     onClick = { onConfirm(courtName.takeIf { it.isNotBlank() }, selectedMillis) },
+                    enabled = canConfirm,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg,
+                        disabledContainerColor = ProCircuit.SurfaceHigh, disabledContentColor = ProCircuit.OnSurface
+                    )
                 ) {
                     Text("WYŚLIJ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                         fontSize = 12.sp, letterSpacing = 2.sp)
