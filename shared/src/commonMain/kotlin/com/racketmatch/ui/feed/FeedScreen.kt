@@ -37,7 +37,7 @@ object FeedScreen : Screen {
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically

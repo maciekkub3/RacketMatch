@@ -45,6 +45,8 @@ object MessagesScreen : Screen {
         val tokenStorage = koinInject<TokenStorage>()
         val currentUserId = tokenStorage.currentUserId ?: ""
 
+        LaunchedEffect(Unit) { viewModel.load() }
+
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
@@ -62,7 +64,7 @@ object MessagesScreen : Screen {
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically

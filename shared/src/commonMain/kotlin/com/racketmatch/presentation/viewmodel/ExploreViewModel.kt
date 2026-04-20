@@ -17,6 +17,7 @@ import com.racketmatch.domain.repository.PlayerRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -112,7 +113,12 @@ sealed class ExploreEvent {
 sealed class ExploreEffect {
     data class SessionJoined(val matchId: String, val opponentName: String, val courtName: String) : ExploreEffect()
     data class OpenChat(val matchId: String) : ExploreEffect()
-    data class ChallengeSent(val name: String) : ExploreEffect()
+    data class ChallengeSent(
+        val name: String,
+        val opponentElo: Int,
+        val opponentCity: String,
+        val myElo: Int,
+    ) : ExploreEffect()
     data class ShowError(val msg: String) : ExploreEffect()
 }
 
@@ -138,7 +144,15 @@ class ExploreViewModel(
             tokenStorage.loginVersionFlow.drop(1).collect { loadAll() }
         }
         viewModelScope.launch {
-            tokenStorage.matchesVersionFlow.drop(1).collect { loadSessions() }
+            // Match changes can shift my own ELO, pending counts, sessions.
+            // Refresh the whole snapshot (not just sessions) so Explore and
+            // any consumer of myElo stays in sync.
+            tokenStorage.matchesVersionFlow.drop(1).collect { loadAll() }
+        }
+        viewModelScope.launch {
+            // Profile edits (avatar, display name, sports, city) — reflect
+            // in my header + challenge dialog state without re-login.
+            tokenStorage.profileVersionFlow.drop(1).collect { loadAll() }
         }
     }
 
@@ -214,18 +228,41 @@ class ExploreViewModel(
         viewModelScope.launch(dispatcher) {
             _state.value = _state.value.copy(isLoading = true)
             val myId = tokenStorage.currentUserId ?: ""
-            val myProfile = runCatching { profileRepository.getMyProfile() }.getOrNull()
+
+            // Kick off every network request in parallel. `players` and
+            // `myMatches` don't depend on the city, so they start immediately;
+            // `courts` and `sessions` are city-scoped and start with the
+            // cached-or-default city, rather than waiting for myProfile — the
+            // 99% case is "stays the same" so the extra refetch is amortised
+            // to zero. If myProfile returns a different city we re-fetch.
+            val cachedCity = _state.value.selectedCity.takeIf { it.isNotBlank() } ?: "Warszawa"
+            val startCity = normalizeCityName(cachedCity)
+
+            val profileDeferred = async { runCatching { profileRepository.getMyProfile() }.getOrNull() }
+            val courtsDeferred = async { runCatching { courtRepository.getCourts(startCity) }.getOrDefault(emptyList()) }
+            val sessionsDeferred = async { runCatching { sessionRepository.getSessions(startCity) }.getOrDefault(emptyList()) }
+            val playersDeferred = async {
+                runCatching { playerRepository.getNearbyPlayers(PlayerFilter(), 0.0, 0.0) }.getOrDefault(emptyList())
+            }
+            val matchesDeferred = async { runCatching { matchRepository.getMyMatches() }.getOrDefault(emptyList()) }
+
+            val myProfile = profileDeferred.await()
             val myElo = myProfile?.eloRating ?: 1200
             val myName = myProfile?.displayName ?: ""
             val myAvatarUrl = myProfile?.avatarUrl
             val mySports = myProfile?.sports ?: emptyList()
-            val initialCity = normalizeCityName(myProfile?.city ?: "Warszawa")
-            val courts = runCatching { courtRepository.getCourts(initialCity) }.getOrDefault(emptyList())
-            val sessions = runCatching { sessionRepository.getSessions(initialCity) }.getOrDefault(emptyList())
-            val players = runCatching {
-                playerRepository.getNearbyPlayers(PlayerFilter(), 0.0, 0.0)
-            }.getOrDefault(emptyList())
-            val myMatches = runCatching { matchRepository.getMyMatches() }.getOrDefault(emptyList())
+            val initialCity = normalizeCityName(myProfile?.city ?: startCity)
+
+            // If profile says a different city than the one we speculatively
+            // fetched, refetch city-scoped data. Otherwise reuse.
+            val courts = if (initialCity == startCity) courtsDeferred.await() else {
+                runCatching { courtRepository.getCourts(initialCity) }.getOrDefault(emptyList())
+            }
+            val sessions = if (initialCity == startCity) sessionsDeferred.await() else {
+                runCatching { sessionRepository.getSessions(initialCity) }.getOrDefault(emptyList())
+            }
+            val players = playersDeferred.await()
+            val myMatches = matchesDeferred.await()
             val pendingIds = myMatches
                 .filter { it.status == MatchStatus.PENDING && it.challengerId == myId }
                 .map { it.challengedId }.toSet()
@@ -324,7 +361,17 @@ class ExploreViewModel(
                     locationName = locationName,
                     scheduledAt = dialog.startsAtMillis
                 )
-            }.onSuccess { _effects.emit(ExploreEffect.ChallengeSent(dialog.player.displayName)); loadAll() }
+            }.onSuccess {
+                _effects.emit(
+                    ExploreEffect.ChallengeSent(
+                        name = dialog.player.displayName,
+                        opponentElo = dialog.player.eloRating,
+                        opponentCity = dialog.player.city,
+                        myElo = _state.value.myElo,
+                    )
+                )
+                loadAll()
+            }
              .onFailure { _effects.emit(ExploreEffect.ShowError((it as? Exception)?.toUserMessage() ?: it.message ?: "Error")) }
         }
     }

@@ -76,7 +76,8 @@ object CoachProfileScreen : Screen {
                 is CoachProfileState.Content -> CoachProfileContent(
                     state = s,
                     padding = padding,
-                    onEditProfile = { navigator.push(CoachProfileEditScreen) }
+                    // Edit = focused form → hide bottom nav via outer Navigator.
+                    onEditProfile = { (navigator.parent?.parent ?: navigator).push(CoachProfileEditScreen) }
                 )
             }
         }

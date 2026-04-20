@@ -67,7 +67,7 @@ object FriendsScreen : Screen {
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -141,7 +141,7 @@ object FriendsScreen : Screen {
                     if (selectedTab == 0) {
                         FriendsList(
                             friends = s.data.friends,
-                            onTap = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(it, initialIsFriend = true)) },
+                            onTap = { navigator.push(PlayerProfileScreen(it, initialIsFriend = true)) },
                             onDm = { viewModel.onEvent(FriendsEvent.OpenDm(it)) }
                         )
                     } else {
@@ -151,7 +151,7 @@ object FriendsScreen : Screen {
                             onAccept = { viewModel.onEvent(FriendsEvent.AcceptRequest(it)) },
                             onDecline = { viewModel.onEvent(FriendsEvent.DeclineRequest(it)) },
                             onCancel = { viewModel.onEvent(FriendsEvent.CancelRequest(it)) },
-                            onPlayerClick = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(it)) }
+                            onPlayerClick = { navigator.push(PlayerProfileScreen(it)) }
                         )
                     }
                 }
