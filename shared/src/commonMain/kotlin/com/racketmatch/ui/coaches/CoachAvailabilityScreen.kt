@@ -47,7 +47,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,9 +111,12 @@ object CoachAvailabilityScreen : Screen {
         }
 
         // Auto-save: debounce state changes and fire Save after 1.2s of idle.
-        // Skips the initial state emission to avoid saving on mount.
+        // Collect the StateFlow directly — `snapshotFlow { stateFlow.value }`
+        // looks right but doesn't work: `.value` is a plain getter, not a
+        // Compose snapshot read, so snapshotFlow emits only the initial
+        // value and never again. (This was the bug: edits never persisted.)
         LaunchedEffect(viewModel) {
-            snapshotFlow { viewModel.stateFlow.value }
+            viewModel.stateFlow
                 .drop(1)
                 .distinctUntilChanged()
                 .debounce(1200)
@@ -235,6 +237,7 @@ private fun AvailabilityContent(
 ) {
     var settingsExpanded by remember { mutableStateOf(false) }
     var showAddException by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     // Day editor sheet — primary bulk-edit path. Tap a day label in the
     // grid header to open range editor for that day.
     var editingDayOfWeek by remember { mutableStateOf<Int?>(null) }
@@ -375,6 +378,31 @@ private fun AvailabilityContent(
                 )
             }
         }
+
+        // Destructive: clear the whole weekly schedule. Visually muted so
+        // it doesn't compete with primary actions; confirmation required.
+        item { Spacer(Modifier.height(28.dp)) }
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(ProCircuit.LossRed.copy(alpha = 0.10f))
+                    .clickable { showClearConfirm = true }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = "Wyczyść cały grafik",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = ProCircuit.LossRed,
+                )
+            }
+        }
     }
 
     if (showAddException) {
@@ -398,6 +426,70 @@ private fun AvailabilityContent(
             },
             onCopyTo = { targetDays ->
                 onEvent(CoachAvailabilityEvent.CopyDayTo(dow, targetDays))
+            },
+        )
+    }
+
+    if (showClearConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            containerColor = ProCircuit.SurfaceLow,
+            title = {
+                Text(
+                    text = "Wyczyścić cały grafik?",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 17.sp,
+                    color = ProCircuit.OnBg,
+                )
+            },
+            text = {
+                Text(
+                    text = "Wszystkie 7 dni zostanie wyłączonych. Zakresy godzinowe znikną — trzeba będzie je wpisać od nowa. Wyjątków to nie ruszy.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            },
+            confirmButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(ProCircuit.LossRed)
+                        .clickable {
+                            (1..7).forEach { dow ->
+                                onEvent(CoachAvailabilityEvent.SetDayWindows(dow, emptyList()))
+                            }
+                            showClearConfirm = false
+                        }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Text(
+                        text = "WYCZYŚĆ",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        letterSpacing = 1.2.sp,
+                        color = Color.White,
+                    )
+                }
+            },
+            dismissButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { showClearConfirm = false }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Text(
+                        text = "Anuluj",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = ProCircuit.OnSurface,
+                    )
+                }
             },
         )
     }

@@ -335,9 +335,14 @@ private fun WeekView(
     onEventTap: (CalendarEvent) -> Unit,
 ) {
     val days = remember(weekStart) { (0..6).map { weekStart.plus(it, DateTimeUnit.DAY) } }
+    // Multi-day events (BLOCKED vacations especially) need to appear on
+    // every day they cover, not just their start day. Filter by overlap,
+    // not by start-date equality.
     val dayEvents = remember(events, days) {
         days.associateWith { date ->
-            events.filter { it.startsAt.toLocalDateTime(tz).date == date }
+            val ds = LocalDateTime(date, LocalTime(0, 0)).toInstant(tz)
+            val de = LocalDateTime(date.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
+            events.filter { it.startsAt < de && it.endsAt > ds }
         }
     }
     val weekSummary = remember(events, weekStart) {
@@ -511,12 +516,28 @@ private fun DayEventColumn(
     val isToday = date == today
     val density = LocalDensity.current
     val hourHeightPx = with(density) { WEEK_HOUR_HEIGHT.toPx() }
+    val dayStart = LocalDateTime(date, LocalTime(0, 0)).toInstant(tz)
+    val dayEnd = LocalDateTime(date.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
+    // A day reads as "niedostępny" when a BLOCKED event covers the full
+    // visible grid on this day (or more). We grey the whole column so the
+    // day is unmistakably off-limits at a glance.
+    val isFullyBlocked = events.any { evt ->
+        evt.eventType == CalendarEventType.BLOCKED &&
+            evt.startsAt <= dayStart &&
+            evt.endsAt >= dayEnd
+    }
     Box(
         modifier = modifier
             .padding(horizontal = 1.dp)
             .height(gridHeight)
             .clip(RoundedCornerShape(6.dp))
-            .background(if (isToday) ProCircuit.Lime.copy(alpha = 0.04f) else Color.Transparent),
+            .background(
+                when {
+                    isFullyBlocked -> ProCircuit.OnSurface.copy(alpha = 0.14f)
+                    isToday -> ProCircuit.Lime.copy(alpha = 0.04f)
+                    else -> Color.Transparent
+                },
+            ),
     ) {
         // Hour grid lines
         Column(modifier = Modifier.fillMaxSize()) {
@@ -533,11 +554,29 @@ private fun DayEventColumn(
                 }
             }
         }
-        // Event blocks
-        events.forEach { event ->
-            val startMinutes = event.startsAt.toLocalDateTime(tz).let { it.hour * 60 + it.minute }
-            val endMinutes = event.endsAt.toLocalDateTime(tz).let { it.hour * 60 + it.minute }
-            // Clamp to visible range
+        // "NIEDOSTĘPNE" watermark centered in fully-blocked columns.
+        if (isFullyBlocked) {
+            Text(
+                text = "NIE-\nDO-\nSTĘPNE",
+                fontFamily = AppFontFamily,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.2.sp,
+                color = ProCircuit.OnSurface.copy(alpha = 0.55f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+        // Event blocks — skip rendering individual blocks when the column
+        // is already fully greyed; otherwise they'd just re-assert the
+        // same information and add visual noise.
+        if (!isFullyBlocked) events.forEach { event ->
+            // Clamp event to THIS day so multi-day events render in the
+            // right vertical slice of each column they cover.
+            val effStart = if (event.startsAt < dayStart) dayStart else event.startsAt
+            val effEnd = if (event.endsAt > dayEnd) dayEnd else event.endsAt
+            val startMinutes = (effStart - dayStart).inWholeMinutes.toInt()
+            val endMinutes = (effEnd - dayStart).inWholeMinutes.toInt()
             val visibleStart = startMinutes.coerceAtLeast(GRID_HOURS_START * 60)
             val visibleEnd = endMinutes.coerceAtMost((GRID_HOURS_END + 1) * 60)
             if (visibleEnd <= visibleStart) return@forEach
@@ -548,7 +587,6 @@ private fun DayEventColumn(
             val isBlockedEvt = event.eventType == CalendarEventType.BLOCKED
             val textColor = if (isBlockedEvt) ProCircuit.OnSurface else ProCircuit.LimeInk
             val extraMod = if (isBlockedEvt) {
-                // Dashed-looking border so blocked slots read as "off limits".
                 Modifier.border(
                     width = 1.dp,
                     color = ProCircuit.OnSurface.copy(alpha = 0.45f),
@@ -567,10 +605,16 @@ private fun DayEventColumn(
                     .clickable { onEventTap(event) }
                     .padding(horizontal = 4.dp, vertical = 2.dp),
             ) {
-                val hh = event.startsAt.toLocalDateTime(tz).hour.toString().padStart(2, '0')
-                val mm = event.startsAt.toLocalDateTime(tz).minute.toString().padStart(2, '0')
+                // Display the effective (clamped) start on this day, not the
+                // event's original start, so a Mon→Fri vacation shown on
+                // Wednesday reads "00:00" (continues) rather than Mon's time.
+                val startLdt = effStart.toLocalDateTime(tz)
+                val spansBefore = event.startsAt < dayStart
+                val hh = startLdt.hour.toString().padStart(2, '0')
+                val mm = startLdt.minute.toString().padStart(2, '0')
+                val timeLabel = if (spansBefore) "↑ cały dzień" else "$hh:$mm"
                 Text(
-                    text = if (isBlockedEvt) "🚫 $hh:$mm" else "$hh:$mm",
+                    text = if (isBlockedEvt) "🚫 $timeLabel" else timeLabel,
                     fontFamily = AppFontFamily,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Black,
@@ -929,7 +973,7 @@ private fun MonthHeatmap(
                 )
             } else {
                 dayEvents.forEach { evt ->
-                    MonthDayEventRow(event = evt, tz = tz, onTap = { onEventTap(evt) })
+                    MonthDayEventRow(event = evt, selectedDate = selectedDate, tz = tz, onTap = { onEventTap(evt) })
                 }
             }
         }
@@ -937,13 +981,29 @@ private fun MonthHeatmap(
 }
 
 @Composable
-private fun MonthDayEventRow(event: CalendarEvent, tz: TimeZone, onTap: () -> Unit) {
-    val start = event.startsAt.toLocalDateTime(tz)
-    val end = event.endsAt.toLocalDateTime(tz)
-    val hh = start.hour.toString().padStart(2, '0')
-    val mm = start.minute.toString().padStart(2, '0')
-    val eh = end.hour.toString().padStart(2, '0')
-    val em = end.minute.toString().padStart(2, '0')
+private fun MonthDayEventRow(
+    event: CalendarEvent,
+    selectedDate: LocalDate,
+    tz: TimeZone,
+    onTap: () -> Unit,
+) {
+    // Clamp to the selected day so multi-day events (week-long vacations)
+    // report *this day's* slice — not the literal event start/end, which
+    // would be from an entirely different day and is misleading.
+    val dayStart = LocalDateTime(selectedDate, LocalTime(0, 0)).toInstant(tz)
+    val dayEnd = LocalDateTime(selectedDate.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
+    val spansBefore = event.startsAt < dayStart
+    val spansAfter = event.endsAt > dayEnd
+    val isAllDay = spansBefore && spansAfter
+    val effStart = if (spansBefore) dayStart else event.startsAt
+    val effEnd = if (spansAfter) dayEnd else event.endsAt
+    val startLdt = effStart.toLocalDateTime(tz)
+    val endLdt = if (spansAfter) LocalDateTime(selectedDate, LocalTime(23, 59))
+        else effEnd.toLocalDateTime(tz)
+    val hh = startLdt.hour.toString().padStart(2, '0')
+    val mm = startLdt.minute.toString().padStart(2, '0')
+    val eh = endLdt.hour.toString().padStart(2, '0')
+    val em = endLdt.minute.toString().padStart(2, '0')
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -955,22 +1015,38 @@ private fun MonthDayEventRow(event: CalendarEvent, tz: TimeZone, onTap: () -> Un
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(
-            modifier = Modifier.width(58.dp),
+            modifier = Modifier.width(62.dp),
             horizontalAlignment = Alignment.Start,
         ) {
-            Text(
-                text = "$hh:$mm",
-                fontFamily = AppFontFamily,
-                fontWeight = FontWeight.Black,
-                fontSize = 14.sp,
-                color = ProCircuit.Lime,
-            )
-            Text(
-                text = "$eh:$em",
-                fontFamily = AppFontFamily,
-                fontSize = 10.sp,
-                color = ProCircuit.OnSurface,
-            )
+            if (isAllDay) {
+                Text(
+                    text = "Cały",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface,
+                )
+                Text(
+                    text = "dzień",
+                    fontFamily = AppFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            } else {
+                Text(
+                    text = if (spansBefore) "↑ $hh:$mm" else "$hh:$mm",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 14.sp,
+                    color = ProCircuit.Lime,
+                )
+                Text(
+                    text = if (spansAfter) "$eh:$em ↓" else "$eh:$em",
+                    fontFamily = AppFontFamily,
+                    fontSize = 10.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            }
         }
         Box(
             modifier = Modifier
