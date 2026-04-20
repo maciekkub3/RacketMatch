@@ -79,6 +79,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -110,21 +111,18 @@ object CoachAvailabilityScreen : Screen {
             }
         }
 
-        // Auto-save: debounce state changes and fire Save after 1.2s of idle.
-        // Collect the StateFlow directly — `snapshotFlow { stateFlow.value }`
-        // looks right but doesn't work: `.value` is a plain getter, not a
-        // Compose snapshot read, so snapshotFlow emits only the initial
-        // value and never again. (This was the bug: edits never persisted.)
+        // Auto-save: debounce edits and fire Save after 1.2s of idle.
+        // Filter to Content and drop the *first* Content — that one is the
+        // initial state produced by load(), not a user edit. Without the
+        // drop, the Loading → Content transition alone fires a save on
+        // mount and flashes a "Zapisano" toast the user didn't ask for.
         LaunchedEffect(viewModel) {
             viewModel.stateFlow
-                .drop(1)
+                .filterIsInstance<CoachAvailabilityState.Content>()
                 .distinctUntilChanged()
+                .drop(1)
                 .debounce(1200)
-                .collect { s ->
-                    if (s is CoachAvailabilityState.Content) {
-                        viewModel.onEvent(CoachAvailabilityEvent.Save)
-                    }
-                }
+                .collect { viewModel.onEvent(CoachAvailabilityEvent.Save) }
         }
 
         Box(
