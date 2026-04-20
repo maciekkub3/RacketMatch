@@ -36,7 +36,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -237,7 +239,7 @@ object TodayScreen : Screen {
         // writing new seen ids triggers recomposition — otherwise the hero
         // would stay on-screen after tap because tokenStorage is just a var,
         // not a Compose-observable.
-        var seenResultCsv by remember { mutableStateOf(tokenStorage.seenResultMatchIds) }
+        var seenResultCsv: String by remember { mutableStateOf(tokenStorage.seenResultMatchIds) }
         val seenResultIds = remember(seenResultCsv) {
             seenResultCsv
                 .split(",")

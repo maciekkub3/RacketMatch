@@ -179,49 +179,26 @@ object CoachCalendarScreen : Screen {
                                 onNextWeek = { weekStart = weekStart.plus(7, DateTimeUnit.DAY) },
                                 onEventTap = { detailEvent = it },
                             )
-                            CalendarView.MONTH -> {
-                                MonthStripCalendar(
-                                    monthStart = s.monthStart,
-                                    events = visibleEvents,
-                                    selectedDate = selectedDate,
-                                    today = today,
-                                    tz = tz,
-                                    onDaySelected = { date ->
-                                        selectedDate = date
-                                        if (date.year != displayedMonth.year || date.monthNumber != displayedMonth.monthNumber) {
-                                            viewModel.onEvent(
-                                                CoachCalendarEvent.LoadMonth(
-                                                    LocalDateTime(LocalDate(date.year, date.monthNumber, 1), LocalTime(0, 0)).toInstant(tz)
-                                                )
-                                            )
-                                        }
-                                    },
-                                    onPrevMonth = {
-                                        val prev = prevMonthStart(s.monthStart, tz)
-                                        val prevDate = prev.toLocalDateTime(tz).date
-                                        selectedDate = if (today.year == prevDate.year && today.monthNumber == prevDate.monthNumber)
-                                            today else prevDate
-                                        viewModel.onEvent(CoachCalendarEvent.LoadMonth(prev))
-                                    },
-                                    onNextMonth = {
-                                        val next = nextMonthStart(s.monthStart, tz)
-                                        val nextDate = next.toLocalDateTime(tz).date
-                                        selectedDate = if (today.year == nextDate.year && today.monthNumber == nextDate.monthNumber)
-                                            today else nextDate
-                                        viewModel.onEvent(CoachCalendarEvent.LoadMonth(next))
-                                    },
-                                )
-                                HorizontalDivider(color = ProCircuit.SurfaceHigh, thickness = 1.dp)
-                                DayView(
-                                    date = selectedDate,
-                                    events = visibleEvents,
-                                    today = today,
-                                    tz = tz,
-                                    onDeleteEvent = { event ->
-                                        viewModel.onEvent(CoachCalendarEvent.DeleteEvent(event.id))
-                                    },
-                                )
-                            }
+                            CalendarView.MONTH -> MonthHeatmap(
+                                monthStart = s.monthStart,
+                                events = visibleEvents,
+                                today = today,
+                                tz = tz,
+                                onDayJump = { date ->
+                                    // Switch to Week view focused on the tapped day.
+                                    selectedDate = date
+                                    weekStart = date.startOfIsoWeek()
+                                    viewMode = CalendarView.WEEK
+                                },
+                                onPrevMonth = {
+                                    val prev = prevMonthStart(s.monthStart, tz)
+                                    viewModel.onEvent(CoachCalendarEvent.LoadMonth(prev))
+                                },
+                                onNextMonth = {
+                                    val next = nextMonthStart(s.monthStart, tz)
+                                    viewModel.onEvent(CoachCalendarEvent.LoadMonth(next))
+                                },
+                            )
                         }
                     }
                 }
@@ -699,7 +676,258 @@ private fun weekLabel(weekStart: LocalDate): String {
     return "$startStr – $endStr"
 }
 
-// ─── Month strip calendar ─────────────────────────────────────────────────────
+// ─── Month heatmap ────────────────────────────────────────────────────────
+
+/**
+ * Full-screen month overview. Each day cell is a heat-tile whose background
+ * intensity scales with the number of sessions that day (0 → blank,
+ * 1 → lime 15%, 2 → lime 30%, 3+ → lime 50%). No drill-down panel below —
+ * tapping a day switches the parent screen to Week view for that week, so
+ * the detailed timeline lives in one place (weekly grid) rather than two.
+ */
+@Composable
+private fun MonthHeatmap(
+    monthStart: Instant,
+    events: List<CalendarEvent>,
+    today: LocalDate,
+    tz: TimeZone,
+    onDayJump: (LocalDate) -> Unit,
+    onPrevMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+) {
+    val firstDay = monthStart.toLocalDateTime(tz).date
+    val daysInMonth = firstDay.daysInMonth()
+    val firstDayOffset = firstDay.dayOfWeek.isoDayNumber - 1
+
+    val eventsByDate = remember(events, monthStart) {
+        val map = HashMap<LocalDate, Int>()
+        for (dayNum in 1..daysInMonth) {
+            val date = LocalDate(firstDay.year, firstDay.monthNumber, dayNum)
+            val dayStart = LocalDateTime(date, LocalTime(0, 0)).toInstant(tz)
+            val nextDay = LocalDateTime(date.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
+            val count = events.count { it.startsAt < nextDay && it.endsAt > dayStart }
+            if (count > 0) map[date] = count
+        }
+        map
+    }
+    val monthTotalSessions = eventsByDate.values.sum()
+    val monthTotalHours = remember(events, monthStart) {
+        events
+            .filter {
+                val d = it.startsAt.toLocalDateTime(tz).date
+                d.year == firstDay.year && d.monthNumber == firstDay.monthNumber
+            }
+            .sumOf { ((it.endsAt - it.startsAt).inWholeMinutes / 60.0).coerceAtLeast(0.0) }
+            .toInt()
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Month nav + summary
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.SurfaceLow)
+                    .clickable(onClick = onPrevMonth),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Poprzedni miesiąc", tint = ProCircuit.OnBg)
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "${monthPlFull(firstDay.monthNumber)} ${firstDay.year}",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    color = ProCircuit.OnBg,
+                )
+                Text(
+                    text = "$monthTotalSessions " +
+                        (if (monthTotalSessions == 1) "sesja" else "sesji") +
+                        " · ${monthTotalHours}h",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.SurfaceLow)
+                    .clickable(onClick = onNextMonth),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Następny miesiąc", tint = ProCircuit.OnBg)
+            }
+        }
+
+        // Day-of-week headers
+        val dayNames = listOf("PON", "WT", "ŚR", "CZW", "PT", "SOB", "ND")
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+        ) {
+            dayNames.forEach { name ->
+                Text(
+                    text = name,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 9.sp,
+                    letterSpacing = 1.2.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            }
+        }
+
+        HorizontalDivider(color = ProCircuit.SurfaceHigh, thickness = 1.dp)
+
+        // Heat grid
+        val totalCells = firstDayOffset + daysInMonth
+        val rows = (totalCells + 6) / 7
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            for (row in 0 until rows) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    for (col in 0..6) {
+                        val dayNumber = row * 7 + col - firstDayOffset + 1
+                        if (dayNumber < 1 || dayNumber > daysInMonth) {
+                            Spacer(modifier = Modifier.weight(1f).height(54.dp))
+                        } else {
+                            val date = LocalDate(firstDay.year, firstDay.monthNumber, dayNumber)
+                            val count = eventsByDate[date] ?: 0
+                            HeatmapCell(
+                                date = date,
+                                sessionCount = count,
+                                isToday = date == today,
+                                modifier = Modifier.weight(1f),
+                                onTap = { onDayJump(date) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Legend
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "INTENSYWNOŚĆ",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 9.sp,
+                letterSpacing = 1.2.sp,
+                color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+            )
+            Spacer(Modifier.weight(1f))
+            listOf(0, 1, 2, 3).forEach { count ->
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(heatmapColor(count)),
+                )
+            }
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "0 → 3+ sesji",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 10.sp,
+                color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeatmapCell(
+    date: LocalDate,
+    sessionCount: Int,
+    isToday: Boolean,
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit,
+) {
+    val bg = heatmapColor(sessionCount)
+    val todayRing = if (isToday) Modifier.clip(RoundedCornerShape(10.dp)) else Modifier
+    Column(
+        modifier = modifier
+            .height(54.dp)
+            .then(todayRing)
+            .background(bg)
+            .clickable(onClick = onTap)
+            .padding(6.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                text = date.dayOfMonth.toString(),
+                fontFamily = AppFontFamily,
+                fontWeight = if (isToday) FontWeight.Black else FontWeight.Bold,
+                fontSize = 13.sp,
+                color = when {
+                    isToday && sessionCount >= 2 -> ProCircuit.LimeInk
+                    isToday -> ProCircuit.Lime
+                    sessionCount >= 2 -> ProCircuit.LimeInk
+                    else -> ProCircuit.OnBg
+                },
+            )
+            if (sessionCount > 0) {
+                Text(
+                    text = sessionCount.toString(),
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                    color = if (sessionCount >= 2) ProCircuit.LimeInk else ProCircuit.Lime,
+                )
+            }
+        }
+        if (isToday) {
+            Box(
+                modifier = Modifier
+                    .size(4.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.Lime),
+            )
+        }
+    }
+}
+
+private fun heatmapColor(count: Int): androidx.compose.ui.graphics.Color = when {
+    count <= 0 -> ProCircuit.SurfaceLow
+    count == 1 -> ProCircuit.Lime.copy(alpha = 0.20f)
+    count == 2 -> ProCircuit.Lime.copy(alpha = 0.45f)
+    else -> ProCircuit.Lime
+}
+
+// ─── Month strip calendar (legacy — kept for older mode, no longer used) ──
 
 @Composable
 private fun MonthStripCalendar(
