@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Notifications
@@ -32,6 +33,7 @@ import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.presentation.viewmodel.NotificationViewModel
@@ -50,8 +52,8 @@ import com.racketmatch.ui.onboarding.OnboardingAnchor
 import com.racketmatch.ui.onboarding.OnboardingOverlay
 import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.players.PlayersScreen
-import com.racketmatch.ui.profile.ProfileScreen
 import com.racketmatch.ui.rankings.RankingsScreen
+import com.racketmatch.ui.today.TodayScreen
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
@@ -70,6 +72,8 @@ object MainScreen : Screen {
         val userId = tokenStorage.currentUserId ?: ""
         val notifVm: NotificationViewModel = kmpViewModel { parametersOf(userId) }
         val notifState by notifVm.state.collectAsState()
+        val badgeVm: ActionBadgeViewModel = kmpViewModel()
+        val badgeState by badgeVm.state.collectAsState()
         var onboardingComplete by remember { mutableStateOf(true) }
         val outerNavigator = LocalNavigator.currentOrThrow
         val isCoach = tokenStorage.isCoach
@@ -100,8 +104,13 @@ object MainScreen : Screen {
                         }
                     },
                     bottomBar = {
-                        CoachNavBar(current = coachTabNavigator.current) {
-                            coachTabNavigator.current = it
+                        CoachNavBar(current = coachTabNavigator.current) { selected ->
+                            val wasActive = coachTabNavigator.current == selected
+                            val alwaysReset = selected == WięcejTab
+                            if (wasActive || alwaysReset) {
+                                TabReset.request(selected.tabKey())
+                            }
+                            coachTabNavigator.current = selected
                         }
                     }
                 ) { paddingValues ->
@@ -115,7 +124,25 @@ object MainScreen : Screen {
             }
         } else {
             // ── Player mode ──────────────────────────────────────────────────
-            TabNavigator(tab = PlayersTab) { tabNavigator ->
+            TabNavigator(tab = TodayTab) { tabNavigator ->
+                // Observe external tab-switch requests (e.g. celebration
+                // scenes pushed on the outer Navigator that can't touch
+                // LocalTabNavigator themselves).
+                val pendingSwitch = TabSwitchSignal.pending()
+                LaunchedEffect(pendingSwitch) {
+                    val target = when (pendingSwitch) {
+                        "today" -> TodayTab
+                        "players" -> PlayersTab
+                        "matches" -> MatchesTab
+                        "rankings" -> RankingsTab
+                        "wiecej" -> WięcejTab
+                        else -> null
+                    }
+                    if (target != null) {
+                        tabNavigator.current = target
+                        TabSwitchSignal.consume()
+                    }
+                }
                 OnboardingOverlay(
                     isComplete = onboardingComplete,
                     onComplete = {
@@ -133,33 +160,25 @@ object MainScreen : Screen {
                 ) {
                     Scaffold(
                         containerColor = ProCircuit.Bg,
-                        topBar = {
-                            if (tabNavigator.current != WięcejTab) {
-                                MainTopBar(
-                                    avatarLetter = avatarLetter,
-                                    avatarUrl = myAvatarUrl,
-                                    unreadCount = notifState.unreadCount,
-                                    onAvatarClick = { outerNavigator.push(ProfileScreen) },
-                                    onBellClick = { outerNavigator.push(NotificationsScreen) },
-                                    isCoach = isCoach,
-                                    hasPlayerProfile = hasPlayerProfile,
-                                    coachModeActive = false,
-                                    onModeSwitch = { targetCoachMode ->
-                                        tokenStorage.coachModeActive = targetCoachMode
-                                        coachModeActive = targetCoachMode
-                                    }
-                                )
-                            }
-                        },
+                        // Player mode — all tabs are now on the new design
+                        // with their own headers, so the global top bar is
+                        // gone. Bell → Today's in-screen icon; avatar →
+                        // Więcej "Moje konto" card.
+                        topBar = { },
                         bottomBar = {
                             ProCircuitNavBar(
                                 current = tabNavigator.current,
-                                onTabSelect = {
-                                    if (it == PlayersTab) exploreViewModel.onEvent(ExploreEvent.ResetToMap)
-                                    tabNavigator.current = it
+                                onTabSelect = { selected ->
+                                    val wasActive = tabNavigator.current == selected
+                                    val alwaysReset = selected == WięcejTab
+                                    if (wasActive || alwaysReset) {
+                                        TabReset.request(selected.tabKey())
+                                    }
+                                    if (selected == PlayersTab) exploreViewModel.onEvent(ExploreEvent.ResetToMap)
+                                    tabNavigator.current = selected
                                 },
-                                matchBadge = notifState.unreadMatchCount,
-                                moreBadge = notifState.unreadFriendCount + notifState.unreadDmCount
+                                matchBadge = badgeState.matchActionCount,
+                                moreBadge = badgeState.moreBadge
                             )
                         }
                     ) { paddingValues ->
@@ -258,7 +277,7 @@ private fun ProCircuitNavBar(
     matchBadge: Int = 0,
     moreBadge: Int = 0
 ) {
-    val mainTabs = listOf(PlayersTab, MatchesTab, RankingsTab, WięcejTab)
+    val mainTabs = listOf(TodayTab, PlayersTab, MatchesTab, RankingsTab, WięcejTab)
 
     Box(
         modifier = Modifier.fillMaxWidth()
@@ -322,32 +341,69 @@ private fun ProCircuitNavBar(
 
 // ─── Existing Tabs ────────────────────────────────────────────────────────────
 
+/** Stable key per Tab for the TabReset registry. Switch-on-type avoids a
+ *  dependency on the user-facing title (which may be localized later). */
+internal fun Tab.tabKey(): String = when (this) {
+    TodayTab -> "today"
+    PlayersTab -> "players"
+    RankingsTab -> "rankings"
+    MatchesTab -> "matches"
+    WięcejTab -> "wiecej"
+    CoachCalendarTab -> "coachCalendar"
+    CoachBookingsTab -> "coachBookings"
+    CoachServicesTab -> "coachServices"
+    CoachAvailabilityTab -> "coachAvailability"
+    else -> this::class.simpleName ?: "unknown"
+}
+
+object TodayTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 0u, title = "Dziś", icon = rememberVectorPainter(Icons.Default.Bolt))
+    @Composable
+    override fun Content() = Navigator(TodayScreen) {
+        popToRootOn("today", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
 object PlayersTab : Tab {
     override val options: TabOptions
-        @Composable get() = TabOptions(index = 0u, title = "Explore", icon = rememberVectorPainter(Icons.Default.Search))
+        @Composable get() = TabOptions(index = 1u, title = "Explore", icon = rememberVectorPainter(Icons.Default.Search))
     @Composable
-    override fun Content() { Navigator(PlayersScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(PlayersScreen) {
+        popToRootOn("players", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object RankingsTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 1u, title = "Rankings", icon = rememberVectorPainter(Icons.Default.Star))
     @Composable
-    override fun Content() { Navigator(RankingsScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(RankingsScreen) {
+        popToRootOn("rankings", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object MatchesTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 2u, title = "Matches", icon = rememberVectorPainter(Icons.Default.Star))
     @Composable
-    override fun Content() { Navigator(MatchListScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(MatchListScreen) {
+        popToRootOn("matches", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object CoachesTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 3u, title = "Coaches", icon = rememberVectorPainter(Icons.Default.Search))
     @Composable
-    override fun Content() { Navigator(CoachesScreen) { CurrentScreen() } }
+    override fun Content() { Navigator(CoachesScreen()) { CurrentScreen() } }
+}
+
+object CoachesCoachModeTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 3u, title = "Trenerzy", icon = rememberVectorPainter(Icons.Default.Person))
+    @Composable
+    override fun Content() { Navigator(CoachesScreen(isCoachMode = true)) { CurrentScreen() } }
 }
 
 object WięcejTab : Tab {
@@ -357,8 +413,8 @@ object WięcejTab : Tab {
             icon = rememberVectorPainter(Icons.Default.Person)
         )
     @Composable
-    override fun Content() {
-        Navigator(WięcejScreen) { CurrentScreen() }
+    override fun Content() = Navigator(WięcejScreen) {
+        popToRootOn("wiecej", LocalNavigator.currentOrThrow); CurrentScreen()
     }
 }
 
@@ -395,38 +451,44 @@ object CoachCalendarTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 0u, title = "Kalendarz", icon = rememberVectorPainter(Icons.Default.DateRange))
     @Composable
-    override fun Content() { Navigator(CoachCalendarScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(CoachCalendarScreen) {
+        popToRootOn("coachCalendar", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object CoachBookingsTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 1u, title = "Rezerwacje", icon = rememberVectorPainter(Icons.AutoMirrored.Filled.List))
     @Composable
-    override fun Content() { Navigator(CoachBookingsScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(CoachBookingsScreen) {
+        popToRootOn("coachBookings", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object CoachServicesTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 2u, title = "Usługi", icon = rememberVectorPainter(Icons.Default.Star))
     @Composable
-    override fun Content() { Navigator(CoachServicesScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(CoachServicesScreen) {
+        popToRootOn("coachServices", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object CoachAvailabilityTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(
-            index = 3u, title = "Dostępność",
+            index = 2u, title = "Dostępność",
             icon = rememberVectorPainter(Icons.Default.DateRange)
         )
     @Composable
-    override fun Content() {
-        Navigator(CoachAvailabilityScreen) { CurrentScreen() }
+    override fun Content() = Navigator(CoachAvailabilityScreen) {
+        popToRootOn("coachAvailability", LocalNavigator.currentOrThrow); CurrentScreen()
     }
 }
 
 @Composable
 private fun CoachNavBar(current: Tab, onTabSelect: (Tab) -> Unit) {
-    val coachTabs = listOf(CoachCalendarTab, CoachBookingsTab, CoachServicesTab, CoachAvailabilityTab, WięcejTab)
+    val coachTabs = listOf(CoachCalendarTab, CoachBookingsTab, CoachAvailabilityTab, WięcejTab)
 
     Box(
         modifier = Modifier.fillMaxWidth()
