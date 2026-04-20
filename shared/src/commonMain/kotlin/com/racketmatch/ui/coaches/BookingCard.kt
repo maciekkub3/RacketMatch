@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,6 +29,8 @@ fun BookingCard(
     booking: CoachBooking,
     requiresAction: Boolean = false,
     onAvatarClick: (() -> Unit)? = null,
+    onChatClick: (() -> Unit)? = null,
+    showPreviousDetails: Boolean = true,
     actions: @Composable () -> Unit = {}
 ) {
     Column(
@@ -64,8 +68,8 @@ fun BookingCard(
         }
 
         Column(modifier = Modifier.padding(16.dp)) {
-            val prevStart = booking.previousStartsAt
-            val prevEnd = booking.previousEndsAt
+            val prevStart = if (showPreviousDetails) booking.previousStartsAt else null
+            val prevEnd = if (showPreviousDetails) booking.previousEndsAt else null
             val isActionableCounter = requiresAction && prevStart != null && prevEnd != null
             val isWaitingCounter = !requiresAction && booking.status == "PENDING" && prevStart != null && prevEnd != null
             val showPrevInHeader = isActionableCounter || isWaitingCounter
@@ -97,12 +101,6 @@ fun BookingCard(
                         fontSize = 15.sp,
                         color = ProCircuit.OnBg
                     )
-                    Text(
-                        if (showPrevInHeader) formatSlot(prevStart!!, prevEnd!!) else formatWhen(booking),
-                        fontFamily = AppBodyFontFamily,
-                        fontSize = 12.sp,
-                        color = ProCircuit.OnSurface
-                    )
                     booking.serviceName?.let {
                         Text(
                             it,
@@ -111,7 +109,16 @@ fun BookingCard(
                             color = ProCircuit.OnSurface
                         )
                     }
-                    if (!booking.courtName.isNullOrBlank() && prevStart == null) {
+                    // When there's a counter, the header always shows the
+                    // CURRENT time — the "was → now" diff is rendered below
+                    // in BookingDiffBox for clarity.
+                    Text(
+                        formatWhen(booking),
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 12.sp,
+                        color = ProCircuit.OnSurface
+                    )
+                    if (!booking.courtName.isNullOrBlank() && !showPrevInHeader) {
                         Text(
                             "🏟️ ${booking.courtName}",
                             fontFamily = AppBodyFontFamily,
@@ -121,100 +128,45 @@ fun BookingCard(
                     }
                 }
                 BookingStatusChip(booking.status)
+                if (onChatClick != null && booking.conversationId != null) {
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onChatClick,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Chat,
+                            contentDescription = "Czat",
+                            tint = ProCircuit.OnSurface,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
 
-            if (prevStart != null && prevEnd != null) {
-                if (isActionableCounter) {
-                    Spacer(Modifier.height(12.dp))
-                    if (booking.proposedByCoach) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(ProCircuit.Lime.copy(alpha = 0.15f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                "↩ KONTROFERTA TRENERA",
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 9.sp, letterSpacing = 0.5.sp, color = ProCircuit.Lime
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(ProCircuit.SurfaceHigh)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "ICH PROPOZYCJA",
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.Tertiary
-                            )
-                            if (timeChanged) {
-                                Text(
-                                    formatSlot(booking.startsAt, booking.endsAt),
-                                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp, color = ProCircuit.Lime
-                                )
-                            }
-                            if (courtChanged) {
-                                Text(
-                                    "🏟️ ${booking.courtName}",
-                                    fontFamily = AppBodyFontFamily,
-                                    fontSize = 11.sp,
-                                    color = ProCircuit.OnSurface
-                                )
-                            }
-                        }
-                    }
-                } else if (isWaitingCounter) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(ProCircuit.SurfaceHigh)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "TWOJA PROPOZYCJA",
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 9.sp, letterSpacing = 1.5.sp,
-                                color = ProCircuit.Lime.copy(alpha = 0.7f)
-                            )
-                            if (timeChanged) {
-                                Text(
-                                    formatSlot(booking.startsAt, booking.endsAt),
-                                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp, color = ProCircuit.Lime
-                                )
-                            }
-                            if (courtChanged) {
-                                Text(
-                                    "🏟️ ${booking.courtName}",
-                                    fontFamily = AppBodyFontFamily,
-                                    fontSize = 11.sp,
-                                    color = ProCircuit.OnSurface
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Poprzednio: ${formatSlot(prevStart, prevEnd)}",
-                        fontFamily = AppBodyFontFamily,
-                        fontSize = 11.sp,
-                        color = ProCircuit.OnSurface
-                    )
-                }
+            // Counter-offer diff box — matches the match-card DetailsDiffBox
+            // pattern: old value with strikethrough, arrow, new value in
+            // lime. Used for both the "they countered" (ICH PROPOZYCJA) and
+            // "I countered, waiting" (TWOJA PROPOZYCJA) states.
+            if (prevStart != null && prevEnd != null && (isActionableCounter || isWaitingCounter)) {
+                Spacer(Modifier.height(12.dp))
+                BookingDiffBox(
+                    fromTime = formatSlot(prevStart, prevEnd),
+                    toTime = formatSlot(booking.startsAt, booking.endsAt),
+                    timeChanged = timeChanged,
+                    fromCourt = booking.previousCourtName,
+                    toCourt = booking.courtName,
+                    courtChanged = courtChanged,
+                    byOpponent = isActionableCounter,
+                )
+            } else if (prevStart != null && prevEnd != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Poprzednio: ${formatSlot(prevStart, prevEnd)}",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface
+                )
             }
 
             if (!booking.playerNote.isNullOrBlank()) {
@@ -274,6 +226,97 @@ internal fun formatSlot(start: kotlin.time.Instant, end: kotlin.time.Instant): S
         "$d.$mo.${ldt.year} • ${ldt.hour.toString().padStart(2,'0')}:${ldt.minute.toString().padStart(2,'0')}–${edt.hour.toString().padStart(2,'0')}:${edt.minute.toString().padStart(2,'0')}"
     } catch (_: Throwable) {
         start.toString().take(16).replace("T", " ")
+    }
+}
+
+@Composable
+private fun BookingDiffBox(
+    fromTime: String,
+    toTime: String,
+    timeChanged: Boolean,
+    fromCourt: String?,
+    toCourt: String?,
+    courtChanged: Boolean,
+    byOpponent: Boolean,
+) {
+    if (!timeChanged && !courtChanged) return
+    val summary = when {
+        timeChanged && courtChanged -> "Zmiana czasu i kortu"
+        timeChanged -> "Zmiana czasu"
+        else -> "Zmiana kortu"
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.Lime.copy(alpha = 0.12f))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = if (byOpponent) "ICH PROPOZYCJA" else "TWOJA PROPOZYCJA",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 9.sp,
+                letterSpacing = 1.5.sp,
+                color = ProCircuit.Lime,
+            )
+            Text(
+                text = "· $summary",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 11.sp,
+                color = ProCircuit.OnSurface,
+            )
+        }
+        if (timeChanged) {
+            BookingDiffRow(label = "Czas", from = fromTime, to = toTime)
+        }
+        if (courtChanged) {
+            BookingDiffRow(
+                label = "Kort",
+                from = fromCourt?.takeIf { it.isNotBlank() } ?: "—",
+                to = toCourt?.takeIf { it.isNotBlank() } ?: "—",
+            )
+        }
+    }
+}
+
+@Composable
+private fun BookingDiffRow(label: String, from: String, to: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            color = ProCircuit.OnSurface,
+            modifier = Modifier.width(44.dp),
+        )
+        Text(
+            text = from,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            fontSize = 12.sp,
+            color = ProCircuit.OnSurface,
+            textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough,
+            maxLines = 1,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Text(
+            text = " → ",
+            fontFamily = AppFontFamily,
+            fontSize = 12.sp,
+            color = ProCircuit.OnSurface,
+        )
+        Text(
+            text = to,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = ProCircuit.Lime,
+            maxLines = 1,
+            modifier = Modifier.weight(1f, fill = false),
+        )
     }
 }
 

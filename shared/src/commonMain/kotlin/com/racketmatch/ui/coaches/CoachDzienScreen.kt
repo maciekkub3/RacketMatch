@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -165,7 +167,10 @@ private fun DzienContent(
         upcoming.filter { it.startsAt.toLocalDateTime(tz).date == today }
     }
     val nextSession = upcoming.firstOrNull()
-    val pendingCount = state.pending.size
+    // Only requests where the *player* made the latest proposal count as
+    // "new requests" — those awaiting my (coach's) response. Bookings where
+    // I (coach) last counter-offered are waiting on the player, not me.
+    val pendingCount = state.pending.count { !it.proposedByCoach }
 
     // Sessions this week (past + future, confirmed or already held)
     val allBookings = remember(state) { state.pending + state.confirmed + state.history }
@@ -202,23 +207,28 @@ private fun DzienContent(
 
     // ── Stat tiles ──────────────────────────────────────────────────────
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         CoachStatTile(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             bigNumber = sessionsThisWeek.size.toString(),
-            label = "Sesje w tyg.",
+            label = "Sesje",
+            footer = "w tyg.",
         )
         CoachStatTile(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             bigNumber = hoursThisWeek.toString(),
-            label = "Godzin w tyg.",
+            label = "Godzin",
+            footer = "w tyg.",
         )
         CoachStatTile(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             bigNumber = uniqueStudentsThisMonth.toString(),
-            label = "Uczniów w mies.",
+            label = "Uczniów",
+            footer = "w mies.",
         )
     }
 
@@ -569,9 +579,17 @@ private fun SessionRow(booking: CoachBooking, tz: TimeZone, compact: Boolean = f
 }
 
 @Composable
-private fun CoachStatTile(modifier: Modifier = Modifier, bigNumber: String, label: String) {
+private fun CoachStatTile(
+    modifier: Modifier = Modifier,
+    bigNumber: String,
+    label: String,
+    footer: String? = null,
+) {
     StatCard(modifier = modifier) {
-        Column {
+        Column(
+            modifier = Modifier.fillMaxHeight(),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(
                 text = bigNumber,
                 fontFamily = AppFontFamily,
@@ -580,15 +598,26 @@ private fun CoachStatTile(modifier: Modifier = Modifier, bigNumber: String, labe
                 letterSpacing = (-0.8).sp,
                 color = ProCircuit.Ink,
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = label,
-                fontFamily = AppFontFamily,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.2.sp,
-                color = ProCircuit.OnSurface,
-            )
+            Column {
+                Text(
+                    text = label,
+                    fontFamily = AppFontFamily,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.2.sp,
+                    color = ProCircuit.OnSurface,
+                    maxLines = 1,
+                )
+                if (footer != null) {
+                    Text(
+                        text = footer,
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 10.sp,
+                        color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
