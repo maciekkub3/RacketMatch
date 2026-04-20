@@ -1008,7 +1008,12 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
         // the empty state (placeholders + dirty-CTA WYŚLIJ PROPOZYCJĘ),
         // so the banner was saying the same thing twice.
 
-        if (hasDetails) {
+        // Reservation section only appears in AGREED state. While a
+        // proposal is in flight (they/iProposed) the details aren't
+        // locked in yet, so asking "who reserves the court?" is premature
+        // — the court itself may change once the proposal is accepted.
+        val detailsAgreed = match.detailsProposedBy == null
+        if (hasDetails && detailsAgreed) {
             Spacer(Modifier.height(12.dp))
             when {
                 match.reservedBy == null -> {
@@ -1155,7 +1160,11 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                         onCounterPropose = { loc, scheduled ->
                             viewModel.onEvent(MatchEvent.ProposeDetails(match.id, loc, scheduled))
                         },
-                        dirtyCtaLabel = "ZAPROPONUJ ZMIANĘ",
+                        // Match accepted but still without details → first
+                        // edit is really the *first* proposal, not a change
+                        // to something already agreed. Flip the label so
+                        // "WYŚLIJ PROPOZYCJĘ" reads naturally in that case.
+                        dirtyCtaLabel = if (hasDetails) "ZAPROPONUJ ZMIANĘ" else "WYŚLIJ PROPOZYCJĘ",
                         idleText = null,
                         // Cancel-match already lives in the header X on
                         // AGREED, so skip the text-link to avoid doubling.
