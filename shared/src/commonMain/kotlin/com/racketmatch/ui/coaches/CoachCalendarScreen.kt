@@ -1588,22 +1588,14 @@ private fun AddCalendarEventSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var title by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
     var eventType by remember { mutableStateOf("EXTERNAL_CLIENT") }
     var startMillis by remember { mutableStateOf<Long?>(null) }
-    var endMillis by remember { mutableStateOf<Long?>(null) }
+    // Duration in minutes — picked via chip row instead of a second date/time
+    // picker. Keeps the sheet a single-screen height on phones; >95% of coach
+    // events fall in the 30m / 1h / 1.5h / 2h / 3h range.
+    var durationMinutes by remember { mutableStateOf(60) }
 
-    // When start shifts, snap end to start + 1h if end is now too early or
-    // unset — cuts the number of taps to get a valid range down to one.
-    LaunchedEffect(startMillis) {
-        val s = startMillis ?: return@LaunchedEffect
-        val e = endMillis
-        if (e == null || e <= s) {
-            endMillis = s + 60L * 60L * 1000L
-        }
-    }
-
-    val canSave = startMillis != null && endMillis != null && endMillis!! > startMillis!!
+    val canSave = startMillis != null
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1622,9 +1614,10 @@ private fun AddCalendarEventSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = "Dodaj zdarzenie",
@@ -1674,48 +1667,21 @@ private fun AddCalendarEventSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            SheetSectionLabel("NOTATKA (OPCJONALNIE)")
-            OutlinedTextField(
-                value = notes,
-                onValueChange = { notes = it },
-                placeholder = {
-                    Text(
-                        text = "Szczegóły widoczne tylko dla Ciebie",
-                        fontFamily = AppBodyFontFamily,
-                        fontSize = 13.sp,
-                        color = ProCircuit.OnSurface.copy(alpha = 0.5f),
-                    )
-                },
-                maxLines = 2,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = ProCircuit.OnBg,
-                    unfocusedTextColor = ProCircuit.OnBg,
-                    focusedBorderColor = ProCircuit.Lime,
-                    unfocusedBorderColor = ProCircuit.OnSurface.copy(alpha = 0.3f),
-                    cursorColor = ProCircuit.Lime,
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
             SheetSectionLabel("POCZĄTEK")
             com.racketmatch.ui.players.QuickDateTimePicker(
                 selectedMillis = startMillis,
                 onMillisSelected = { startMillis = it },
             )
 
-            SheetSectionLabel("KONIEC")
-            com.racketmatch.ui.players.QuickDateTimePicker(
-                selectedMillis = endMillis,
-                onMillisSelected = { endMillis = it },
-            )
-            if (startMillis != null && endMillis != null && endMillis!! <= startMillis!!) {
-                Text(
-                    text = "Koniec musi być po początku.",
-                    fontFamily = AppBodyFontFamily,
-                    fontSize = 11.sp,
-                    color = ProCircuit.LossRed,
-                )
+            SheetSectionLabel("CZAS TRWANIA")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(30 to "30 min", 60 to "1h", 90 to "1.5h", 120 to "2h", 180 to "3h").forEach { (mins, label) ->
+                    SheetChip(
+                        label = label,
+                        selected = durationMinutes == mins,
+                        onClick = { durationMinutes = mins },
+                    )
+                }
             }
 
             Spacer(Modifier.height(4.dp))
@@ -1726,12 +1692,14 @@ private fun AddCalendarEventSheet(
                     .clip(RoundedCornerShape(14.dp))
                     .background(if (canSave) ProCircuit.Lime else ProCircuit.SurfaceHigh)
                     .clickable(enabled = canSave) {
+                        val start = startMillis!!
+                        val end = start + durationMinutes * 60L * 1000L
                         onConfirm(
                             title.ifBlank { null },
-                            notes.ifBlank { null },
+                            null,
                             eventType,
-                            Instant.fromEpochMilliseconds(startMillis!!),
-                            Instant.fromEpochMilliseconds(endMillis!!),
+                            Instant.fromEpochMilliseconds(start),
+                            Instant.fromEpochMilliseconds(end),
                         )
                     }
                     .padding(vertical = 16.dp),
