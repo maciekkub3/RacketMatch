@@ -74,6 +74,15 @@ sealed class CoachAvailabilityEvent {
     data class RemoveWindow(val dayOfWeek: Int, val windowIndex: Int) : CoachAvailabilityEvent()
     data class SetStart(val dayOfWeek: Int, val windowIndex: Int, val minutes: Int) : CoachAvailabilityEvent()
     data class SetEnd(val dayOfWeek: Int, val windowIndex: Int, val minutes: Int) : CoachAvailabilityEvent()
+    /**
+     * Replaces the entire window list + enabled flag for a single day. Used by
+     * the weekly-grid UI where each tap translates into a fresh windows list
+     * for that day rather than a stream of add/remove/edit window calls.
+     */
+    data class SetDayWindows(
+        val dayOfWeek: Int,
+        val windows: List<TimeWindow>,
+    ) : CoachAvailabilityEvent()
     object Save : CoachAvailabilityEvent()
     data class SetLeadTime(val hours: Int) : CoachAvailabilityEvent()
     data class SetHorizon(val days: Int) : CoachAvailabilityEvent()
@@ -154,12 +163,13 @@ class CoachAvailabilityViewModel(
     }
 
     private fun eventDay(event: CoachAvailabilityEvent): Int = when (event) {
-        is CoachAvailabilityEvent.ToggleDay    -> event.dayOfWeek
-        is CoachAvailabilityEvent.AddWindow    -> event.dayOfWeek
-        is CoachAvailabilityEvent.RemoveWindow -> event.dayOfWeek
-        is CoachAvailabilityEvent.SetStart     -> event.dayOfWeek
-        is CoachAvailabilityEvent.SetEnd       -> event.dayOfWeek
-        else                                   -> -1
+        is CoachAvailabilityEvent.ToggleDay      -> event.dayOfWeek
+        is CoachAvailabilityEvent.AddWindow      -> event.dayOfWeek
+        is CoachAvailabilityEvent.RemoveWindow   -> event.dayOfWeek
+        is CoachAvailabilityEvent.SetStart       -> event.dayOfWeek
+        is CoachAvailabilityEvent.SetEnd         -> event.dayOfWeek
+        is CoachAvailabilityEvent.SetDayWindows  -> event.dayOfWeek
+        else                                     -> -1
     }
 
     private fun applyEvent(day: DayAvailability, event: CoachAvailabilityEvent): DayAvailability = when (event) {
@@ -193,6 +203,10 @@ class CoachAvailabilityViewModel(
                     w.copy(endMinutes = event.minutes.coerceIn(w.startMinutes + STEP, DAY_MAX))
                 else w
             })
+        }
+        is CoachAvailabilityEvent.SetDayWindows -> {
+            // Weekly-grid toggles: enabled follows whether any windows remain.
+            day.copy(enabled = event.windows.isNotEmpty(), windows = event.windows)
         }
         else -> day
     }

@@ -32,6 +32,9 @@ import com.racketmatch.presentation.viewmodel.PlayerBookingsIntent
 import com.racketmatch.presentation.viewmodel.PlayerBookingsState
 import com.racketmatch.presentation.viewmodel.PlayerBookingsViewModel
 import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.IconCircleButton
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -60,26 +63,29 @@ data class CoachesScreen(val isCoachMode: Boolean = false) : Screen {
             if (selectedTab == 1) bookingsVm.onIntent(PlayerBookingsIntent.Refresh)
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+            // Editorial header: circular back button on top, Eyebrow + H1
+            // below. Matches the pattern used on Notifications, CoachDetail
+            // and other pushed screens so coach mode looks cohesive with
+            // the rest of the app.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 8.dp, bottom = 12.dp),
             ) {
-                IconButton(onClick = { navigator.pop() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
-                }
-                Column {
-                    Text(
-                        "Trenerzy",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 24.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
-                    )
-                    Text(
-                        if (isCoachMode) "Przeglądaj trenerów w aplikacji" else "Znajdź idealnego partnera na korcie",
-                        fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
-                    )
-                }
+                IconCircleButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Wstecz",
+                    onClick = { navigator.pop() },
+                )
+                Spacer(Modifier.height(14.dp))
+                Eyebrow(
+                    if (isCoachMode) "Katalog trenerów"
+                    else "Znajdź idealnego trenera"
+                )
+                Spacer(Modifier.height(6.dp))
+                H1("Trenerzy")
             }
 
             // Tab bar — hidden in coach mode (no bookings tab for coaches)
@@ -151,19 +157,7 @@ data class CoachesScreen(val isCoachMode: Boolean = false) : Screen {
                     onConfirm = { bookingsVm.onIntent(PlayerBookingsIntent.Confirm(it)) },
                     onDecline = { b -> declineTarget = b },
                     onCancel = { b -> cancelTarget = b },
-                    onCounter = { b -> counterTarget = b },
-                    onWrite = { booking ->
-                        val conv = booking.conversationId ?: return@PlayerBookingsList
-                        val other = booking.otherParty
-                        navigator.push(
-                            DmChatScreen(
-                                conversationId = conv,
-                                currentUserId = booking.playerId,
-                                otherUserName = other?.displayName ?: "Trener",
-                                otherUserAvatarUrl = other?.avatarUrl
-                            )
-                        )
-                    }
+                    onCounter = { b -> counterTarget = b }
                 )
             }
         }
@@ -252,9 +246,9 @@ private fun PlayerBookingsList(
     onConfirm: (String) -> Unit = {},
     onDecline: (CoachBooking) -> Unit = {},
     onCancel: (CoachBooking) -> Unit = {},
-    onCounter: (CoachBooking) -> Unit = {},
-    onWrite: (CoachBooking) -> Unit = {}
+    onCounter: (CoachBooking) -> Unit = {}
 ) {
+    val navigator = LocalNavigator.currentOrThrow
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         when (state) {
             PlayerBookingsState.Loading -> item {
@@ -295,15 +289,23 @@ private fun PlayerBookingsList(
                     items(state.pending, key = { it.id }) { booking ->
                         BookingCard(
                             booking = booking,
-                            requiresAction = booking.status == "PENDING" && booking.proposedByCoach
+                            requiresAction = booking.status == "PENDING" && booking.proposedByCoach,
+                            onChatClick = booking.conversationId?.let { conv -> {
+                                val other = booking.otherParty
+                                (navigator.parent?.parent ?: navigator).push(DmChatScreen(
+                                    conversationId = conv,
+                                    currentUserId = booking.playerId,
+                                    otherUserName = other?.displayName ?: "Trener",
+                                    otherUserAvatarUrl = other?.avatarUrl
+                                ))
+                            }}
                         ) {
                             PlayerActions(
                                 booking = booking,
                                 onConfirm = { onConfirm(booking.id) },
                                 onDecline = { onDecline(booking) },
                                 onCancel = { onCancel(booking) },
-                                onCounter = { onCounter(booking) },
-                                onWrite = { onWrite(booking) }
+                                onCounter = { onCounter(booking) }
                             )
                         }
                     }
@@ -311,14 +313,24 @@ private fun PlayerBookingsList(
                 if (state.confirmed.isNotEmpty()) {
                     item { BookingGroupHeader("NADCHODZĄCE") }
                     items(state.confirmed, key = { it.id }) { booking ->
-                        BookingCard(booking = booking) {
+                        BookingCard(
+                            booking = booking,
+                            onChatClick = booking.conversationId?.let { conv -> {
+                                val other = booking.otherParty
+                                (navigator.parent?.parent ?: navigator).push(DmChatScreen(
+                                    conversationId = conv,
+                                    currentUserId = booking.playerId,
+                                    otherUserName = other?.displayName ?: "Trener",
+                                    otherUserAvatarUrl = other?.avatarUrl
+                                ))
+                            }}
+                        ) {
                             PlayerActions(
                                 booking = booking,
                                 onConfirm = { onConfirm(booking.id) },
                                 onDecline = { onDecline(booking) },
                                 onCancel = { onCancel(booking) },
-                                onCounter = { onCounter(booking) },
-                                onWrite = { onWrite(booking) }
+                                onCounter = { onCounter(booking) }
                             )
                         }
                     }
