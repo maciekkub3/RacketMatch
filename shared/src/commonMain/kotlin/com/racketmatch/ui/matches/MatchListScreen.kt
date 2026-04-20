@@ -1,6 +1,7 @@
 package com.racketmatch.ui.matches
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
@@ -440,7 +442,6 @@ private fun HistoryEmptyState() {
 // Someone challenged you — show their name, ELO, sport type, with Accept/Decline/Counter
 @Composable
 private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel, courts: List<com.racketmatch.domain.model.Court>) {
-    var showProposeDialog by remember { mutableStateOf(false) }
     var showAcceptConfirm by remember { mutableStateOf(false) }
     var showDeclineConfirm by remember { mutableStateOf(false) }
 
@@ -507,19 +508,6 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
         )
     }
 
-    if (showProposeDialog) {
-        ProposeDetailsDialog(
-            prefillLocation = match.locationName,
-            prefillMillis = match.scheduledAt?.let { parseScheduledAt(it) },
-            courts = courts,
-            onConfirm = { locationName, scheduledAt ->
-                showProposeDialog = false
-                viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
-            },
-            onDismiss = { showProposeDialog = false }
-        )
-    }
-
     val theyProposed = match.detailsProposedBy != null && match.detailsProposedBy != myId
     val iWaited = match.detailsProposedBy == myId
     val hasDetails = !match.locationName.isNullOrBlank() || !match.scheduledAt.isNullOrBlank()
@@ -571,12 +559,9 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
             MatchTypeBadge(match.type)
         }
 
-        // Details row (proposed court/time). When the backend has a
-        // previous_* snapshot (someone counter-proposed), render the full
-        // DetailsDiffBox with strikethrough so the user can see what
-        // changed vs. the earlier proposal — same look as the SCHEDULED
-        // card uses. Falls back to the simple "proposed" tile when this
-        // is the first proposal (no snapshot yet).
+        // Diff-box stays for the historical "was→now" context — valuable
+        // when opponent counter-proposed. Current values live in the
+        // editable tiles below; this box is purely informational.
         if (hasDiff) {
             Spacer(Modifier.height(12.dp))
             DetailsDiffBox(
@@ -586,52 +571,15 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 toScheduledAt = match.scheduledAt,
                 byOpponent = theyProposed,
             )
-            if (theyProposed) {
-                Spacer(Modifier.height(6.dp))
-                Text("Upewnij się, że kort jest zarezerwowany",
-                    fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface)
-            }
-        } else if (hasDetails) {
-            Spacer(Modifier.height(12.dp))
-            val labelColor = if (iWaited) ProCircuit.OnSurface else ProCircuit.Lime.copy(alpha = 0.7f)
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(ProCircuit.SurfaceHigh)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (!match.locationName.isNullOrBlank()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(if (iWaited) "TWOJA PROPOZYCJA" else "PROPONOWANY KORT",
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 9.sp, letterSpacing = 1.5.sp, color = labelColor)
-                        Text(match.locationName!!, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp, color = ProCircuit.OnBg)
-                    }
-                }
-                if (!match.scheduledAt.isNullOrBlank()) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("KIEDY", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 9.sp, letterSpacing = 1.5.sp, color = labelColor)
-                        Text(match.scheduledAt!!.take(16).replace("T", " "),
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp, color = ProCircuit.Lime)
-                    }
-                }
-            }
-            if (theyProposed) {
-                Spacer(Modifier.height(6.dp))
-                Text("Upewnij się, że kort jest zarezerwowany",
-                    fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface)
-            }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         if (iWaited) {
-            // I already proposed — waiting for their response
+            // Edge case: I'm the challenged side and I proposed details
+            // before the backend auto-accept was in place. The match is
+            // still PENDING. Let me withdraw so I can start over, or
+            // reject the whole thing.
             Text("Czekasz na odpowiedź...",
                 fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface,
                 modifier = Modifier.padding(bottom = 10.dp))
@@ -646,44 +594,24 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                     fontSize = 11.sp, letterSpacing = 1.sp)
             }
         } else {
-            // They proposed (or no details yet) — I can accept / counter / decline
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            if (!hasDetails) showAcceptConfirm = true
-                            else viewModel.onEvent(MatchEvent.AcceptMatch(match.id))
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-                    ) {
-                        Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                    OutlinedButton(
-                        onClick = { showDeclineConfirm = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
-                    ) {
-                        Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                }
-                OutlinedButton(
-                    onClick = { showProposeDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                ) {
-                    Text(if (theyProposed) "ZAPROPONUJ KONTRĘ" else "ZAPROPONUJ KORT/CZAS",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
-                }
-            }
+            // Unified tap-to-edit flow. User can tap either tile to edit,
+            // CTA switches between AKCEPTUJ and WYŚLIJ PROPOZYCJĘ based on
+            // whether anything was staged. Rejection is a text-link at
+            // the bottom — destructive and rare, so it gets quiet weight.
+            EditableDetailsSection(
+                match = match,
+                courts = courts,
+                acceptLabel = if (hasDetails) "AKCEPTUJ" else "AKCEPTUJ WYZWANIE",
+                onAcceptAsIs = {
+                    if (!hasDetails) showAcceptConfirm = true
+                    else viewModel.onEvent(MatchEvent.AcceptMatch(match.id))
+                },
+                onCounterPropose = { loc, scheduled ->
+                    viewModel.onEvent(MatchEvent.ProposeDetails(match.id, loc, scheduled))
+                },
+                onReject = { showDeclineConfirm = true },
+                rejectLabel = "✕ Odrzuć wyzwanie",
+            )
         }
         } // inner Column
     }
@@ -1859,4 +1787,324 @@ private fun parseScheduledAt(s: String): Long? = runCatching {
         LocalDateTime.parse(clean).toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds()
     }
 }.getOrNull()
+
+// ─── Tap-to-edit details — shared pieces ───────────────────────────────────
+
+/**
+ * Format a scheduled epoch-ms as a long tile label like "Pt, 26.04 · 18:00".
+ * Lighter than the eyebrow: leaves weekday in normal case so the tile reads
+ * as data, not as a shouted header.
+ */
+private fun formatDateTileLabel(ms: Long): String {
+    val tz = TimeZone.currentSystemDefault()
+    val dt = Instant.fromEpochMilliseconds(ms).toLocalDateTime(tz)
+    val dayStr = when (dt.dayOfWeek.isoDayNumber) {
+        1 -> "Pon"; 2 -> "Wt"; 3 -> "Śr"; 4 -> "Czw"
+        5 -> "Pt"; 6 -> "Sob"; 7 -> "Ndz"; else -> ""
+    }
+    val dm = "${dt.dayOfMonth}.${dt.monthNumber.toString().padStart(2, '0')}"
+    val tm = "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
+    return "$dayStr, $dm · $tm"
+}
+
+/**
+ * One editable detail tile. Outlined rectangle with icon, label, pencil. When
+ * the value differs from the original match value, it flips to a lime border
+ * and the label takes on the lime color so the user always sees what they've
+ * staged but not yet sent.
+ */
+@Composable
+private fun DetailsTile(
+    icon: String,
+    label: String,
+    placeholder: Boolean,
+    dirty: Boolean,
+    modifier: Modifier = Modifier,
+    onTap: () -> Unit,
+) {
+    val borderColor = when {
+        dirty -> ProCircuit.Lime.copy(alpha = 0.7f)
+        placeholder -> ProCircuit.OnSurface.copy(alpha = 0.35f)
+        else -> ProCircuit.OnSurface.copy(alpha = 0.25f)
+    }
+    val textColor = when {
+        dirty -> ProCircuit.Lime2
+        placeholder -> ProCircuit.OnSurface.copy(alpha = 0.7f)
+        else -> ProCircuit.OnBg
+    }
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(12.dp))
+            .clickable(onClick = onTap)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(icon, fontSize = 14.sp)
+        Text(
+            text = label,
+            fontFamily = AppFontFamily,
+            fontWeight = if (dirty) FontWeight.Bold else FontWeight.SemiBold,
+            fontSize = 12.sp,
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "✎",
+            fontFamily = AppFontFamily,
+            fontSize = 11.sp,
+            color = ProCircuit.OnSurface.copy(alpha = 0.6f),
+        )
+    }
+}
+
+/**
+ * Modal sheet wrapping QuickDateTimePicker with a save CTA. Staging happens
+ * in-sheet so dismissing (swipe down) abandons the change — matches how
+ * iOS pickers behave.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerSheet(
+    initialMillis: Long?,
+    onConfirm: (Long?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var pending by remember { mutableStateOf(initialMillis) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = ProCircuit.SurfaceLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "Kiedy gracie?",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp,
+                color = ProCircuit.OnBg,
+            )
+            com.racketmatch.ui.players.QuickDateTimePicker(
+                selectedMillis = pending,
+                onMillisSelected = { pending = it },
+            )
+            Button(
+                onClick = { onConfirm(pending) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = pending != null,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ProCircuit.Lime,
+                    contentColor = ProCircuit.LimeInk,
+                    disabledContainerColor = ProCircuit.SurfaceHigh,
+                    disabledContentColor = ProCircuit.OnSurface,
+                ),
+            ) {
+                Text("ZAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(vertical = 6.dp))
+            }
+        }
+    }
+}
+
+/**
+ * Modal sheet wrapping CourtPicker. Mirrors DatePickerSheet's structure.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CourtPickerSheet(
+    initialCourtName: String,
+    courts: List<com.racketmatch.domain.model.Court>,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var pending by remember { mutableStateOf(initialCourtName) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = ProCircuit.SurfaceLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "Gdzie?",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp,
+                color = ProCircuit.OnBg,
+            )
+            com.racketmatch.ui.players.CourtPicker(
+                courtName = pending,
+                courts = courts,
+                onNameChanged = { pending = it },
+            )
+            Button(
+                onClick = { onConfirm(pending.trim()) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = pending.trim().isNotBlank(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ProCircuit.Lime,
+                    contentColor = ProCircuit.LimeInk,
+                    disabledContainerColor = ProCircuit.SurfaceHigh,
+                    disabledContentColor = ProCircuit.OnSurface,
+                ),
+            ) {
+                Text("ZAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 12.sp, letterSpacing = 1.2.sp, modifier = Modifier.padding(vertical = 6.dp))
+            }
+        }
+    }
+}
+
+/**
+ * The unified "ustalcie szczegóły" block — two tappable tiles + a dynamic
+ * CTA that switches between accept-as-is and send-counter-proposal based
+ * on whether the user has edited either tile.
+ *
+ * Used wherever a match enters the "you need to respond" state, so the
+ * interaction model is identical across: incoming PENDING challenge and
+ * SCHEDULED with theyProposed.
+ */
+@Composable
+private fun EditableDetailsSection(
+    match: Match,
+    courts: List<com.racketmatch.domain.model.Court>,
+    acceptLabel: String,
+    onAcceptAsIs: () -> Unit,
+    onCounterPropose: (locationName: String?, scheduledAt: Long?) -> Unit,
+    onReject: () -> Unit,
+    rejectLabel: String = "✕ Odrzuć",
+) {
+    val initialMillis = match.scheduledAt?.let { parseScheduledAt(it) }
+    val initialCourt = match.locationName.orEmpty()
+
+    // Keyed on the match snapshot so a remote update (opponent countered)
+    // re-seeds the pending state and the card doesn't hold a stale edit.
+    var pendingMillis by remember(match.id, match.scheduledAt, match.detailsProposedBy) {
+        mutableStateOf(initialMillis)
+    }
+    var pendingCourt by remember(match.id, match.locationName, match.detailsProposedBy) {
+        mutableStateOf(initialCourt)
+    }
+
+    var editingDate by remember { mutableStateOf(false) }
+    var editingCourt by remember { mutableStateOf(false) }
+
+    val dateDirty = pendingMillis != initialMillis
+    val courtDirty = pendingCourt != initialCourt
+    val anyDirty = dateDirty || courtDirty
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DetailsTile(
+                icon = "📅",
+                label = pendingMillis?.let { formatDateTileLabel(it) } ?: "Wybierz datę",
+                placeholder = pendingMillis == null,
+                dirty = dateDirty,
+                onTap = { editingDate = true },
+                modifier = Modifier.weight(1f),
+            )
+            DetailsTile(
+                icon = "📍",
+                label = pendingCourt.takeIf { it.isNotBlank() } ?: "Wybierz kort",
+                placeholder = pendingCourt.isBlank(),
+                dirty = courtDirty,
+                onTap = { editingCourt = true },
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        // Primary CTA — switches based on whether something was edited.
+        Button(
+            onClick = {
+                if (anyDirty) {
+                    onCounterPropose(pendingCourt.takeIf { it.isNotBlank() }, pendingMillis)
+                } else {
+                    onAcceptAsIs()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ProCircuit.Lime,
+                contentColor = ProCircuit.LimeInk,
+            ),
+        ) {
+            Text(
+                text = if (anyDirty) "WYŚLIJ PROPOZYCJĘ" else acceptLabel,
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 12.sp,
+                letterSpacing = 1.2.sp,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+        }
+
+        if (anyDirty) {
+            Text(
+                text = "← Cofnij zmiany",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = ProCircuit.OnSurface,
+                modifier = Modifier
+                    .clickable {
+                        pendingMillis = initialMillis
+                        pendingCourt = initialCourt
+                    }
+                    .padding(vertical = 4.dp),
+            )
+        }
+
+        Text(
+            text = rejectLabel,
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.sp,
+            color = ProCircuit.Error,
+            modifier = Modifier
+                .clickable(onClick = onReject)
+                .padding(vertical = 4.dp),
+        )
+    }
+
+    if (editingDate) {
+        DatePickerSheet(
+            initialMillis = pendingMillis,
+            onConfirm = {
+                pendingMillis = it
+                editingDate = false
+            },
+            onDismiss = { editingDate = false },
+        )
+    }
+    if (editingCourt) {
+        CourtPickerSheet(
+            initialCourtName = pendingCourt,
+            courts = courts,
+            onConfirm = {
+                pendingCourt = it
+                editingCourt = false
+            },
+            onDismiss = { editingCourt = false },
+        )
+    }
+}
 
