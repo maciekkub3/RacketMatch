@@ -1,15 +1,33 @@
 package com.racketmatch.ui.coaches
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +42,10 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.presentation.viewmodel.CoachProfileState
 import com.racketmatch.presentation.viewmodel.CoachProfileViewModel
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.IconCircleButton
+import com.racketmatch.ui.common.IconSquare
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -31,53 +53,41 @@ import com.racketmatch.util.kmpViewModel
 
 object CoachProfileScreen : Screen {
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val viewModel: CoachProfileViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
+        val rootNavigator = navigator.parent?.parent ?: navigator
 
-        Scaffold(
-            containerColor = ProCircuit.Bg,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "Profil trenera",
-                            fontFamily = AppFontFamily,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp,
-                            color = ProCircuit.OnBg
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ProCircuit.SurfaceLow)
-                )
-            }
-        ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ProCircuit.Bg)
+                .windowInsetsPadding(WindowInsets.statusBars),
+        ) {
             when (val s = state) {
                 CoachProfileState.Loading -> Box(
-                    Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = ProCircuit.Lime)
-                }
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator(color = ProCircuit.Lime) }
+
                 CoachProfileState.Error -> Box(
-                    Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text("Nie udalo sie zaladowac profilu", color = ProCircuit.OnSurface)
+                    Text(
+                        text = "Nie udało się załadować profilu",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 14.sp,
+                        color = ProCircuit.OnSurface,
+                    )
                 }
+
                 is CoachProfileState.Content -> CoachProfileContent(
                     state = s,
-                    padding = padding,
-                    // Edit = focused form → hide bottom nav via outer Navigator.
-                    onEditProfile = { (navigator.parent?.parent ?: navigator).push(CoachProfileEditScreen) }
+                    onBack = { navigator.pop() },
+                    onEditProfile = { rootNavigator.push(CoachProfileEditScreen) },
                 )
             }
         }
@@ -87,231 +97,230 @@ object CoachProfileScreen : Screen {
 @Composable
 private fun CoachProfileContent(
     state: CoachProfileState.Content,
-    padding: PaddingValues,
-    onEditProfile: () -> Unit
+    onBack: () -> Unit,
+    onEditProfile: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(padding)
+            .padding(bottom = 40.dp),
     ) {
-        // Header section
-        Column(
+        // ─ Header row: back + edit pencil ─
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(top = 24.dp, bottom = 8.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.Top) {
-                // Avatar
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(ProCircuit.Lime),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (state.avatarUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = state.avatarUrl,
-                            contentDescription = "Avatar",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.matchParentSize()
-                        )
-                    } else {
-                        Text(
-                            text = state.displayName.take(2).uppercase(),
-                            fontFamily = AppFontFamily,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 26.sp,
-                            color = ProCircuit.SurfaceLow
-                        )
-                    }
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    // TRENER badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(ProCircuit.Tertiary)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            "TRENER",
-                            fontFamily = AppFontFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 9.sp,
-                            letterSpacing = 1.5.sp,
-                            color = ProCircuit.SurfaceLow
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = state.displayName,
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 22.sp,
-                        letterSpacing = (-0.5).sp,
-                        color = ProCircuit.OnBg
-                    )
-                    Text(
-                        text = state.city.uppercase(),
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        letterSpacing = 2.sp,
-                        color = ProCircuit.OnSurface
-                    )
-                }
-            }
-
-            // Sports chips
-            if (state.sports.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.sports.forEach { sport ->
-                        val (emoji, label) = when (sport) {
-                            Sport.TENNIS -> "🎾" to "Tenis"
-                            Sport.PADEL -> "🏸" to "Padel"
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.SurfaceLow)
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                "$emoji $label",
-                                fontFamily = AppFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = ProCircuit.OnBg
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Edit profile button
-        Button(
-            onClick = onEditProfile,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .height(48.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ProCircuit.SurfaceLow,
-                contentColor = ProCircuit.Lime
+            IconCircleButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Wstecz",
+                onClick = onBack,
             )
-        ) {
-            Text(
-                "Edytuj profil",
-                fontFamily = AppFontFamily,
-                fontWeight = FontWeight.Black,
-                fontSize = 13.sp,
-                letterSpacing = 1.sp
+            Spacer(Modifier.weight(1f))
+            IconCircleButton(
+                icon = Icons.Default.Edit,
+                contentDescription = "Edytuj profil",
+                onClick = onEditProfile,
             )
         }
 
-        // Stats section
-        if (state.lessonCount > 0) {
-            Spacer(Modifier.height(24.dp))
-            CoachSectionLabel("STATYSTYKI")
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(ProCircuit.SurfaceLow)
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "${state.lessonCount}",
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 20.sp,
-                        color = ProCircuit.Lime
-                    )
-                    Text(
-                        text = "LEKCJI",
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 9.sp,
-                        letterSpacing = 1.5.sp,
-                        color = ProCircuit.OnSurface
-                    )
-                }
-            }
-        }
+        Spacer(Modifier.height(8.dp))
 
-        // Bio section
+        // ─ Forest hero: avatar + trener badge + name + city + sports ─
+        CoachHero(
+            displayName = state.displayName,
+            avatarUrl = state.avatarUrl,
+            city = state.city,
+            sports = state.sports,
+            lessonCount = state.lessonCount,
+        )
+
+        // ─ Bio ─
         if (state.bio.isNotBlank()) {
             Spacer(Modifier.height(24.dp))
-            CoachSectionLabel("BIO")
-            Spacer(Modifier.height(12.dp))
+            SectionHeader("O mnie")
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = state.bio,
                 fontFamily = AppBodyFontFamily,
-                fontWeight = FontWeight.Normal,
-                fontSize = 13.sp,
-                color = ProCircuit.OnSurface,
-                lineHeight = 20.sp,
-                modifier = Modifier.padding(horizontal = 24.dp)
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                color = ProCircuit.OnBg,
+                modifier = Modifier.padding(horizontal = 20.dp),
             )
         }
 
-        // Courts section
+        // ─ Courts ─
         if (state.courts.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))
-            CoachSectionLabel("KORTY")
-            Spacer(Modifier.height(12.dp))
+            SectionHeader("Korty treningowe")
+            Spacer(Modifier.height(8.dp))
             Column(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 state.courts.forEach { courtName ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(ProCircuit.SurfaceLow)
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        IconSquare(
+                            icon = Icons.Default.Place,
+                            contentDescription = null,
+                            background = ProCircuit.Lime.copy(alpha = 0.14f),
+                            contentColor = ProCircuit.Lime,
+                            size = 36.dp,
+                        )
                         Text(
                             text = courtName,
                             fontFamily = AppFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = ProCircuit.OnBg
+                            color = ProCircuit.OnBg,
                         )
                     }
                 }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(32.dp))
+// ─── Hero ────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CoachHero(
+    displayName: String,
+    avatarUrl: String,
+    city: String,
+    sports: List<Sport>,
+    lessonCount: Int,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(ProCircuit.Forest)
+            .padding(horizontal = 22.dp, vertical = 22.dp),
+    ) {
+        // Avatar + trener badge row
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.Lime),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (avatarUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                } else {
+                    Text(
+                        text = displayName.take(2).uppercase(),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 26.sp,
+                        color = ProCircuit.LimeInk,
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Eyebrow(
+                    text = "TRENER",
+                    color = ProCircuit.Lime,
+                )
+                Spacer(Modifier.height(6.dp))
+                H1(
+                    text = displayName,
+                    color = ProCircuit.ForestInk,
+                )
+                if (city.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = city.uppercase(),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.8.sp,
+                        color = ProCircuit.ForestInk.copy(alpha = 0.65f),
+                    )
+                }
+            }
+        }
+
+        if (sports.isNotEmpty() || lessonCount > 0) {
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                sports.forEach { sport ->
+                    val (emoji, label) = when (sport) {
+                        Sport.TENNIS -> "🎾" to "Tenis"
+                        Sport.PADEL -> "🏸" to "Padel"
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(ProCircuit.Lime.copy(alpha = 0.16f))
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Text(
+                            text = "$emoji $label",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = ProCircuit.Lime,
+                        )
+                    }
+                }
+                if (lessonCount > 0) {
+                    Spacer(Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            text = lessonCount.toString(),
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 26.sp,
+                            letterSpacing = (-0.5).sp,
+                            color = ProCircuit.Lime,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "LEKCJI",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 9.sp,
+                            letterSpacing = 1.5.sp,
+                            color = ProCircuit.ForestInk.copy(alpha = 0.65f),
+                            modifier = Modifier.padding(bottom = 5.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun CoachSectionLabel(text: String) {
+private fun SectionHeader(title: String) {
     Text(
-        text = text,
+        text = title.uppercase(),
         fontFamily = AppFontFamily,
-        fontWeight = FontWeight.ExtraBold,
+        fontWeight = FontWeight.Black,
         fontSize = 11.sp,
-        letterSpacing = 2.sp,
-        color = ProCircuit.OnSurface,
-        modifier = Modifier.padding(horizontal = 24.dp)
+        letterSpacing = 1.6.sp,
+        color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+        modifier = Modifier.padding(horizontal = 20.dp),
     )
 }

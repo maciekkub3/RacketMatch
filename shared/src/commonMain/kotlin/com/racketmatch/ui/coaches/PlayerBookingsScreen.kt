@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -61,20 +59,18 @@ object PlayerBookingsScreen : Screen {
             }
         }
 
-        @OptIn(ExperimentalMaterial3Api::class)
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbar) },
-            containerColor = ProCircuit.Bg
-        ) { padding ->
-            Column(modifier = Modifier.fillMaxSize().padding(padding).background(ProCircuit.Bg)) {
-                Text(
-                    "Moje rezerwacje",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 28.sp,
-                    color = ProCircuit.OnBg,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
-                )
+        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 16.dp, bottom = 14.dp),
+                ) {
+                    com.racketmatch.ui.common.Eyebrow("Treningi z trenerami")
+                    Spacer(Modifier.height(6.dp))
+                    com.racketmatch.ui.common.H1("Moje rezerwacje")
+                }
 
                 @OptIn(ExperimentalMaterial3Api::class)
                 PullToRefreshBox(
@@ -118,26 +114,26 @@ object PlayerBookingsScreen : Screen {
                                         items(list, key = { it.id }) { booking ->
                                             BookingCard(
                                                 booking = booking,
-                                                requiresAction = booking.status == "PENDING" && booking.proposedByCoach
+                                                requiresAction = booking.status == "PENDING" && booking.proposedByCoach,
+                                                onChatClick = if (s.segment != BookingSegment.HISTORY) booking.conversationId?.let { conv -> {
+                                                    val other = booking.otherParty
+                                                    (navigator.parent?.parent ?: navigator).push(
+                                                        DmChatScreen(
+                                                            conversationId = conv,
+                                                            currentUserId = booking.playerId,
+                                                            otherUserName = other?.displayName ?: "Trener",
+                                                            otherUserAvatarUrl = other?.avatarUrl
+                                                        )
+                                                    )
+                                                }} else null,
+                                                showPreviousDetails = s.segment != BookingSegment.CONFIRMED
                                             ) {
                                                 PlayerActions(
                                                     booking = booking,
                                                     onConfirm = { viewModel.onIntent(PlayerBookingsIntent.Confirm(booking.id)) },
                                                     onDecline = { declineTarget = booking },
                                                     onCancel = { cancelTarget = booking },
-                                                    onCounter = { counterTarget = booking },
-                                                    onWrite = {
-                                                        val conv = booking.conversationId ?: return@PlayerActions
-                                                        val other = booking.otherParty
-                                                        (navigator.parent?.parent ?: navigator).push(
-                                                            DmChatScreen(
-                                                                conversationId = conv,
-                                                                currentUserId = booking.playerId,
-                                                                otherUserName = other?.displayName ?: "Trener",
-                                                                otherUserAvatarUrl = other?.avatarUrl
-                                                            )
-                                                        )
-                                                    }
+                                                    onCounter = { counterTarget = booking }
                                                 )
                                             }
                                         }
@@ -148,6 +144,10 @@ object PlayerBookingsScreen : Screen {
                     }
                 }
             }
+            SnackbarHost(
+                hostState = snackbar,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+            )
         }
 
         declineTarget?.let { b ->
@@ -180,7 +180,8 @@ object PlayerBookingsScreen : Screen {
                 booking = b,
                 onDismiss = { counterTarget = null },
                 onConfirm = { starts, ends, court ->
-                    viewModel.onIntent(PlayerBookingsIntent.Counter(b.id, starts, ends, courtName = court))
+                    val mins = (ends - starts).inWholeMinutes.toInt()
+                    viewModel.onIntent(PlayerBookingsIntent.Counter(b.id, starts, ends, durationMinutes = mins, courtName = court))
                     counterTarget = null
                 }
             )
@@ -194,8 +195,7 @@ internal fun PlayerActions(
     onConfirm: () -> Unit,
     onDecline: () -> Unit,
     onCancel: () -> Unit,
-    onCounter: () -> Unit,
-    onWrite: () -> Unit
+    onCounter: () -> Unit
 ) {
     when (booking.status) {
         "PENDING" -> {
@@ -203,27 +203,10 @@ internal fun PlayerActions(
             if (isCounter) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = onConfirm,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp) }
-                        OutlinedButton(
-                            onClick = onDecline,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                            border = BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f)),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
+                        PrimaryBtn("AKCEPTUJ", onConfirm, Modifier.weight(1f))
+                        DangerBtn("ODRZUĆ", onDecline, Modifier.weight(1f))
                     }
-                    OutlinedButton(
-                        onClick = onCounter,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                        border = BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                    ) { Text("ZAPROPONUJ KONTRĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
+                    SubtleBtn("ZAPROPONUJ KONTRĘ", onCounter, Modifier.fillMaxWidth())
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -231,43 +214,11 @@ internal fun PlayerActions(
                         "⏳ Czekasz na odpowiedź trenera",
                         fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = onWrite,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                            border = BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f)),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
-                        OutlinedButton(
-                            onClick = onCancel,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                            border = BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f)),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
-                    }
+                    DangerBtn("ANULUJ", onCancel, Modifier.fillMaxWidth())
                 }
             }
         }
-        "CONFIRMED" -> {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onWrite,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                    border = BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f)),
-                    modifier = Modifier.weight(1f)
-                ) { Text("NAPISZ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
-                OutlinedButton(
-                    onClick = onCancel,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                    border = BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f)),
-                    modifier = Modifier.weight(1f)
-                ) { Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp) }
-            }
-        }
-        else -> { /* history — no actions */ }
+        "CONFIRMED" -> DangerBtn("ANULUJ", onCancel, Modifier.fillMaxWidth())
+        else -> {}
     }
 }

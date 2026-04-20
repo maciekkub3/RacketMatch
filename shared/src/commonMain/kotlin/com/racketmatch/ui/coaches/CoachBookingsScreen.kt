@@ -40,6 +40,8 @@ import com.racketmatch.presentation.viewmodel.CoachBookingsIntent
 import com.racketmatch.presentation.viewmodel.CoachBookingsState
 import com.racketmatch.presentation.viewmodel.CoachBookingsViewModel
 import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -79,14 +81,16 @@ object CoachBookingsScreen : Screen {
 
         Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             Column(modifier = Modifier.fillMaxSize()) {
-                Text(
-                    "Rezerwacje",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 28.sp,
-                    color = ProCircuit.OnBg,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 16.dp, bottom = 14.dp),
+                ) {
+                    Eyebrow("Twoi uczniowie")
+                    Spacer(Modifier.height(6.dp))
+                    H1("Rezerwacje")
+                }
 
                 when (val s = state) {
                     CoachBookingsState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -118,26 +122,26 @@ object CoachBookingsScreen : Screen {
                                     BookingCard(
                                         booking = booking,
                                         requiresAction = booking.status == "PENDING" && !booking.proposedByCoach,
-                                        onAvatarClick = { booking.otherParty?.id?.let { viewModel.openPlayerProfile(it) } }
+                                        onAvatarClick = { booking.otherParty?.id?.let { viewModel.openPlayerProfile(it) } },
+                                        onChatClick = if (s.segment != BookingSegment.HISTORY) booking.conversationId?.let { conv -> {
+                                            val other = booking.otherParty
+                                            (navigator.parent?.parent ?: navigator).push(
+                                                DmChatScreen(
+                                                    conversationId = conv,
+                                                    currentUserId = booking.coachId,
+                                                    otherUserName = other?.displayName ?: "Gracz",
+                                                    otherUserAvatarUrl = other?.avatarUrl
+                                                )
+                                            )
+                                        }} else null,
+                                        showPreviousDetails = s.segment != BookingSegment.CONFIRMED
                                     ) {
                                         CoachActions(
                                             booking = booking,
                                             onConfirm = { viewModel.onIntent(CoachBookingsIntent.Confirm(booking.id)) },
                                             onDecline = { declineTarget = booking },
                                             onCancel = { cancelTarget = booking },
-                                            onCounter = { counterTarget = booking },
-                                            onWrite = {
-                                                val conv = booking.conversationId ?: return@CoachActions
-                                                val other = booking.otherParty
-                                                (navigator.parent?.parent ?: navigator).push(
-                                                    DmChatScreen(
-                                                        conversationId = conv,
-                                                        currentUserId = booking.coachId,
-                                                        otherUserName = other?.displayName ?: "Gracz",
-                                                        otherUserAvatarUrl = other?.avatarUrl
-                                                    )
-                                                )
-                                            }
+                                            onCounter = { counterTarget = booking }
                                         )
                                     }
                                 }
@@ -183,7 +187,8 @@ object CoachBookingsScreen : Screen {
                 allowFreeform = true,
                 onDismiss = { counterTarget = null },
                 onConfirm = { starts, ends, court ->
-                    viewModel.onIntent(CoachBookingsIntent.Counter(b.id, starts, ends, courtName = court))
+                    val mins = (ends - starts).inWholeMinutes.toInt()
+                    viewModel.onIntent(CoachBookingsIntent.Counter(b.id, starts, ends, durationMinutes = mins, courtName = court))
                     counterTarget = null
                 }
             )
@@ -197,51 +202,35 @@ private fun CoachActions(
     onConfirm: () -> Unit,
     onDecline: () -> Unit,
     onCancel: () -> Unit,
-    onCounter: () -> Unit,
-    onWrite: () -> Unit
+    onCounter: () -> Unit
 ) {
     when (booking.status) {
         "PENDING" -> {
             if (booking.proposedByCoach) {
-                // Coach sent this counter-offer — waiting for player's response
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         "⏳ Oczekujesz na odpowiedź gracza",
-                        fontFamily = AppBodyFontFamily,
-                        fontSize = 11.sp,
-                        color = ProCircuit.OnSurface
+                        fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SubtleBtn("NAPISZ", onWrite, Modifier.weight(1f))
-                        DangerBtn("ANULUJ", onCancel, Modifier.weight(1f))
-                    }
+                    DangerBtn("ANULUJ", onCancel, Modifier.fillMaxWidth())
                 }
             } else {
-                // Player sent request or player's counter — coach can confirm/decline
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PrimaryBtn("POTWIERDŹ", onConfirm, Modifier.weight(1f))
                         DangerBtn("ODRZUĆ", onDecline, Modifier.weight(1f))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SubtleBtn("KONTROFERTA", onCounter, Modifier.weight(1f))
-                        SubtleBtn("NAPISZ", onWrite, Modifier.weight(1f))
-                    }
+                    SubtleBtn("KONTROFERTA", onCounter, Modifier.fillMaxWidth())
                 }
             }
         }
-        "CONFIRMED" -> {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SubtleBtn("NAPISZ", onWrite, Modifier.weight(1f))
-                DangerBtn("ANULUJ", onCancel, Modifier.weight(1f))
-            }
-        }
-        else -> { /* history — no actions */ }
+        "CONFIRMED" -> DangerBtn("ANULUJ", onCancel, Modifier.fillMaxWidth())
+        else -> {}
     }
 }
 
 @Composable
-private fun PrimaryBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun PrimaryBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Button(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
@@ -251,7 +240,7 @@ private fun PrimaryBtn(label: String, onClick: () -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun DangerBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun DangerBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedButton(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
@@ -262,7 +251,7 @@ private fun DangerBtn(label: String, onClick: () -> Unit, modifier: Modifier = M
 }
 
 @Composable
-private fun SubtleBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SubtleBtn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedButton(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
@@ -373,16 +362,17 @@ fun CounterSlotSheet(
             if (slot.startsAt == booking.startsAt) slot.copy(isAvailable = true) else slot
         }
         isLoading = false
-        // Pre-select the slot matching the current booking time
-        if (selectedSlot == null) {
-            selectedSlot = allSlots.firstOrNull { it.startsAt == booking.startsAt }
-        }
     }
 
     LaunchedEffect(daysWithAvailability, displayedMonth) {
-        selectedDay = daysInMonth.firstOrNull { it in daysWithAvailability }
-            ?: (daysInMonth.firstOrNull() ?: today)
-        selectedSlot = null
+        val newDay = if (bookingDay in daysWithAvailability) bookingDay
+                     else daysInMonth.firstOrNull { it in daysWithAvailability }
+                         ?: (daysInMonth.firstOrNull() ?: today)
+        if (newDay != selectedDay) selectedDay = newDay
+        // Always try to pre-select the booking's slot when its day is selected
+        selectedSlot = if (selectedDay == bookingDay)
+            allSlots.firstOrNull { it.startsAt == booking.startsAt }
+        else null
     }
 
     LaunchedEffect(selectedDuration) { selectedSlot = null }
@@ -672,7 +662,17 @@ fun CounterSlotSheet(
                         onConfirm(s.startsAt, s.startsAt + selectedDuration.minutes, selectedCourt)
                     }
                 },
-                enabled = if (freeformMode) true else selectedSlot != null,
+                enabled = if (freeformMode) {
+                    val date = Instant.fromEpochMilliseconds(freeformDateMillis)
+                        .toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date
+                    val ldt = kotlinx.datetime.LocalDateTime(date.year, date.monthNumber, date.dayOfMonth, freeformHour, freeformMinute)
+                    val freeformStart = ldt.toInstant(tz)
+                    val freeformEnd = freeformStart + selectedDuration.minutes
+                    freeformStart != booking.startsAt || freeformEnd != booking.endsAt || selectedCourt != booking.courtName
+                } else {
+                    val slotEnd = selectedSlot?.startsAt?.plus(selectedDuration.minutes)
+                    selectedSlot != null && (selectedSlot!!.startsAt != booking.startsAt || slotEnd != booking.endsAt || selectedCourt != booking.courtName)
+                },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(

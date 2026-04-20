@@ -12,6 +12,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.IconCircleButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,48 +63,57 @@ object CoachProfileEditScreen : Screen {
             }
         }
 
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = ProCircuit.Bg,
-            topBar = {
-                TopAppBar(
-                    title = {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ProCircuit.Bg)
+                .windowInsetsPadding(WindowInsets.statusBars),
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Editorial header — replaces the old TopAppBar.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 8.dp, bottom = 16.dp),
+                ) {
+                    IconCircleButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Wstecz",
+                        onClick = { navigator.pop() },
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Eyebrow("Twoje dane")
+                    Spacer(Modifier.height(6.dp))
+                    H1("Edytuj profil")
+                }
+
+                when (val s = state) {
+                    CoachProfileEditState.Loading -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) { CircularProgressIndicator(color = ProCircuit.Lime) }
+                    CoachProfileEditState.Error -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Text(
-                            "Edytuj profil",
-                            fontFamily = AppFontFamily,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp,
-                            color = ProCircuit.OnBg
+                            "Nie można załadować profilu",
+                            fontFamily = AppBodyFontFamily,
+                            fontSize = 14.sp,
+                            color = ProCircuit.OnSurface,
                         )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ProCircuit.SurfaceLow)
-                )
-            }
-        ) { padding ->
-            when (val s = state) {
-                CoachProfileEditState.Loading -> Box(
-                    Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = ProCircuit.Lime)
+                    }
+                    is CoachProfileEditState.Content -> CoachProfileEditContent(
+                        state = s,
+                        viewModel = viewModel,
+                    )
                 }
-                CoachProfileEditState.Error -> Box(
-                    Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Nie można załadować profilu", color = ProCircuit.OnSurface)
-                }
-                is CoachProfileEditState.Content -> CoachProfileEditContent(
-                    state = s,
-                    viewModel = viewModel,
-                    padding = padding
-                )
             }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+            )
         }
     }
 }
@@ -107,7 +122,6 @@ object CoachProfileEditScreen : Screen {
 private fun CoachProfileEditContent(
     state: CoachProfileEditState.Content,
     viewModel: CoachProfileEditViewModel,
-    padding: PaddingValues
 ) {
     val imagePicker = rememberImagePickerLauncher { bytes ->
         viewModel.onEvent(CoachProfileEditEvent.UploadAvatar(bytes))
@@ -117,7 +131,6 @@ private fun CoachProfileEditContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(padding)
             .padding(horizontal = 24.dp)
     ) {
         Spacer(Modifier.height(24.dp))

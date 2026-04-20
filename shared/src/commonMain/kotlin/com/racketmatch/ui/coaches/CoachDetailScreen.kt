@@ -23,9 +23,16 @@ import coil3.compose.AsyncImage
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.domain.model.BookingSlot
 import com.racketmatch.domain.model.CoachService
 import com.racketmatch.domain.model.PricingType
 import com.racketmatch.domain.model.Sport
+import kotlin.time.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.presentation.viewmodel.CoachDetailEffect
@@ -41,7 +48,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
-data class CoachDetailScreen(val coachId: String) : Screen {
+data class CoachDetailScreen(val coachId: String, val isCoachMode: Boolean = false) : Screen {
 
     @Composable
     override fun Content() {
@@ -62,28 +69,42 @@ data class CoachDetailScreen(val coachId: String) : Screen {
             }
         }
 
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = ProCircuit.Bg
-        ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ProCircuit.Bg),
+        ) {
             when (val s = state) {
-                CoachDetailState.Loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ProCircuit.Lime)
-                }
-                CoachDetailState.Error -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("Nie udało się załadować profilu trenera", color = ProCircuit.OnSurface)
+                CoachDetailState.Loading -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator(color = ProCircuit.Lime) }
+                CoachDetailState.Error -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Nie udało się załadować profilu trenera",
+                        color = ProCircuit.OnSurface,
+                    )
                 }
                 is CoachDetailState.Content -> CoachDetailContent(
                     state = s,
                     friendRepo = friendRepo,
                     tokenStorage = tokenStorage,
+                    isCoachMode = isCoachMode,
                     onBook = { service ->
-                        navigator.push(ServiceBookingScreen(coachId = coachId, service = service))
+                        // Booking is a checkout-style form → hide bottom nav.
+                        (navigator.parent?.parent ?: navigator).push(ServiceBookingScreen(coachId = coachId, service = service))
                     },
                     onNavigate = { screen -> (navigator.parent?.parent ?: navigator).push(screen) },
                     onBack = { navigator.pop() }
                 )
             }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+            )
         }
     }
 }
@@ -93,6 +114,7 @@ private fun CoachDetailContent(
     state: CoachDetailState.Content,
     friendRepo: FriendRepository,
     tokenStorage: TokenStorage,
+    isCoachMode: Boolean,
     onBook: (CoachService) -> Unit,
     onNavigate: (Screen) -> Unit,
     onBack: () -> Unit
@@ -111,6 +133,11 @@ private fun CoachDetailContent(
                 requestSent = sent.any { it.toUserId == coach.userId }
             }
         } catch (_: Exception) {}
+    }
+
+    val nextSlot = remember(state.slots) {
+        state.slots.filter { it.isAvailable && it.startsAt > Clock.System.now() }
+            .minByOrNull { it.startsAt }
     }
 
     LazyColumn(
@@ -329,7 +356,7 @@ private fun CoachDetailContent(
         }
 
         items(state.services) { service ->
-            ServiceCard(service = service, onBook = { onBook(service) })
+            ServiceCard(service = service, nextAvailableSlot = nextSlot, canBook = !isCoachMode, onBook = { onBook(service) })
         }
 
         // Training locations
@@ -386,7 +413,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun ServiceCard(service: CoachService, onBook: () -> Unit) {
+private fun ServiceCard(service: CoachService, nextAvailableSlot: BookingSlot?, canBook: Boolean, onBook: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -422,16 +449,64 @@ private fun ServiceCard(service: CoachService, onBook: () -> Unit) {
                     textAlign = TextAlign.End)
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = onBook,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
-            contentPadding = PaddingValues(vertical = 10.dp)
-        ) {
-            Text("↗ ZAREZERWUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 11.sp, letterSpacing = 0.5.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (nextAvailableSlot != null) {
+                Text(
+                    "Następny wolny: ",
+                    fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
+                )
+                Text(
+                    formatNextSlot(nextAvailableSlot),
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp, color = ProCircuit.Lime
+                )
+            } else {
+                Text(
+                    "Brak wolnych terminów w najbliższym czasie",
+                    fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
+                )
+            }
+        }
+        if (canBook) {
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = onBook,
+                enabled = nextAvailableSlot != null,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg,
+                    disabledContainerColor = ProCircuit.SurfaceHigh, disabledContentColor = ProCircuit.OnSurface
+                ),
+                contentPadding = PaddingValues(vertical = 10.dp)
+            ) {
+                Text("↗ ZAREZERWUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 11.sp, letterSpacing = 0.5.sp)
+            }
+        }
+    }
+}
+
+private fun formatNextSlot(slot: BookingSlot): String {
+    val tz = TimeZone.currentSystemDefault()
+    val today = Clock.System.now().toLocalDateTime(tz).date
+    val tomorrow = today.plus(1, DateTimeUnit.DAY)
+    val slotLdt = slot.startsAt.toLocalDateTime(tz)
+    val slotDate = slotLdt.date
+    val hh = slotLdt.hour.toString().padStart(2, '0')
+    val mm = slotLdt.minute.toString().padStart(2, '0')
+    return when (slotDate) {
+        today    -> "Dziś • $hh:$mm"
+        tomorrow -> "Jutro • $hh:$mm"
+        else -> {
+            val dow = when (slotDate.dayOfWeek) {
+                DayOfWeek.MONDAY    -> "Pon"; DayOfWeek.TUESDAY -> "Wt"
+                DayOfWeek.WEDNESDAY -> "Śr";  DayOfWeek.THURSDAY -> "Czw"
+                DayOfWeek.FRIDAY    -> "Pt";  DayOfWeek.SATURDAY -> "Sob"
+                else                -> "Nd"
+            }
+            "$dow ${slotDate.dayOfMonth}.${slotDate.monthNumber.toString().padStart(2,'0')} • $hh:$mm"
         }
     }
 }
