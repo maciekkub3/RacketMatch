@@ -98,6 +98,10 @@ open class InMemoryTokenStorage : TokenStorage {
         coachModeActive = false
         isNewUser = false
         isOnboardingComplete = false
-        seenResultMatchIds = ""
+        // Note: seenResultMatchIds intentionally survives logout.
+        // Match UUIDs are user-scoped (you only see your own matches), so
+        // there's no data-leak risk, and clearing them meant the "Nowy
+        // wynik" hero re-triggered on every re-login — treating every
+        // already-seen result as brand-new.
     }
 }
