@@ -36,6 +36,9 @@ data class AuthResponseDto(
 data class LoginRequestDto(val email: String, val password: String)
 
 @Serializable
+data class RefreshRequestDto(val refreshToken: String)
+
+@Serializable
 data class RegisterRequestDto(
     val email: String,
     val password: String,

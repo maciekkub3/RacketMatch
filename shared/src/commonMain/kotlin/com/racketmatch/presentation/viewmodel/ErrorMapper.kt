@@ -4,7 +4,7 @@ fun Exception.toUserMessage(): String {
     val msg = message ?: return "Coś poszło nie tak. Spróbuj ponownie."
     println("RacketMatch error: ${this::class.simpleName}: $msg")
     return when {
-        msg.contains("401") -> "Nieprawidłowy email lub hasło."
+        msg.contains("401") -> "Sesja wygasła. Zaloguj się ponownie."
         msg.contains("409") -> "Konto z tym emailem już istnieje."
         msg.contains("400") -> "Sprawdź poprawność danych i spróbuj ponownie."
         msg.contains("403") -> "Brak uprawnień."
@@ -19,6 +19,24 @@ fun Exception.toUserMessage(): String {
         msg.contains("Connection refused") ||
         msg.contains("timed out") -> "Brak połączenia z serwerem."
         else -> "Coś poszło nie tak. Spróbuj ponownie. [${this::class.simpleName}]"
+    }
+}
+
+/** Use during login — 401 here means wrong credentials. */
+fun Exception.toLoginMessage(): String {
+    val msg = message ?: return "Coś poszło nie tak. Spróbuj ponownie."
+    return when {
+        msg.contains("401") -> "Nieprawidłowy email lub hasło."
+        msg.contains("Unable to resolve host") ||
+        msg.contains("UnresolvedAddress") ||
+        msg.contains("ConnectException") ||
+        msg.contains("SocketException") ||
+        msg.contains("SocketTimeout") ||
+        msg.contains("Timeout") ||
+        msg.contains("Connection refused") ||
+        msg.contains("timed out") -> "Brak połączenia z serwerem."
+        msg.contains("500") || msg.contains("502") || msg.contains("503") -> "Błąd serwera. Spróbuj później."
+        else -> "Coś poszło nie tak. Spróbuj ponownie."
     }
 }
 

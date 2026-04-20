@@ -20,6 +20,9 @@ class AuthRepositoryImpl(
         tokenStorage.isCoach = response.user.isCoach
         tokenStorage.hasPlayerProfile = response.user.hasPlayerProfile
         if (response.user.isCoach && !response.user.hasPlayerProfile) tokenStorage.coachModeActive = true
+        // Drop any cached bearer in the Auth plugin so the next authed call
+        // re-reads tokens from storage (picks up the new tokens we just saved).
+        authApi.clearBearerCache()
         return response.toDomain()
     }
 
@@ -39,10 +42,12 @@ class AuthRepositoryImpl(
         tokenStorage.isCoach = response.user.isCoach
         tokenStorage.hasPlayerProfile = response.user.hasPlayerProfile
         if (response.user.isCoach && !response.user.hasPlayerProfile) tokenStorage.coachModeActive = true
+        authApi.clearBearerCache()
         return response.toDomain()
     }
 
     override suspend fun logout() {
         tokenStorage.clear()
+        authApi.clearBearerCache()
     }
 }

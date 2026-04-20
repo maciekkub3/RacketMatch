@@ -50,7 +50,7 @@ class LoginViewModel(
                 _effects.emit(LoginEffect.NavigateToHome)
             } catch (e: Exception) {
                 _state.value = LoginState.Idle
-                _effects.emit(LoginEffect.ShowError(e.toUserMessage()))
+                _effects.emit(LoginEffect.ShowError(e.toLoginMessage()))
             }
         }
     }
