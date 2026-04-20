@@ -246,36 +246,34 @@ object TodayScreen : Screen {
                 .filter { it.isNotBlank() }
                 .toSet()
         }
-        val recentResult: RecentResultUi? = remember(matchState, matchUserId, seenResultIds) {
-            val matches = matchContent?.matches.orEmpty()
-            if (matchUserId.isBlank()) return@remember null
-            matches.asSequence()
-                .filter {
-                    it.status == MatchStatus.COMPLETED &&
-                        (it.challengerId == matchUserId || it.challengedId == matchUserId) &&
-                        it.eloChanges?.get(matchUserId) != null &&
-                        it.id !in seenResultIds
-                }
-                // Latest first — match.scheduledAt is an ISO string sortable as text.
-                .sortedByDescending { it.scheduledAt ?: "" }
-                .firstOrNull()
-                ?.let { m ->
-                    val iAmChallenger = m.challengerId == matchUserId
-                    val myScore = (if (iAmChallenger) m.scoreChallenger else m.scoreChallenged) ?: 0
-                    val oppScore = (if (iAmChallenger) m.scoreChallenged else m.scoreChallenger) ?: 0
-                    val oppName = (if (iAmChallenger) m.challengedName else m.challengerName)
-                        .ifBlank { "Rywal" }
-                    val delta = m.eloChanges?.get(matchUserId) ?: 0
-                    RecentResultUi(
-                        matchId = m.id,
-                        opponentName = oppName,
-                        initials = oppName.initials2(),
-                        iWon = myScore > oppScore,
-                        myScore = myScore,
-                        oppScore = oppScore,
-                        eloDelta = delta,
-                    )
-                }
+        // Delegate the "which match to celebrate + what to clear on tap"
+        // decision to a pure function so the rule is unit-tested.
+        val recentDecision = remember(matchState, matchUserId, seenResultIds) {
+            computeRecentResultDecision(
+                matches = matchContent?.matches.orEmpty(),
+                myUserId = matchUserId,
+                seenIds = seenResultIds,
+            )
+        }
+        val recentResult: RecentResultUi? = remember(recentDecision, matchState) {
+            val targetId = recentDecision.heroMatchId ?: return@remember null
+            val m = matchContent?.matches.orEmpty().firstOrNull { it.id == targetId }
+                ?: return@remember null
+            val iAmChallenger = m.challengerId == matchUserId
+            val myScore = (if (iAmChallenger) m.scoreChallenger else m.scoreChallenged) ?: 0
+            val oppScore = (if (iAmChallenger) m.scoreChallenged else m.scoreChallenger) ?: 0
+            val oppName = (if (iAmChallenger) m.challengedName else m.challengerName)
+                .ifBlank { "Rywal" }
+            val delta = m.eloChanges?.get(matchUserId) ?: 0
+            RecentResultUi(
+                matchId = m.id,
+                opponentName = oppName,
+                initials = oppName.initials2(),
+                iWon = myScore > oppScore,
+                myScore = myScore,
+                oppScore = oppScore,
+                eloDelta = delta,
+            )
         }
 
         // Invites: incoming challenges where I'm the challenged, awaiting my answer.
@@ -373,7 +371,13 @@ object TodayScreen : Screen {
                 com.racketmatch.ui.navigation.TabSwitchSignal.request("matches")
             }
             val markResultSeenAndReveal: (RecentResultUi) -> Unit = { data ->
-                val newSeen = (seenResultIds + data.matchId).joinToString(",")
+                // Mark ALL currently-unseen completed matches as seen in
+                // one shot — not just the tapped one. Otherwise every
+                // tap rearmed the hero with the next-oldest match in the
+                // backlog ("jeden po drugim"). The tapped match is still
+                // the one revealed; the rest are silently acknowledged.
+                val newSeen = (seenResultIds + recentDecision.onTapMarkSeen)
+                    .joinToString(",")
                 tokenStorage.seenResultMatchIds = newSeen
                 // Mirror into local state so Compose recomposes and the
                 // hero disappears now that the match is marked seen.
