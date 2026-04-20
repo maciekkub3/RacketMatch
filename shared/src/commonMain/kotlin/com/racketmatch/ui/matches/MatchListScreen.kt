@@ -1201,8 +1201,8 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
                         border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
                     ) {
-                        Text("ODRZUĆ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp, maxLines = 1)
+                        Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp, letterSpacing = 1.sp)
                     }
                     Button(
                         onClick = { viewModel.onEvent(MatchEvent.AcceptDetails(match.id)) },
