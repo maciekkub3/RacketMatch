@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import com.racketmatch.domain.model.CalendarEvent
 import com.racketmatch.domain.model.CalendarEventType
+import com.racketmatch.presentation.viewmodel.CoachBookingsIntent
+import com.racketmatch.presentation.viewmodel.CoachBookingsState
+import com.racketmatch.presentation.viewmodel.CoachBookingsViewModel
 import com.racketmatch.presentation.viewmodel.CoachCalendarEvent
 import com.racketmatch.presentation.viewmodel.CoachCalendarState
 import com.racketmatch.presentation.viewmodel.CoachCalendarViewModel
@@ -45,6 +48,11 @@ private val HOUR_HEIGHT = 64.dp
 private val TIME_COL_WIDTH = 44.dp
 private val GRID_HOURS_START = 7
 private val GRID_HOURS_END = 22
+// Week view: slightly denser hour height so the whole 7-22 span fits a
+// scrollable view without forcing too much scrolling.
+private val WEEK_HOUR_HEIGHT = 52.dp
+
+private enum class CalendarView { WEEK, MONTH }
 
 object CoachCalendarScreen : Screen {
 
@@ -52,11 +60,19 @@ object CoachCalendarScreen : Screen {
     override fun Content() {
         val viewModel: CoachCalendarViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
+        // Bookings VM gives us status per booking so calendar events linked
+        // to declined/cancelled bookings can be filtered out — backend still
+        // returns them otherwise.
+        val bookingsVm: CoachBookingsViewModel = kmpViewModel()
+        val bookingsState by bookingsVm.stateFlow.collectAsState()
         var showAddSheet by remember { mutableStateOf(false) }
+        var detailEvent by remember { mutableStateOf<CalendarEvent?>(null) }
 
         val tz = TimeZone.currentSystemDefault()
         val today = remember { Clock.System.now().toLocalDateTime(tz).date }
         var selectedDate by remember { mutableStateOf(today) }
+        var viewMode by remember { mutableStateOf(CalendarView.WEEK) }
+        var weekStart by remember { mutableStateOf(today.startOfIsoWeek()) }
 
         val initialMonthStart = remember {
             LocalDateTime(LocalDate(today.year, today.monthNumber, 1), LocalTime(0, 0)).toInstant(tz)
@@ -64,6 +80,25 @@ object CoachCalendarScreen : Screen {
 
         LaunchedEffect(Unit) {
             viewModel.onEvent(CoachCalendarEvent.LoadMonth(initialMonthStart))
+            bookingsVm.onIntent(CoachBookingsIntent.Refresh)
+        }
+
+        // Auto-load the month containing the currently visible week so the
+        // grid never shows empty cells just because the user swiped a week
+        // across a month boundary.
+        LaunchedEffect(weekStart) {
+            val content = state as? CoachCalendarState.Content
+            val loaded = content?.monthStart?.toLocalDateTime(tz)?.date
+            if (loaded == null ||
+                loaded.year != weekStart.year || loaded.monthNumber != weekStart.monthNumber
+            ) {
+                viewModel.onEvent(
+                    CoachCalendarEvent.LoadMonth(
+                        LocalDateTime(LocalDate(weekStart.year, weekStart.monthNumber, 1), LocalTime(0, 0))
+                            .toInstant(tz),
+                    )
+                )
+            }
         }
 
         Scaffold(
@@ -96,106 +131,98 @@ object CoachCalendarScreen : Screen {
 
                     is CoachCalendarState.Content -> {
                         val displayedMonth = s.monthStart.toLocalDateTime(tz).date
-                        val todayEventCount = s.events.count { evt ->
+
+                        // Filter out events whose backing booking is declined
+                        // or cancelled — backend still returns them.
+                        val declinedBookingIds = remember(bookingsState) {
+                            val content = bookingsState as? CoachBookingsState.Content
+                            val all = (content?.pending.orEmpty() +
+                                content?.confirmed.orEmpty() +
+                                content?.history.orEmpty())
+                            all.filter { it.status in setOf("DECLINED", "CANCELLED") }
+                                .map { it.id }
+                                .toSet()
+                        }
+                        val visibleEvents = remember(s.events, declinedBookingIds) {
+                            s.events.filter { evt ->
+                                evt.eventType != CalendarEventType.BOOKING ||
+                                    evt.bookingId == null ||
+                                    evt.bookingId !in declinedBookingIds
+                            }
+                        }
+                        val todayEventCount = visibleEvents.count { evt ->
                             val startDate = evt.startsAt.toLocalDateTime(tz).date
                             startDate == today
                         }
 
-                        // Editorial header + quick "Dziś" jump. Stays visible
-                        // above the month strip so the screen has a clear
-                        // identity without a Material TopAppBar.
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp)
-                                .padding(top = 10.dp, bottom = 12.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Eyebrow(
-                                        if (todayEventCount == 0) "Brak sesji dziś"
-                                        else "Dziś · $todayEventCount " +
-                                            if (todayEventCount == 1) "sesja" else "sesje"
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    H1("Kalendarz")
-                                }
-                                if (selectedDate != today) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(ProCircuit.Lime)
-                                            .clickable {
-                                                selectedDate = today
-                                                val todayMonthStart = LocalDateTime(
-                                                    LocalDate(today.year, today.monthNumber, 1),
-                                                    LocalTime(0, 0),
-                                                ).toInstant(tz)
-                                                if (displayedMonth.year != today.year || displayedMonth.monthNumber != today.monthNumber) {
-                                                    viewModel.onEvent(
-                                                        CoachCalendarEvent.LoadMonth(todayMonthStart)
-                                                    )
-                                                }
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    ) {
-                                        Text(
-                                            text = "DZIŚ",
-                                            fontFamily = AppFontFamily,
-                                            fontWeight = FontWeight.Black,
-                                            fontSize = 11.sp,
-                                            letterSpacing = 1.4.sp,
-                                            color = ProCircuit.LimeInk,
-                                        )
-                                    }
-                                }
+                        CalendarHeader(
+                            todayEventCount = todayEventCount,
+                            viewMode = viewMode,
+                            onViewChange = { viewMode = it },
+                            showTodayJump = when (viewMode) {
+                                CalendarView.WEEK -> weekStart != today.startOfIsoWeek()
+                                CalendarView.MONTH -> selectedDate != today
+                            },
+                            onJumpToday = {
+                                selectedDate = today
+                                weekStart = today.startOfIsoWeek()
+                            },
+                        )
+
+                        when (viewMode) {
+                            CalendarView.WEEK -> WeekView(
+                                weekStart = weekStart,
+                                events = visibleEvents,
+                                today = today,
+                                tz = tz,
+                                onPrevWeek = { weekStart = weekStart.plus(-7, DateTimeUnit.DAY) },
+                                onNextWeek = { weekStart = weekStart.plus(7, DateTimeUnit.DAY) },
+                                onEventTap = { detailEvent = it },
+                            )
+                            CalendarView.MONTH -> {
+                                MonthStripCalendar(
+                                    monthStart = s.monthStart,
+                                    events = visibleEvents,
+                                    selectedDate = selectedDate,
+                                    today = today,
+                                    tz = tz,
+                                    onDaySelected = { date ->
+                                        selectedDate = date
+                                        if (date.year != displayedMonth.year || date.monthNumber != displayedMonth.monthNumber) {
+                                            viewModel.onEvent(
+                                                CoachCalendarEvent.LoadMonth(
+                                                    LocalDateTime(LocalDate(date.year, date.monthNumber, 1), LocalTime(0, 0)).toInstant(tz)
+                                                )
+                                            )
+                                        }
+                                    },
+                                    onPrevMonth = {
+                                        val prev = prevMonthStart(s.monthStart, tz)
+                                        val prevDate = prev.toLocalDateTime(tz).date
+                                        selectedDate = if (today.year == prevDate.year && today.monthNumber == prevDate.monthNumber)
+                                            today else prevDate
+                                        viewModel.onEvent(CoachCalendarEvent.LoadMonth(prev))
+                                    },
+                                    onNextMonth = {
+                                        val next = nextMonthStart(s.monthStart, tz)
+                                        val nextDate = next.toLocalDateTime(tz).date
+                                        selectedDate = if (today.year == nextDate.year && today.monthNumber == nextDate.monthNumber)
+                                            today else nextDate
+                                        viewModel.onEvent(CoachCalendarEvent.LoadMonth(next))
+                                    },
+                                )
+                                HorizontalDivider(color = ProCircuit.SurfaceHigh, thickness = 1.dp)
+                                DayView(
+                                    date = selectedDate,
+                                    events = visibleEvents,
+                                    today = today,
+                                    tz = tz,
+                                    onDeleteEvent = { event ->
+                                        viewModel.onEvent(CoachCalendarEvent.DeleteEvent(event.id))
+                                    },
+                                )
                             }
                         }
-
-                        MonthStripCalendar(
-                            monthStart = s.monthStart,
-                            events = s.events,
-                            selectedDate = selectedDate,
-                            today = today,
-                            tz = tz,
-                            onDaySelected = { date ->
-                                selectedDate = date
-                                // If tapped a day outside the loaded month, reload for that month
-                                if (date.year != displayedMonth.year || date.monthNumber != displayedMonth.monthNumber) {
-                                    viewModel.onEvent(
-                                        CoachCalendarEvent.LoadMonth(
-                                            LocalDateTime(LocalDate(date.year, date.monthNumber, 1), LocalTime(0, 0)).toInstant(tz)
-                                        )
-                                    )
-                                }
-                            },
-                            onPrevMonth = {
-                                val prev = prevMonthStart(s.monthStart, tz)
-                                val prevDate = prev.toLocalDateTime(tz).date
-                                selectedDate = if (today.year == prevDate.year && today.monthNumber == prevDate.monthNumber)
-                                    today else prevDate
-                                viewModel.onEvent(CoachCalendarEvent.LoadMonth(prev))
-                            },
-                            onNextMonth = {
-                                val next = nextMonthStart(s.monthStart, tz)
-                                val nextDate = next.toLocalDateTime(tz).date
-                                selectedDate = if (today.year == nextDate.year && today.monthNumber == nextDate.monthNumber)
-                                    today else nextDate
-                                viewModel.onEvent(CoachCalendarEvent.LoadMonth(next))
-                            }
-                        )
-
-                        HorizontalDivider(color = ProCircuit.SurfaceHigh, thickness = 1.dp)
-
-                        DayView(
-                            date = selectedDate,
-                            events = s.events,
-                            today = today,
-                            tz = tz,
-                            onDeleteEvent = { event ->
-                                viewModel.onEvent(CoachCalendarEvent.DeleteEvent(event.id))
-                            }
-                        )
                     }
                 }
             }
@@ -210,7 +237,466 @@ object CoachCalendarScreen : Screen {
                 }
             )
         }
+
+        detailEvent?.let { event ->
+            EventDetailSheet(
+                event = event,
+                tz = tz,
+                onDismiss = { detailEvent = null },
+                onDelete = {
+                    viewModel.onEvent(CoachCalendarEvent.DeleteEvent(event.id))
+                    detailEvent = null
+                },
+            )
+        }
     }
+}
+
+// ─── Header (editorial + view toggle + today jump) ─────────────────────
+
+@Composable
+private fun CalendarHeader(
+    todayEventCount: Int,
+    viewMode: CalendarView,
+    onViewChange: (CalendarView) -> Unit,
+    showTodayJump: Boolean,
+    onJumpToday: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(top = 10.dp, bottom = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow(
+                    if (todayEventCount == 0) "Brak sesji dziś"
+                    else "Dziś · $todayEventCount " +
+                        if (todayEventCount == 1) "sesja" else "sesje"
+                )
+                Spacer(Modifier.height(4.dp))
+                H1("Kalendarz")
+            }
+            if (showTodayJump) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(ProCircuit.Lime)
+                        .clickable(onClick = onJumpToday)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = "DZIŚ",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.4.sp,
+                        color = ProCircuit.LimeInk,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        // View toggle — Tydzień / Miesiąc segmented.
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(ProCircuit.SurfaceLow)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            listOf("Tydzień" to CalendarView.WEEK, "Miesiąc" to CalendarView.MONTH).forEach { (label, mode) ->
+                val selected = viewMode == mode
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (selected) ProCircuit.Lime else Color.Transparent)
+                        .clickable { onViewChange(mode) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        letterSpacing = 0.5.sp,
+                        color = if (selected) ProCircuit.LimeInk else ProCircuit.OnSurface,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── Week view (Pon-Nd × hours grid, events as positioned blocks) ─────
+
+@Composable
+private fun WeekView(
+    weekStart: LocalDate,
+    events: List<CalendarEvent>,
+    today: LocalDate,
+    tz: TimeZone,
+    onPrevWeek: () -> Unit,
+    onNextWeek: () -> Unit,
+    onEventTap: (CalendarEvent) -> Unit,
+) {
+    val days = remember(weekStart) { (0..6).map { weekStart.plus(it, DateTimeUnit.DAY) } }
+    val dayEvents = remember(events, days) {
+        days.associateWith { date ->
+            events.filter { it.startsAt.toLocalDateTime(tz).date == date }
+        }
+    }
+    val weekSummary = remember(events, weekStart) {
+        val inWeek = events.filter {
+            val d = it.startsAt.toLocalDateTime(tz).date
+            d >= weekStart && d < weekStart.plus(7, DateTimeUnit.DAY)
+        }
+        val hours = inWeek.sumOf {
+            ((it.endsAt - it.startsAt).inWholeMinutes / 60.0).coerceAtLeast(0.0)
+        }.toInt()
+        "${inWeek.size} sesji · ${hours}h"
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Week navigator row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.SurfaceLow)
+                    .clickable(onClick = onPrevWeek),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Poprzedni tydzień", tint = ProCircuit.OnBg)
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = weekLabel(weekStart),
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 14.sp,
+                    color = ProCircuit.OnBg,
+                )
+                Text(
+                    text = weekSummary,
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.SurfaceLow)
+                    .clickable(onClick = onNextWeek),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Następny tydzień", tint = ProCircuit.OnBg)
+            }
+        }
+
+        // Day header row (PON 12 · WT 13 · …)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.width(TIME_COL_WIDTH))
+            days.forEach { date ->
+                val isToday = date == today
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = dayOfWeekShortLabel(date.dayOfWeek),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.2.sp,
+                        color = if (isToday) ProCircuit.Lime else ProCircuit.OnSurface,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(if (isToday) ProCircuit.Lime else Color.Transparent),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = date.dayOfMonth.toString(),
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = if (isToday) ProCircuit.LimeInk else ProCircuit.OnBg,
+                        )
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(color = ProCircuit.SurfaceHigh, thickness = 1.dp)
+
+        // Scrollable grid body
+        val gridHeight = WEEK_HOUR_HEIGHT * (GRID_HOURS_END - GRID_HOURS_START + 1)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(gridHeight)
+                    .padding(horizontal = 8.dp),
+            ) {
+                // Time labels column
+                Column(modifier = Modifier.width(TIME_COL_WIDTH)) {
+                    (GRID_HOURS_START..GRID_HOURS_END).forEach { h ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(WEEK_HOUR_HEIGHT),
+                            contentAlignment = Alignment.TopEnd,
+                        ) {
+                            Text(
+                                text = "${h.toString().padStart(2, '0')}:00",
+                                fontFamily = AppFontFamily,
+                                fontSize = 10.sp,
+                                color = ProCircuit.OnSurface,
+                                modifier = Modifier.padding(end = 6.dp, top = 2.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Per-day event columns
+                days.forEach { date ->
+                    DayEventColumn(
+                        date = date,
+                        events = dayEvents[date].orEmpty(),
+                        today = today,
+                        tz = tz,
+                        gridHeight = gridHeight,
+                        onEventTap = onEventTap,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DayEventColumn(
+    date: LocalDate,
+    events: List<CalendarEvent>,
+    today: LocalDate,
+    tz: TimeZone,
+    gridHeight: Dp,
+    onEventTap: (CalendarEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isToday = date == today
+    val density = LocalDensity.current
+    val hourHeightPx = with(density) { WEEK_HOUR_HEIGHT.toPx() }
+    Box(
+        modifier = modifier
+            .padding(horizontal = 1.dp)
+            .height(gridHeight)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isToday) ProCircuit.Lime.copy(alpha = 0.04f) else Color.Transparent),
+    ) {
+        // Hour grid lines
+        Column(modifier = Modifier.fillMaxSize()) {
+            repeat(GRID_HOURS_END - GRID_HOURS_START + 1) { i ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(WEEK_HOUR_HEIGHT),
+                ) {
+                    HorizontalDivider(
+                        color = ProCircuit.SurfaceHigh.copy(alpha = if (i == 0) 0f else 0.6f),
+                        thickness = 0.5.dp,
+                    )
+                }
+            }
+        }
+        // Event blocks
+        events.forEach { event ->
+            val startMinutes = event.startsAt.toLocalDateTime(tz).let { it.hour * 60 + it.minute }
+            val endMinutes = event.endsAt.toLocalDateTime(tz).let { it.hour * 60 + it.minute }
+            // Clamp to visible range
+            val visibleStart = startMinutes.coerceAtLeast(GRID_HOURS_START * 60)
+            val visibleEnd = endMinutes.coerceAtMost((GRID_HOURS_END + 1) * 60)
+            if (visibleEnd <= visibleStart) return@forEach
+            val topPx = ((visibleStart - GRID_HOURS_START * 60).toFloat() / 60f) * hourHeightPx
+            val heightPx = ((visibleEnd - visibleStart).toFloat() / 60f) * hourHeightPx
+            val topDp = with(density) { topPx.toDp() }
+            val heightDp = with(density) { heightPx.toDp() }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 1.dp)
+                    .offset(y = topDp)
+                    .height(heightDp.coerceAtLeast(18.dp))
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(eventColor(event))
+                    .clickable { onEventTap(event) }
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+            ) {
+                val hh = event.startsAt.toLocalDateTime(tz).hour.toString().padStart(2, '0')
+                val mm = event.startsAt.toLocalDateTime(tz).minute.toString().padStart(2, '0')
+                Text(
+                    text = "$hh:$mm",
+                    fontFamily = AppFontFamily,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    color = ProCircuit.LimeInk,
+                    maxLines = 1,
+                )
+                if (!event.title.isNullOrBlank()) {
+                    Text(
+                        text = event.title,
+                        fontFamily = AppFontFamily,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ProCircuit.LimeInk,
+                        maxLines = 2,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun eventColor(event: CalendarEvent): androidx.compose.ui.graphics.Color = when (event.eventType) {
+    CalendarEventType.BOOKING -> ProCircuit.Lime
+    CalendarEventType.EXTERNAL_CLIENT -> ProCircuit.Lime.copy(alpha = 0.55f)
+    CalendarEventType.BLOCKED -> ProCircuit.OnSurface.copy(alpha = 0.25f)
+}
+
+// ─── Event detail sheet ──────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EventDetailSheet(
+    event: CalendarEvent,
+    tz: TimeZone,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val s = event.startsAt.toLocalDateTime(tz)
+    val e = event.endsAt.toLocalDateTime(tz)
+    val dateLabel = "${dayOfWeekShortLabel(s.dayOfWeek)} ${s.dayOfMonth}.${s.monthNumber.toString().padStart(2, '0')}"
+    val timeLabel = "${s.hour.toString().padStart(2, '0')}:${s.minute.toString().padStart(2, '0')}–" +
+        "${e.hour.toString().padStart(2, '0')}:${e.minute.toString().padStart(2, '0')}"
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = ProCircuit.SurfaceLow,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = event.title ?: when (event.eventType) {
+                    CalendarEventType.BOOKING -> "Sesja"
+                    CalendarEventType.EXTERNAL_CLIENT -> "Klient zewnętrzny"
+                    CalendarEventType.BLOCKED -> "Zablokowany czas"
+                },
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp,
+                color = ProCircuit.OnBg,
+            )
+            Text(
+                text = "$dateLabel · $timeLabel",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 13.sp,
+                color = ProCircuit.OnSurface,
+            )
+            if (!event.notes.isNullOrBlank()) {
+                Text(
+                    text = event.notes,
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = ProCircuit.OnBg,
+                )
+            }
+            // Only allow deletion of non-booking events — bookings are managed
+            // via the Rezerwacje tab (decline / cancel) so there's always a
+            // clear trail.
+            if (event.eventType != CalendarEventType.BOOKING) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ProCircuit.LossRed.copy(alpha = 0.14f))
+                        .clickable(onClick = onDelete)
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Usuń z kalendarza",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = ProCircuit.LossRed,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── Date helpers ────────────────────────────────────────────────────
+
+private fun LocalDate.startOfIsoWeek(): LocalDate {
+    val dow = this.dayOfWeek.isoDayNumber // 1 = Mon, 7 = Sun
+    return this.plus(-(dow - 1), DateTimeUnit.DAY)
+}
+
+private fun dayOfWeekShortLabel(d: DayOfWeek): String = when (d) {
+    DayOfWeek.MONDAY -> "PON"
+    DayOfWeek.TUESDAY -> "WT"
+    DayOfWeek.WEDNESDAY -> "ŚR"
+    DayOfWeek.THURSDAY -> "CZW"
+    DayOfWeek.FRIDAY -> "PT"
+    DayOfWeek.SATURDAY -> "SOB"
+    DayOfWeek.SUNDAY -> "ND"
+    else -> "—"
+}
+
+private fun weekLabel(weekStart: LocalDate): String {
+    val end = weekStart.plus(6, DateTimeUnit.DAY)
+    val startStr = "${weekStart.dayOfMonth}.${weekStart.monthNumber.toString().padStart(2, '0')}"
+    val endStr = "${end.dayOfMonth}.${end.monthNumber.toString().padStart(2, '0')}"
+    return "$startStr – $endStr"
 }
 
 // ─── Month strip calendar ─────────────────────────────────────────────────────

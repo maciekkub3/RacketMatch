@@ -172,19 +172,23 @@ private fun DzienContent(
     // I (coach) last counter-offered are waiting on the player, not me.
     val pendingCount = state.pending.count { !it.proposedByCoach }
 
-    // Sessions this week (past + future, confirmed or already held)
-    val allBookings = remember(state) { state.pending + state.confirmed + state.history }
-    val sessionsThisWeek = remember(allBookings, weekStart, weekEndExclusive) {
-        allBookings.filter {
+    // Stats only count sessions the coach has actually committed to —
+    // CONFIRMED (upcoming or past) and COMPLETED. Pending requests and
+    // declined/cancelled ones would overstate the coach's load.
+    val countedBookings = remember(state) {
+        (state.confirmed + state.history).filter {
+            it.status == "CONFIRMED" || it.status == "COMPLETED"
+        }
+    }
+    val sessionsThisWeek = remember(countedBookings, weekStart, weekEndExclusive) {
+        countedBookings.filter {
             val d = it.startsAt.toLocalDateTime(tz).date
-            it.status != "CANCELLED" && it.status != "DECLINED" &&
-                d >= weekStart && d < weekEndExclusive
+            d >= weekStart && d < weekEndExclusive
         }
     }
     val hoursThisWeek = sessionsThisWeek.sumOf { (it.durationMinutes ?: 60) } / 60
-    val uniqueStudentsThisMonth = remember(allBookings, monthStart) {
-        allBookings.asSequence()
-            .filter { it.status != "CANCELLED" && it.status != "DECLINED" }
+    val uniqueStudentsThisMonth = remember(countedBookings, monthStart) {
+        countedBookings.asSequence()
             .filter { it.startsAt.toLocalDateTime(tz).date >= monthStart }
             .map { it.playerId }
             .toSet()
@@ -194,7 +198,7 @@ private fun DzienContent(
     // ── Hero ────────────────────────────────────────────────────────────
     if (nextSession != null) {
         NextSessionHero(session = nextSession, now = now, tz = tz, onOpen = onOpenCalendar)
-    } else if (allBookings.isEmpty()) {
+    } else if (state.pending.isEmpty() && state.confirmed.isEmpty() && state.history.isEmpty()) {
         FirstSessionHero()
     } else {
         NoSessionsTodayHero()
