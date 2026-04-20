@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -555,17 +556,21 @@ private fun DayEventColumn(
                 }
             }
         }
-        // "NIEDOSTĘPNE" watermark centered in fully-blocked columns.
+        // Watermark centered in fully-blocked columns. Text is rotated 90°
+        // so "Niedostępne" reads naturally along the narrow column instead
+        // of getting hacked into 3 hyphenated lines.
         if (isFullyBlocked) {
             Text(
-                text = "NIE-\nDO-\nSTĘPNE",
+                text = "Niedostępne",
                 fontFamily = AppFontFamily,
-                fontSize = 9.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 1.2.sp,
-                color = ProCircuit.OnSurface.copy(alpha = 0.55f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.Center),
+                letterSpacing = 2.sp,
+                color = ProCircuit.OnSurface.copy(alpha = 0.6f),
+                maxLines = 1,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .rotate(-90f),
             )
         }
         // Event blocks — skip rendering individual blocks when the column
