@@ -810,21 +810,7 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
     val hasLocation = !match.locationName.isNullOrBlank()
     val hasTime = !match.scheduledAt.isNullOrBlank()
     val hasDetails = hasLocation || hasTime
-    var showDetailsDialog by remember { mutableStateOf(false) }
     var showCancelConfirm by remember { mutableStateOf(false) }
-
-    if (showDetailsDialog) {
-        ProposeDetailsDialog(
-            prefillLocation = match.locationName,
-            prefillMillis = match.scheduledAt?.let { parseScheduledAt(it) },
-            courts = courts,
-            onConfirm = { locationName, scheduledAt ->
-                showDetailsDialog = false
-                viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
-            },
-            onDismiss = { showDetailsDialog = false }
-        )
-    }
 
     if (showCancelConfirm) {
         AlertDialog(
@@ -1018,43 +1004,9 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
             )
         }
 
-        if (!hasTime) {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(ProCircuit.Lime.copy(alpha = 0.14f))
-                    .clickable { showDetailsDialog = true }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text("⏰", fontSize = 18.sp)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Ustal termin",
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = ProCircuit.Ink,
-                    )
-                    Text(
-                        text = "Mecz zaakceptowany — wybierz datę i kort.",
-                        fontFamily = AppBodyFontFamily,
-                        fontSize = 11.sp,
-                        color = ProCircuit.Ink2,
-                    )
-                }
-                Text(
-                    text = "→",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = ProCircuit.Ink,
-                )
-            }
-        }
+        // "Ustal termin" banner retired — the editable tiles below cover
+        // the empty state (placeholders + dirty-CTA WYŚLIJ PROPOZYCJĘ),
+        // so the banner was saying the same thing twice.
 
         if (hasDetails) {
             Spacer(Modifier.height(12.dp))
@@ -1148,13 +1100,6 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
         val theyProposedDetails = match.detailsProposedBy != null && match.detailsProposedBy != myId
         val iProposedDetails = match.detailsProposedBy == myId
 
-        val detailsLabel = when {
-            !hasLocation && !hasTime -> "USTAW SZCZEGÓŁY"
-            !hasLocation             -> "USTAW KORT"
-            !hasTime                 -> "USTAW CZAS"
-            else                     -> "EDYTUJ SZCZEGÓŁY"
-        }
-
         when {
             // They proposed → tap-to-edit tiles + dynamic CTA. No edit =
             // AKCEPTUJ; any edit = WYŚLIJ PROPOZYCJĘ (counter). Rejection
@@ -1192,31 +1137,49 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                     rejectLabel = "✕ Wycofaj propozycję",
                 )
             }
-            // Normal scheduled state — edit details or record result.
-            // When !hasTime the big "Ustal termin" banner above already
-            // owns the primary action (picks date + court), so we skip
-            // the redundant details button and SET RESULT (you can't
-            // record a result for a match that isn't scheduled yet).
-            else -> if (hasTime) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { showDetailsDialog = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                    ) {
-                        Text(detailsLabel, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                    Button(
-                        onClick = onSetResult,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.Lime)
-                    ) {
-                        Text("SET RESULT", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
+            // AGREED state — both sides on the same page. Tiles stay
+            // editable so either side can propose a change inline; no
+            // CTA unless something is dirty (card is a "just reviewing"
+            // card by default). Dirty → "ZAPROPONUJ ZMIANĘ" which pushes
+            // the match back into iProposed for the other side to
+            // accept/counter. SET RESULT stays a standalone standout CTA
+            // for when the match has been played; only relevant once the
+            // time is set.
+            else -> {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    EditableDetailsSection(
+                        match = match,
+                        courts = courts,
+                        acceptLabel = null,
+                        onAcceptAsIs = null,
+                        onCounterPropose = { loc, scheduled ->
+                            viewModel.onEvent(MatchEvent.ProposeDetails(match.id, loc, scheduled))
+                        },
+                        dirtyCtaLabel = "ZAPROPONUJ ZMIANĘ",
+                        idleText = null,
+                        // Cancel-match already lives in the header X on
+                        // AGREED, so skip the text-link to avoid doubling.
+                        onReject = null,
+                    )
+                    if (hasTime) {
+                        Button(
+                            onClick = onSetResult,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ProCircuit.SurfaceHigh,
+                                contentColor = ProCircuit.Lime,
+                            ),
+                        ) {
+                            Text(
+                                text = "ZAPISZ WYNIK",
+                                fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 12.sp,
+                                letterSpacing = 1.2.sp,
+                                modifier = Modifier.padding(vertical = 6.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -1947,7 +1910,10 @@ private fun EditableDetailsSection(
     // Optional line shown *instead* of the accept CTA when onAcceptAsIs is
     // null and nothing was edited — e.g., "Czekasz na odpowiedź…".
     idleText: String? = null,
-    onReject: () -> Unit,
+    // Pass null to suppress the reject link entirely — use on AGREED-state
+    // cards where the cancel-match X in the header already covers that
+    // action and a text-link would just duplicate it.
+    onReject: (() -> Unit)? = null,
     rejectLabel: String = "✕ Odrzuć",
 ) {
     val initialMillis = match.scheduledAt?.let { parseScheduledAt(it) }
@@ -2057,16 +2023,18 @@ private fun EditableDetailsSection(
             )
         }
 
-        Text(
-            text = rejectLabel,
-            fontFamily = AppFontFamily,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 12.sp,
-            color = ProCircuit.Error,
-            modifier = Modifier
-                .clickable(onClick = onReject)
-                .padding(vertical = 4.dp),
-        )
+        if (onReject != null) {
+            Text(
+                text = rejectLabel,
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = ProCircuit.Error,
+                modifier = Modifier
+                    .clickable(onClick = onReject)
+                    .padding(vertical = 4.dp),
+            )
+        }
     }
 
     if (editingDate) {
