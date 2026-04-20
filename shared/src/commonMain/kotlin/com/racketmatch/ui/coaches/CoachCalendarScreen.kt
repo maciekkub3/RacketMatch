@@ -1771,61 +1771,12 @@ private fun AddCalendarEventSheet(
                 onMillisSelected = { startMillis = it },
             )
 
-            SheetSectionLabel("CZAS TRWANIA")
-            val presets = if (eventType == "BLOCKED") {
-                // N × 24h from picked start — pick start at 00:00 for clean
-                // calendar-day blocks, or any time for rolling 24h windows.
-                listOf(
-                    240 to "4h",
-                    480 to "8h",
-                    1440 to "1 dzień",
-                    2880 to "2 dni",
-                    10080 to "7 dni",
-                )
-            } else {
-                listOf(
-                    30 to "30 min",
-                    60 to "1h",
-                    90 to "1.5h",
-                    120 to "2h",
-                    180 to "3h",
-                )
-            }
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                presets.forEach { (mins, label) ->
-                    SheetChip(
-                        label = label,
-                        selected = customEndMillis == null && durationMinutes == mins,
-                        onClick = {
-                            durationMinutes = mins
-                            customEndMillis = null
-                        },
-                    )
-                }
-                // Escape hatch for BLOCKED: any of the presets not fit? pick
-                // the exact end date/time by hand.
-                if (eventType == "BLOCKED") {
-                    SheetChip(
-                        label = if (customEndMillis != null) "Własny koniec ✓" else "Własny koniec…",
-                        selected = customEndMillis != null,
-                        onClick = {
-                            // Seed with start + 1 day so the picker opens near
-                            // a plausible value rather than "today now".
-                            val seed = (startMillis ?: Clock.System.now().toEpochMilliseconds()) +
-                                24L * 60L * 60L * 1000L
-                            customEndMillis = seed
-                        },
-                    )
-                }
-            }
+            // Section header matches the mental model per event type:
+            // client sessions are "how long", blocks are "until when".
+            SheetSectionLabel(if (eventType == "BLOCKED") "KONIEC" else "CZAS TRWANIA")
 
-            // Manual end-date picker, shown only when the user engaged the
-            // custom-end chip.
             if (customEndMillis != null) {
-                SheetSectionLabel("KONIEC")
+                // ── Custom end path (BLOCKED only) ───────────────────────
                 com.racketmatch.ui.players.QuickDateTimePicker(
                     selectedMillis = customEndMillis,
                     onMillisSelected = { customEndMillis = it },
@@ -1836,6 +1787,85 @@ private fun AddCalendarEventSheet(
                         fontFamily = AppBodyFontFamily,
                         fontSize = 11.sp,
                         color = ProCircuit.LossRed,
+                    )
+                }
+                Text(
+                    text = "← Użyj szablonu",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    color = ProCircuit.Lime,
+                    modifier = Modifier
+                        .clickable { customEndMillis = null }
+                        .padding(vertical = 4.dp),
+                )
+            } else {
+                // ── Preset path ──────────────────────────────────────────
+                val presets = if (eventType == "BLOCKED") {
+                    listOf(
+                        240 to "4h",
+                        480 to "8h",
+                        1440 to "Dzień",
+                        2880 to "2 dni",
+                        10080 to "Tydzień",
+                    )
+                } else {
+                    listOf(
+                        30 to "30 min",
+                        60 to "1h",
+                        90 to "1.5h",
+                        120 to "2h",
+                        180 to "3h",
+                    )
+                }
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    presets.forEach { (mins, label) ->
+                        SheetChip(
+                            label = label,
+                            selected = durationMinutes == mins,
+                            onClick = { durationMinutes = mins },
+                        )
+                    }
+                }
+
+                // Resolved end preview — closes the loop for BLOCKED where
+                // "Tydzień" alone is ambiguous without seeing the actual
+                // end date. For client sessions "1.5h" is self-explanatory
+                // so we skip the preview to keep the sheet compact.
+                if (eventType == "BLOCKED" && startMillis != null) {
+                    val tz = TimeZone.currentSystemDefault()
+                    val endMillis = startMillis!! + durationMinutes * 60L * 1000L
+                    val endLdt = Instant.fromEpochMilliseconds(endMillis).toLocalDateTime(tz)
+                    val endLabel = "${dayOfWeekShortLabel(endLdt.dayOfWeek)} " +
+                        "${endLdt.dayOfMonth}.${endLdt.monthNumber.toString().padStart(2, '0')} · " +
+                        "${endLdt.hour.toString().padStart(2, '0')}:" +
+                        endLdt.minute.toString().padStart(2, '0')
+                    Text(
+                        text = "do $endLabel",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 12.sp,
+                        color = ProCircuit.OnSurface,
+                    )
+                }
+
+                // Escape hatch — only surfaces for BLOCKED and only after
+                // start is picked, so the manual picker has a seed that
+                // makes sense (1 day after start) instead of "now + 24h".
+                if (eventType == "BLOCKED" && startMillis != null) {
+                    Text(
+                        text = "Wybierz konkretną datę →",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                        color = ProCircuit.Lime,
+                        modifier = Modifier
+                            .clickable {
+                                customEndMillis = startMillis!! + 24L * 60L * 60L * 1000L
+                            }
+                            .padding(vertical = 4.dp),
                     )
                 }
             }
