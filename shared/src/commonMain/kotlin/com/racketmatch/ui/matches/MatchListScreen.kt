@@ -442,6 +442,43 @@ private fun HistoryEmptyState() {
 private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel, courts: List<com.racketmatch.domain.model.Court>) {
     var showProposeDialog by remember { mutableStateOf(false) }
     var showAcceptConfirm by remember { mutableStateOf(false) }
+    var showDeclineConfirm by remember { mutableStateOf(false) }
+
+    val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
+
+    if (showDeclineConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeclineConfirm = false },
+            containerColor = ProCircuit.SurfaceLow,
+            title = {
+                Text("Odrzucić wyzwanie?", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 16.sp, color = ProCircuit.OnBg)
+            },
+            text = {
+                Text("Wyzwanie od $opponentName zostanie usunięte. Tej akcji nie można cofnąć.",
+                    fontFamily = AppBodyFontFamily, fontSize = 13.sp,
+                    color = ProCircuit.OnSurface, lineHeight = 19.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeclineConfirm = false
+                        viewModel.onEvent(MatchEvent.DeclineMatch(match.id))
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Error, contentColor = ProCircuit.OnBg)
+                ) {
+                    Text("ODRZUĆ WYZWANIE", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeclineConfirm = false }) {
+                    Text("WRÓĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = ProCircuit.OnSurface)
+                }
+            }
+        )
+    }
 
     if (showAcceptConfirm) {
         AlertDialog(
@@ -599,7 +636,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface,
                 modifier = Modifier.padding(bottom = 10.dp))
             OutlinedButton(
-                onClick = { viewModel.onEvent(MatchEvent.DeclineMatch(match.id)) },
+                onClick = { showDeclineConfirm = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
@@ -625,7 +662,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                             fontSize = 10.sp, letterSpacing = 1.sp)
                     }
                     OutlinedButton(
-                        onClick = { viewModel.onEvent(MatchEvent.DeclineMatch(match.id)) },
+                        onClick = { showDeclineConfirm = true },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
@@ -656,6 +693,9 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 @Composable
 private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel, courts: List<com.racketmatch.domain.model.Court>) {
     var showProposeDialog by remember { mutableStateOf(false) }
+    var showCancelConfirm by remember { mutableStateOf(false) }
+
+    val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
 
     if (showProposeDialog) {
         ProposeDetailsDialog(
@@ -667,6 +707,40 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
             },
             onDismiss = { showProposeDialog = false }
+        )
+    }
+
+    if (showCancelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            containerColor = ProCircuit.SurfaceLow,
+            title = {
+                Text("Anulować wyzwanie?", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 16.sp, color = ProCircuit.OnBg)
+            },
+            text = {
+                Text("Wyzwanie wysłane do $opponentName zostanie anulowane. Tej akcji nie można cofnąć.",
+                    fontFamily = AppBodyFontFamily, fontSize = 13.sp,
+                    color = ProCircuit.OnSurface, lineHeight = 19.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCancelConfirm = false
+                        viewModel.onEvent(MatchEvent.CancelChallenge(match.id))
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Error, contentColor = ProCircuit.OnBg)
+                ) {
+                    Text("ANULUJ WYZWANIE", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) {
+                    Text("WRÓĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = ProCircuit.OnSurface)
+                }
+            }
         )
     }
 
@@ -822,7 +896,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                         fontSize = 10.sp, letterSpacing = 1.sp)
                 }
                 OutlinedButton(
-                    onClick = { viewModel.onEvent(MatchEvent.CancelChallenge(match.id)) },
+                    onClick = { showCancelConfirm = true },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
