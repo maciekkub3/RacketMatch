@@ -1,43 +1,59 @@
 package com.racketmatch.ui.profile
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.layout.ContentScale
-import coil3.compose.AsyncImage
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.racketmatch.ui.payment.SubscriptionScreen
-import com.racketmatch.ui.theme.AppBodyFontFamily
-import com.racketmatch.ui.theme.AppFontFamily
-import com.racketmatch.ui.theme.ProCircuit
-import com.racketmatch.domain.model.EloPoint
+import coil3.compose.AsyncImage
 import com.racketmatch.domain.model.Match
 import com.racketmatch.domain.model.MatchStatus
-import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.presentation.viewmodel.ProfileState
 import com.racketmatch.presentation.viewmodel.ProfileViewModel
+import com.racketmatch.ui.common.Ava
+import com.racketmatch.ui.common.AvaTone
+import com.racketmatch.ui.common.DarkHeroCard
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.H2HBar
+import com.racketmatch.ui.common.IconCircleButton
+import com.racketmatch.ui.common.Sparkline
+import com.racketmatch.ui.common.StatCard
+import com.racketmatch.ui.common.Tiny
+import com.racketmatch.ui.settings.SettingsScreen
+import com.racketmatch.ui.theme.AppBodyFontFamily
+import com.racketmatch.ui.theme.AppFontFamily
+import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+private enum class ProfileTab { STATS, RIVALS, BADGES }
+
 object ProfileScreen : Screen {
 
     @Composable
@@ -46,46 +62,24 @@ object ProfileScreen : Screen {
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
 
-        Scaffold(
-            containerColor = ProCircuit.Bg,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "Profil",
-                            fontFamily = AppFontFamily,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp,
-                            color = ProCircuit.OnBg
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Wstecz",
-                                tint = ProCircuit.OnBg
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = ProCircuit.SurfaceLow
-                    )
-                )
-            }
-        ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).background(ProCircuit.Bg)) {
-                when (val s = state) {
-                    ProfileState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = ProCircuit.Lime)
-                    }
-                    ProfileState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Nie udało się załadować profilu", color = ProCircuit.OnSurface)
-                    }
-                    is ProfileState.Content -> ProfileContent(
+        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+            when (val s = state) {
+                ProfileState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = ProCircuit.Lime)
+                }
+                ProfileState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Nie udało się załadować profilu", color = ProCircuit.Ink2)
+                }
+                is ProfileState.Content -> {
+                    // Edit + settings are focused account flows → push to the
+                    // outer Navigator so the bottom nav hides. Profile itself
+                    // stays a browsable destination on the tab Navigator.
+                    val rootNav = navigator.parent?.parent ?: navigator
+                    ProfileContent(
                         state = s,
-                        onSubscribeClick = { navigator.push(SubscriptionScreen) },
-                        onEditProfile = { navigator.push(PlayerProfileEditScreen) }
+                        onBack = { navigator.pop() },
+                        onEdit = { rootNav.push(PlayerProfileEditScreen) },
+                        onSettings = { rootNav.push(SettingsScreen) },
                     )
                 }
             }
@@ -94,337 +88,824 @@ object ProfileScreen : Screen {
 }
 
 @Composable
-private fun ProfileContent(state: ProfileState.Content, onSubscribeClick: () -> Unit, onEditProfile: () -> Unit) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ProfileHeader(user = state.user) }
-
-        item {
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = onEditProfile,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(48.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ProCircuit.SurfaceLow,
-                    contentColor = ProCircuit.Lime
-                )
-            ) {
-                Text(
-                    "EDYTUJ PROFIL",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.sp
-                )
-            }
-        }
-
-        if (!state.user.bio.isNullOrBlank()) {
-            item {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = state.user.bio!!,
-                    fontFamily = AppBodyFontFamily,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 13.sp,
-                    color = ProCircuit.OnSurface,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
-            }
-        }
-
-        if (state.user.sports.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(8.dp))
-                SectionLabel("ELO NA SPORT")
-                Spacer(Modifier.height(12.dp))
-                Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    state.user.sports.forEach { sport ->
-                        val elo = state.user.eloPerSport[sport.name] ?: state.user.eloRating
-                        SportEloCard(sport = sport, elo = elo, modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-
-        item {
-            Spacer(Modifier.height(16.dp))
-            SubscriptionCard(isActive = state.user.subscriptionActive, onSubscribeClick = onSubscribeClick)
-        }
-
-        if (state.eloHistory.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(16.dp))
-                SectionLabel("MOMENTUM ELO")
-                Spacer(Modifier.height(12.dp))
-                EloSparkline(eloHistory = state.eloHistory.takeLast(10))
-            }
-        }
-
-        if (state.recentMatches.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(16.dp))
-                SectionLabel("OSTATNIE MECZE")
-                Spacer(Modifier.height(8.dp))
-            }
-            items(state.recentMatches.take(5)) { MatchHistoryRow(it, state.user.id) }
-        }
-
-    }
-}
-
-@Composable
-private fun ProfileHeader(user: User) {
-    val winRate = if (user.wins + user.losses > 0)
-        "${(user.wins.toFloat() / (user.wins + user.losses) * 100).toInt()}%" else "—"
+private fun ProfileContent(
+    state: ProfileState.Content,
+    onBack: () -> Unit,
+    onEdit: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    val user = state.user
     val totalMatches = user.wins + user.losses
-
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 24.dp, bottom = 8.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            // Avatar block
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(ProCircuit.Lime),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!user.avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = user.avatarUrl,
-                        contentDescription = "Avatar",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.matchParentSize()
-                    )
-                } else {
-                    Text(
-                        text = user.displayName.take(2).uppercase(),
-                        fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 26.sp,
-                        color = ProCircuit.SurfaceLow
-                    )
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                // RANKED badge
-                if (user.isMaster) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(ProCircuit.Tertiary)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text("★ RANKED", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.SurfaceLow)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-                Text(
-                    text = user.displayName,
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 22.sp,
-                    letterSpacing = (-0.5).sp,
-                    color = ProCircuit.OnBg
-                )
-                Text(
-                    text = user.city.uppercase(),
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp,
-                    letterSpacing = 2.sp,
-                    color = ProCircuit.OnSurface
-                )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(ProCircuit.SurfaceLow)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            StatItem("ELO", "${user.eloRating}")
-            StatDivider()
-            StatItem("WIN%", winRate, color = if (totalMatches > 0 && user.wins * 100 / totalMatches >= 50) ProCircuit.Lime else ProCircuit.OnSurface)
-            StatDivider()
-            StatItem("MECZE", "$totalMatches")
-        }
+    val winRate = if (totalMatches > 0) (user.wins * 100 / totalMatches) else 0
+    val streak = remember(state.recentMatches, user.id) { computeWinStreak(state.recentMatches, user.id) }
+    val series = remember(state.eloHistory) { state.eloHistory.takeLast(20).map { it.rating.toFloat() } }
+    val eloDelta = remember(state.eloHistory) {
+        if (state.eloHistory.size < 2) 0
+        else state.eloHistory.last().rating - state.eloHistory.first().rating
     }
-}
+    val rivals = remember(state.recentMatches, user.id) { aggregateRivals(state.recentMatches, user.id) }
 
-@Composable
-private fun StatItem(label: String, value: String, color: androidx.compose.ui.graphics.Color = ProCircuit.Lime) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = value, fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 20.sp, color = color)
-        Text(text = label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
-    }
-}
+    var tab by remember { mutableStateOf(ProfileTab.RIVALS) }
+    val scrollState = rememberScrollState()
 
-@Composable
-private fun StatDivider() {
-    Box(modifier = Modifier.width(1.dp).height(32.dp).background(ProCircuit.OnSurface.copy(alpha = 0.2f)))
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text = text, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface, modifier = Modifier.padding(horizontal = 24.dp))
-}
-
-@Composable
-private fun SportEloCard(sport: Sport, elo: Int, modifier: Modifier = Modifier) {
-    val emoji = when (sport) { Sport.TENNIS -> "🎾"; Sport.PADEL -> "🏸" }
     Column(
-        modifier = modifier.clip(RoundedCornerShape(16.dp)).background(ProCircuit.SurfaceLow).padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 20.dp)
+            .padding(top = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(emoji, fontSize = 24.sp)
-        Spacer(Modifier.height(6.dp))
-        Text(text = "$elo", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 22.sp, color = ProCircuit.Lime)
-        Text(text = if (sport == com.racketmatch.domain.model.Sport.TENNIS) "TENIS" else "PADEL", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
+        // Header row: back + eyebrow/name + edit/settings
+        Row(verticalAlignment = Alignment.Top) {
+            IconCircleButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Wstecz",
+                onClick = onBack,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("Profil")
+                Spacer(Modifier.height(6.dp))
+                H1(user.displayName)
+            }
+            IconCircleButton(
+                icon = Icons.Default.Edit,
+                contentDescription = "Edytuj profil",
+                onClick = onEdit,
+            )
+            Spacer(Modifier.width(8.dp))
+            IconCircleButton(
+                icon = Icons.Default.Settings,
+                contentDescription = "Ustawienia",
+                onClick = onSettings,
+            )
+        }
+
+        // Bio — subtle, directly under name. Hidden if empty.
+        if (!user.bio.isNullOrBlank()) {
+            Text(
+                text = user.bio!!,
+                fontFamily = AppBodyFontFamily,
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                color = ProCircuit.Ink2,
+            )
+        }
+
+        // Forest hero card with ELO + sparkline + watermark
+        HeroCard(
+            user = user,
+            totalMatches = totalMatches,
+            eloDelta = eloDelta,
+            series = series,
+        )
+
+        // 4-tile stat grid
+        StatGrid(
+            wins = user.wins,
+            losses = user.losses,
+            winRate = winRate,
+            streak = streak,
+            hasMatches = totalMatches > 0,
+        )
+
+        // Inline tabs
+        ProfileTabs(active = tab, onSelect = { tab = it })
+
+        when (tab) {
+            ProfileTab.STATS -> StatsTab(
+                user = user,
+                recentMatches = state.recentMatches,
+            )
+            ProfileTab.RIVALS -> RivalsTab(rivals = rivals)
+            ProfileTab.BADGES -> BadgesTab(totalMatches = totalMatches, streak = streak, winRate = winRate, wins = user.wins)
+        }
     }
 }
 
+// ─── Hero ─────────────────────────────────────────────────────────────────
+
 @Composable
-private fun SubscriptionCard(isActive: Boolean, onSubscribeClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(16.dp))
-            .background(if (isActive) ProCircuit.Lime.copy(alpha = 0.08f) else ProCircuit.SurfaceLow)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+private fun HeroCard(user: User, totalMatches: Int, eloDelta: Int, series: List<Float>) {
+    // Watermark: total matches played — sizeable number for visual interest,
+    // falls back to city initial for brand-new users.
+    val watermark = if (totalMatches > 0) totalMatches.toString() else user.city.take(1).uppercase()
+
+    DarkHeroCard(
+        modifier = Modifier.fillMaxWidth(),
+        watermark = watermark,
     ) {
         Column {
-            Text(text = if (isActive) "PRO MEMBER" else "PRO CIRCUIT", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 14.sp, letterSpacing = 1.sp, color = if (isActive) ProCircuit.Lime else ProCircuit.OnBg)
-            Text(text = if (isActive) "Wszystkie funkcje aktywne" else "9,99 zł / miesiąc", fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Normal, fontSize = 12.sp, color = ProCircuit.OnSurface)
-        }
-        if (!isActive) {
-            Button(onClick = onSubscribeClick, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)) {
-                Text("KUP", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Avatar — photo if available, otherwise initials pill
+                if (!user.avatarUrl.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(ProCircuit.Lime),
+                    ) {
+                        AsyncImage(
+                            model = user.avatarUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.matchParentSize(),
+                        )
+                    }
+                } else {
+                    Ava(
+                        initials = user.displayName.take(2).uppercase(),
+                        size = 56.dp,
+                        tone = AvaTone.Lime,
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = user.city.ifBlank { "—" },
+                        fontFamily = AppFontFamily,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ProCircuit.ForestInk,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (totalMatches > 0) "$totalMatches ${matchesWordFor(totalMatches)}" else "Zagraj pierwszy mecz",
+                        fontFamily = AppFontFamily,
+                        fontSize = 12.sp,
+                        color = ProCircuit.ForestInk.copy(alpha = 0.6f),
+                    )
+                }
             }
-        } else {
-            Box(modifier = Modifier.clip(CircleShape).background(ProCircuit.Lime).padding(8.dp)) {
-                Text("✓", fontSize = 14.sp, color = ProCircuit.Bg, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = "ELO RATING",
+                fontFamily = AppFontFamily,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.54.sp,
+                color = ProCircuit.ForestInk.copy(alpha = 0.5f),
+            )
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = user.eloRating.toString(),
+                    fontFamily = AppFontFamily,
+                    fontSize = 64.sp,
+                    lineHeight = 66.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-3).sp,
+                    color = ProCircuit.ForestInk,
+                )
+                if (eloDelta != 0) {
+                    Spacer(Modifier.width(10.dp))
+                    val deltaColor = if (eloDelta > 0) ProCircuit.Lime else Color(0xFFFF9A8A)
+                    Text(
+                        text = if (eloDelta > 0) "+$eloDelta" else eloDelta.toString(),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = deltaColor,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                }
+            }
+            if (series.size >= 2) {
+                Spacer(Modifier.height(8.dp))
+                Sparkline(
+                    data = series,
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    lineColor = ProCircuit.Lime,
+                )
+            }
+        }
+    }
+}
+
+private fun matchesWordFor(count: Int): String = when {
+    count == 1 -> "mecz"
+    count in 2..4 -> "mecze"
+    else -> "meczów"
+}
+
+// ─── Stat grid ────────────────────────────────────────────────────────────
+
+@Composable
+private fun StatGrid(wins: Int, losses: Int, winRate: Int, streak: Int, hasMatches: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        GridTile(label = "W", value = wins.toString(), modifier = Modifier.weight(1f).fillMaxHeight())
+        GridTile(label = "L", value = losses.toString(), modifier = Modifier.weight(1f).fillMaxHeight())
+        GridTile(
+            label = "Win%",
+            value = if (hasMatches) "$winRate%" else "—",
+            valueColor = if (hasMatches && winRate >= 50) ProCircuit.Lime2 else ProCircuit.Ink,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+        )
+        GridTile(label = "Seria", value = streak.toString(), modifier = Modifier.weight(1f).fillMaxHeight())
+    }
+}
+
+@Composable
+private fun GridTile(
+    label: String,
+    value: String,
+    valueColor: Color = ProCircuit.Ink,
+    modifier: Modifier = Modifier,
+) {
+    StatCard(modifier = modifier, padding = 14.dp) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = value,
+                fontFamily = AppFontFamily,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.6).sp,
+                color = valueColor,
+            )
+            Spacer(Modifier.height(3.dp))
+            Tiny(label)
+        }
+    }
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ProfileTabs(active: ProfileTab, onSelect: (ProfileTab) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        listOf(
+            ProfileTab.STATS to "Statystyki",
+            ProfileTab.RIVALS to "Rywale",
+            ProfileTab.BADGES to "Odznaki",
+        ).forEach { (t, label) ->
+            val selected = t == active
+            Column(
+                modifier = Modifier
+                    .width(IntrinsicSize.Max)
+                    .clickable { onSelect(t) },
+            ) {
+                Text(
+                    text = label,
+                    fontFamily = AppFontFamily,
+                    fontSize = 14.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (selected) ProCircuit.Ink else ProCircuit.Ink2,
+                    maxLines = 1,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                Box(
+                    modifier = Modifier
+                        .height(2.dp)
+                        .fillMaxWidth()
+                        .background(if (selected) ProCircuit.Ink else Color.Transparent),
+                )
+            }
+        }
+    }
+}
+
+// ─── Tab contents ─────────────────────────────────────────────────────────
+
+@Composable
+private fun StatsTab(user: User, recentMatches: List<Match>) {
+    val stats = remember(recentMatches, user.id) { computeStats(recentMatches, user.id) }
+
+    if (recentMatches.none { it.status == MatchStatus.COMPLETED } && user.sports.isEmpty()) {
+        EmptyTab(
+            emoji = "📊",
+            title = "Statystyki pojawią się tutaj",
+            subtitle = "Zagraj pierwszy mecz, aby zobaczyć formę, ulubione korty i nie tylko.",
+        )
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Per-sport ELO — this IS a stat, so it belongs on top of this tab.
+        if (user.sports.isNotEmpty()) {
+            StatsSection(title = "ELO na sport") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    user.sports.forEach { sport ->
+                        val elo = user.eloPerSport[sport.name] ?: user.eloRating
+                        SportEloChip(sport = sport, elo = elo, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        // Form — last 10 matches as W/L pips.
+        if (stats.formCount > 0) {
+            StatsSection(
+                title = "Forma · ostatnie ${stats.formCount}",
+                trailing = "${stats.formWins}W–${stats.formCount - stats.formWins}L",
+            ) {
+                FormPips(form = stats.form)
+            }
+        }
+
+        // Win rate by match type.
+        if (stats.byType.isNotEmpty()) {
+            StatsSection(title = "Win rate wg typu") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    stats.byType.forEach { row -> TypeWinRateRow(row) }
+                }
+            }
+        }
+
+        // Favorite venue.
+        if (stats.favoriteVenue != null) {
+            StatsSection(title = "Ulubiony kort") {
+                VenueRow(stats.favoriteVenue)
+            }
+        }
+
+        // Longest streak (within recentMatches).
+        if (stats.longestStreak > 0) {
+            StatsSection(title = "Najdłuższa seria zwycięstw") {
+                LongestStreakRow(count = stats.longestStreak)
             }
         }
     }
 }
 
 @Composable
-private fun EloSparkline(eloHistory: List<EloPoint>) {
-    Box(
-        modifier = Modifier.fillMaxWidth().height(80.dp).padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp)).background(ProCircuit.SurfaceLow).padding(16.dp)
-    ) {
-        if (eloHistory.size >= 2) {
-            val minElo = eloHistory.minOf { it.rating }.toFloat()
-            val maxElo = eloHistory.maxOf { it.rating }.toFloat()
-            val range  = (maxElo - minElo).coerceAtLeast(1f)
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val stepX = size.width / (eloHistory.size - 1).coerceAtLeast(1)
-                val points = eloHistory.mapIndexed { i, pt ->
-                    Offset(x = i * stepX, y = size.height - ((pt.rating - minElo) / range) * size.height)
-                }
-                for (i in 0 until points.size - 1) {
-                    drawLine(color = ProCircuit.Lime, start = points[i], end = points[i + 1], strokeWidth = 3f)
-                }
-                points.lastOrNull()?.let { drawCircle(color = ProCircuit.Lime, radius = 6f, center = it) }
+private fun StatsSection(
+    title: String,
+    trailing: String? = null,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Tiny(title, modifier = Modifier.weight(1f))
+            if (trailing != null) {
+                Text(
+                    text = trailing,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ProCircuit.Ink2,
+                )
             }
         }
-        val trend = if (eloHistory.size >= 2) eloHistory.last().rating - eloHistory.first().rating else 0
+        content()
+    }
+}
+
+@Composable
+private fun SportEloChip(sport: Sport, elo: Int, modifier: Modifier = Modifier) {
+    val (emoji, label) = when (sport) {
+        Sport.TENNIS -> "🎾" to "Tenis"
+        Sport.PADEL -> "🏸" to "Padel"
+        else -> "🏆" to sport.name
+    }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(ProCircuit.SurfaceLow)
+            .padding(14.dp),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text(emoji, fontSize = 20.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = elo.toString(),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = ProCircuit.Ink,
+            )
+            Tiny(label)
+        }
+    }
+}
+
+@Composable
+private fun FormPips(form: List<Boolean>) {
+    // Oldest → newest, left → right. Lime for win, red-tinted for loss.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        form.forEach { won ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (won) ProCircuit.Lime else ProCircuit.LossRed.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (won) "W" else "L",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = if (won) ProCircuit.LimeInk else ProCircuit.LossRed,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TypeWinRateRow(row: TypeWinRate) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = row.label,
+                fontFamily = AppFontFamily,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = ProCircuit.Ink,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${row.winRate}%",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (row.winRate >= 50) ProCircuit.Lime2 else ProCircuit.Ink,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "${row.wins}/${row.total}",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = ProCircuit.Ink2,
+            )
+        }
+        H2HBar(wins = row.wins, total = row.total)
+    }
+}
+
+@Composable
+private fun VenueRow(venue: VenueStat) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.SurfaceLow)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("🏟️", fontSize = 22.sp)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = venue.name,
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = ProCircuit.Ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${venue.count} ${matchesWordFor(venue.count)} · ${venue.winRate}% win rate",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 12.sp,
+                color = ProCircuit.Ink2,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LongestStreakRow(count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.SurfaceLow)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("🔥", fontSize = 22.sp)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "$count zwycięstw z rzędu",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                color = ProCircuit.Ink,
+            )
+            Text(
+                text = "Najdłuższa passa w ostatnich meczach",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 12.sp,
+                color = ProCircuit.Ink2,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RivalsTab(rivals: List<RivalStats>) {
+    if (rivals.isEmpty()) {
+        EmptyTab(
+            emoji = "🤝",
+            title = "Brak rywali",
+            subtitle = "Zagraj kilka meczów, aby pojawili się tu Twoi najczęstsi przeciwnicy.",
+        )
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rivals.forEach { r ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(ProCircuit.SurfaceLow)
+                    .padding(14.dp),
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Ava(
+                            initials = r.name.take(1).uppercase(),
+                            size = 40.dp,
+                            tone = if (r.wins >= r.losses) AvaTone.Lime else AvaTone.Blue,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = r.name,
+                                fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = ProCircuit.Ink,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = "Ostatni: ${r.lastResult}",
+                                fontFamily = AppBodyFontFamily,
+                                fontSize = 12.sp,
+                                color = ProCircuit.Ink2,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "${r.wins}–${r.losses}",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ProCircuit.Ink,
+                            )
+                            Tiny("H2H · ${r.total}")
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    H2HBar(wins = r.wins, total = r.total)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BadgesTab(totalMatches: Int, streak: Int, winRate: Int, wins: Int) {
+    val earned = listOf(
+        Badge("Pierwsza krew", "1. zwycięstwo", unlocked = wins >= 1, color = ProCircuit.Lime),
+        Badge("Passa", "4 z rzędu", unlocked = streak >= 4, color = ProCircuit.Forest),
+        Badge("Weteran", "10 meczów", unlocked = totalMatches >= 10, color = ProCircuit.Blue),
+        Badge("Stabilny", "50% win rate", unlocked = winRate >= 50 && totalMatches >= 5, color = ProCircuit.Lime),
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BadgeTile(earned[0], Modifier.weight(1f))
+            BadgeTile(earned[1], Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BadgeTile(earned[2], Modifier.weight(1f))
+            BadgeTile(earned[3], Modifier.weight(1f))
+        }
+    }
+}
+
+private data class Badge(val name: String, val desc: String, val unlocked: Boolean, val color: Color)
+
+@Composable
+private fun BadgeTile(badge: Badge, modifier: Modifier = Modifier) {
+    val tint = if (badge.unlocked) badge.color else ProCircuit.Stroke
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(ProCircuit.SurfaceLow)
+            .padding(16.dp),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(tint),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (badge.unlocked) "🏆" else "🔒",
+                    fontSize = 22.sp,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = badge.name,
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = if (badge.unlocked) ProCircuit.Ink else ProCircuit.Ink2,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = badge.desc,
+                fontFamily = AppBodyFontFamily,
+                fontSize = 11.sp,
+                color = ProCircuit.Ink2,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyTab(emoji: String, title: String, subtitle: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(emoji, fontSize = 44.sp)
+        Spacer(Modifier.height(10.dp))
         Text(
-            text = if (trend >= 0) "+$trend ELO" else "$trend ELO",
-            fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp,
-            color = if (trend >= 0) ProCircuit.Lime else ProCircuit.Error,
-            modifier = Modifier.align(Alignment.TopEnd)
+            title,
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 16.sp,
+            color = ProCircuit.Ink,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            subtitle,
+            fontFamily = AppBodyFontFamily,
+            fontSize = 13.sp,
+            color = ProCircuit.Ink2,
+            textAlign = TextAlign.Center,
         )
     }
 }
 
-@Composable
-private fun MatchHistoryRow(match: Match, myId: String) {
-    val iAmChallenger = match.challengerId == myId
-    val opponentName = if (iAmChallenger) match.challengedName else match.challengerName
-    val myEloChange = match.eloChanges?.get(myId)
-    val myScore = if (match.scoreChallenger != null && match.scoreChallenged != null)
-        if (iAmChallenger) match.scoreChallenger else match.scoreChallenged else null
-    val oppScore = if (match.scoreChallenger != null && match.scoreChallenged != null)
-        if (iAmChallenger) match.scoreChallenged else match.scoreChallenger else null
-    val iWon = myScore != null && oppScore != null && myScore > oppScore
+// ─── Data derivations ─────────────────────────────────────────────────────
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(14.dp)).background(ProCircuit.SurfaceLow).padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        val sportEmoji = when (match.sport) { Sport.TENNIS -> "🎾"; Sport.PADEL -> "🏸" }
-        Text(sportEmoji, fontSize = 18.sp)
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = if (opponentName.isNotEmpty()) "vs $opponentName" else match.type.typePl + " · " + match.sport.sportPl,
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = ProCircuit.OnBg
-            )
-            Text(
-                text = match.type.typePl + " · " + match.sport.sportPl,
-                fontFamily = AppBodyFontFamily, fontWeight = FontWeight.Normal, fontSize = 11.sp, color = ProCircuit.OnSurface
-            )
-        }
-        if (myScore != null && oppScore != null) {
-            Column(horizontalAlignment = Alignment.End) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "$myScore",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 18.sp,
-                        color = if (iWon) ProCircuit.Lime else ProCircuit.Error
-                    )
-                    Text("—", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 14.sp, color = ProCircuit.OnSurface)
-                    Text(
-                        text = "$oppScore",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 18.sp,
-                        color = ProCircuit.OnSurface
-                    )
-                }
-                if (myEloChange != null) {
-                    Text(
-                        text = if (myEloChange > 0) "+$myEloChange ELO" else "$myEloChange ELO",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 9.sp,
-                        color = if (myEloChange > 0) ProCircuit.Lime else ProCircuit.Error
-                    )
-                }
-            }
-        } else if (myEloChange != null) {
-            Text(
-                text = if (myEloChange > 0) "+$myEloChange" else "$myEloChange",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 13.sp,
-                color = if (myEloChange > 0) ProCircuit.Lime else ProCircuit.Error
-            )
-        } else {
-            Box(
-                modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                    .background(if (match.status == MatchStatus.PENDING) ProCircuit.Tertiary.copy(alpha = 0.15f) else ProCircuit.SurfaceHigh)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = when (match.status) {
-                        MatchStatus.PENDING -> "OCZEKUJE"
-                        MatchStatus.SCHEDULED -> "ZAPLANOWANY"
-                        MatchStatus.RESULT_PROPOSED -> "WYNIK?"
-                        MatchStatus.COMPLETED -> "UKOŃCZONY"
-                        MatchStatus.CANCELLED -> "ANULOWANY"
-                    },
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, letterSpacing = 1.sp,
-                    color = if (match.status == MatchStatus.PENDING) ProCircuit.Tertiary else ProCircuit.OnSurface
-                )
-            }
-        }
-    }
+private data class RivalStats(
+    val id: String,
+    val name: String,
+    val wins: Int,
+    val losses: Int,
+    val lastResult: String,
+) {
+    val total: Int get() = wins + losses
 }
 
-private val Sport.sportPl: String get() = when (this) { Sport.TENNIS -> "Tenis"; Sport.PADEL -> "Padel" }
-private val MatchType.typePl: String get() = when (this) { MatchType.CASUAL -> "Towarzyski"; MatchType.RANKED -> "Rankingowy"; MatchType.MASTER -> "Masters" }
+private fun aggregateRivals(matches: List<Match>, myId: String): List<RivalStats> {
+    return matches
+        .asSequence()
+        .filter { it.status == MatchStatus.COMPLETED && it.scoreChallenger != null && it.scoreChallenged != null }
+        .groupBy { if (it.challengerId == myId) it.challengedId else it.challengerId }
+        .map { (oppId, ms) ->
+            val sample = ms.first()
+            val oppName = if (sample.challengerId == myId) sample.challengedName else sample.challengerName
+            var wins = 0
+            var losses = 0
+            ms.forEach { m ->
+                val iAmChall = m.challengerId == myId
+                val myScore = if (iAmChall) m.scoreChallenger!! else m.scoreChallenged!!
+                val oppScore = if (iAmChall) m.scoreChallenged!! else m.scoreChallenger!!
+                if (myScore > oppScore) wins++ else losses++
+            }
+            val last = ms.first()
+            val lastIAmChall = last.challengerId == myId
+            val lastMy = if (lastIAmChall) last.scoreChallenger!! else last.scoreChallenged!!
+            val lastOpp = if (lastIAmChall) last.scoreChallenged!! else last.scoreChallenger!!
+            val lastResultStr = if (lastMy > lastOpp) "W $lastMy:$lastOpp" else "L $lastMy:$lastOpp"
+            RivalStats(id = oppId, name = oppName.ifBlank { "Rywal" }, wins = wins, losses = losses, lastResult = lastResultStr)
+        }
+        .sortedByDescending { it.total }
+        .take(10)
+        .toList()
+}
+
+// ─── Stats derivation ────────────────────────────────────────────────────
+
+private data class ProfileStats(
+    val form: List<Boolean>,
+    val formWins: Int,
+    val formCount: Int,
+    val byType: List<TypeWinRate>,
+    val favoriteVenue: VenueStat?,
+    val longestStreak: Int,
+)
+
+private data class TypeWinRate(
+    val label: String,
+    val wins: Int,
+    val total: Int,
+    val winRate: Int,
+)
+
+private data class VenueStat(
+    val name: String,
+    val count: Int,
+    val winRate: Int,
+)
+
+private fun computeStats(matches: List<Match>, myId: String): ProfileStats {
+    val completed = matches.filter {
+        it.status == MatchStatus.COMPLETED && it.scoreChallenger != null && it.scoreChallenged != null
+    }
+
+    // Form — last N matches, oldest→newest for left-to-right display.
+    val formSource = completed.take(10).reversed()
+    val form = formSource.map { m -> didIWin(m, myId) }
+
+    // Win rate per match type.
+    val byType = completed.groupBy { it.type }
+        .map { (type, ms) ->
+            val wins = ms.count { didIWin(it, myId) }
+            TypeWinRate(
+                label = when (type.name) {
+                    "CASUAL" -> "Towarzyski"
+                    "RANKED" -> "Rankingowy"
+                    "MASTER" -> "Masters"
+                    else -> type.name
+                },
+                wins = wins,
+                total = ms.size,
+                winRate = if (ms.isNotEmpty()) wins * 100 / ms.size else 0,
+            )
+        }
+        .sortedByDescending { it.total }
+
+    // Favorite venue.
+    val favoriteVenue = completed
+        .mapNotNull { m -> m.locationName?.takeIf { it.isNotBlank() }?.let { m to it } }
+        .groupBy { (_, name) -> name }
+        .maxByOrNull { it.value.size }
+        ?.let { (name, ms) ->
+            val wins = ms.count { (m, _) -> didIWin(m, myId) }
+            VenueStat(
+                name = name,
+                count = ms.size,
+                winRate = if (ms.isNotEmpty()) wins * 100 / ms.size else 0,
+            )
+        }
+
+    // Longest streak within this window (not all-time — limited by API page).
+    var longest = 0
+    var current = 0
+    for (m in completed.reversed()) { // oldest → newest
+        if (didIWin(m, myId)) {
+            current += 1
+            if (current > longest) longest = current
+        } else {
+            current = 0
+        }
+    }
+
+    return ProfileStats(
+        form = form,
+        formWins = form.count { it },
+        formCount = form.size,
+        byType = byType,
+        favoriteVenue = favoriteVenue,
+        longestStreak = longest,
+    )
+}
+
+private fun didIWin(m: Match, myId: String): Boolean {
+    val iAmChall = m.challengerId == myId
+    val mine = (if (iAmChall) m.scoreChallenger else m.scoreChallenged) ?: 0
+    val opp = (if (iAmChall) m.scoreChallenged else m.scoreChallenger) ?: 0
+    return mine > opp
+}
+
+private fun computeWinStreak(recentMatches: List<Match>, myId: String): Int {
+    if (myId.isBlank()) return 0
+    var count = 0
+    for (m in recentMatches) {
+        if (m.status != MatchStatus.COMPLETED) continue
+        val myScore = if (m.challengerId == myId) m.scoreChallenger ?: 0 else m.scoreChallenged ?: 0
+        val oppScore = if (m.challengerId == myId) m.scoreChallenged ?: 0 else m.scoreChallenger ?: 0
+        if (myScore > oppScore) count++ else break
+    }
+    return count
+}
