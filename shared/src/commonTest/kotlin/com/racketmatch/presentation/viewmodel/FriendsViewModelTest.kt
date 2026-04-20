@@ -62,7 +62,10 @@ class FriendsViewModelTest {
     fun setUp() {
         MockKAnnotations.init(this)
         Dispatchers.setMain(dispatcher)
-        viewModel = FriendsViewModel(repo = repo, tokenStorage = InMemoryTokenStorage())
+        // Seed currentUserId so OpenDm has something to emit — the VM
+        // early-returns when no user is logged in.
+        val tokenStorage = InMemoryTokenStorage().apply { currentUserId = "u1" }
+        viewModel = FriendsViewModel(repo = repo, tokenStorage = tokenStorage)
     }
 
     @AfterTest
@@ -118,8 +121,6 @@ class FriendsViewModelTest {
             viewModel.onEvent(event = FriendsEvent.SendRequest(userId = "u3"))
             dispatcher.scheduler.advanceUntilIdle()
 
-            // Loading emitted by reload, then Content
-            skipItems(1)
             val state = awaitItem() as FriendsState.Content
             state.data.friends shouldBe listOf(mockUser)
         }
@@ -140,7 +141,6 @@ class FriendsViewModelTest {
             viewModel.onEvent(event = FriendsEvent.AcceptRequest(id = "fr1"))
             dispatcher.scheduler.advanceUntilIdle()
 
-            skipItems(1)
             val state = awaitItem() as FriendsState.Content
             state.data.friends shouldBe listOf(mockUser)
         }
@@ -161,7 +161,6 @@ class FriendsViewModelTest {
             viewModel.onEvent(event = FriendsEvent.DeclineRequest(id = "fr1"))
             dispatcher.scheduler.advanceUntilIdle()
 
-            skipItems(1)
             val state = awaitItem() as FriendsState.Content
             state.data.received shouldBe emptyList()
         }
@@ -182,7 +181,6 @@ class FriendsViewModelTest {
             viewModel.onEvent(event = FriendsEvent.CancelRequest(id = "fr2"))
             dispatcher.scheduler.advanceUntilIdle()
 
-            skipItems(1)
             val state = awaitItem() as FriendsState.Content
             state.data.sent shouldBe emptyList()
         }
@@ -203,7 +201,6 @@ class FriendsViewModelTest {
             viewModel.onEvent(event = FriendsEvent.RemoveFriend(userId = "u1"))
             dispatcher.scheduler.advanceUntilIdle()
 
-            skipItems(1)
             val state = awaitItem() as FriendsState.Content
             state.data.friends shouldBe emptyList()
         }

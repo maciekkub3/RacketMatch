@@ -11,7 +11,9 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.impl.annotations.MockK
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -31,6 +33,9 @@ class PlayersViewModelTest {
     @BeforeTest
     fun setUp() {
         MockKAnnotations.init(this)
+        // VM subscribes to loginVersionFlow and reads currentUserId on init.
+        every { tokenStorage.loginVersionFlow } returns MutableStateFlow(0)
+        every { tokenStorage.currentUserId } returns "me"
     }
 
     @Test

@@ -12,7 +12,9 @@ import com.racketmatch.domain.repository.ProfileRepository
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.impl.annotations.MockK
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -42,6 +44,11 @@ class ProfileViewModelTest {
         coEvery { profileRepository.getMyProfile() } returns testUser
         coEvery { profileRepository.getRecentMatches() } returns listOf(testMatch)
         coEvery { profileRepository.getEloHistory() } returns listOf(testEloPoint)
+        // VM subscribes to three version flows on init — stub them so the
+        // mock doesn't throw MockKException at first access.
+        every { tokenStorage.loginVersionFlow } returns MutableStateFlow(0)
+        every { tokenStorage.matchesVersionFlow } returns MutableStateFlow(0)
+        every { tokenStorage.profileVersionFlow } returns MutableStateFlow(0)
     }
 
     @Test
