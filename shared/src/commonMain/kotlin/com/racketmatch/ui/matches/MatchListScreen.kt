@@ -900,8 +900,23 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
             // actually it nukes the whole match. If the user really wants
             // to cancel mid-negotiation, they can first handle (accept /
             // reject / withdraw) the proposal, then the X reappears.
+            // Chat is always relevant on a SCHEDULED match — whether
+            // still negotiating or locked in, messaging the other player
+            // is useful. Lives in the header so it's one tap away from
+            // wherever the card currently leads the eye.
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(ProCircuit.Bg2)
+                    .clickable { viewModel.onEvent(MatchEvent.OpenChat(match.id)) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("💬", fontFamily = AppFontFamily, fontSize = 14.sp)
+            }
             if (!theyProposed && !iProposed) {
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
                         .size(30.dp)
@@ -1016,85 +1031,79 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
         if (hasDetails && detailsAgreed) {
             Spacer(Modifier.height(12.dp))
             when {
+                // No one has claimed yet — tappable banner (same visual
+                // vocabulary as "Ustal termin" banner used to be). Single
+                // tap = claim. Chat icon moved to the header, so there's
+                // no competing CTA in this spot.
                 match.reservedBy == null -> {
-                    Text(
-                        text = "KTO REZERWUJE KORT?",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { viewModel.onEvent(MatchEvent.ClaimReservation(match.id)) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-                        ) {
-                            Text("Ja zarezerwaluję", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(ProCircuit.Lime.copy(alpha = 0.14f))
+                            .clickable { viewModel.onEvent(MatchEvent.ClaimReservation(match.id)) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("🏟️", fontSize = 18.sp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Zarezerwuj kort",
+                                fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = ProCircuit.Ink,
+                            )
+                            Text(
+                                text = match.locationName?.let { "Weź na siebie rezerwację w $it?" }
+                                    ?: "Weź na siebie rezerwację?",
+                                fontFamily = AppBodyFontFamily,
+                                fontSize = 11.sp,
+                                color = ProCircuit.Ink2,
+                            )
                         }
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.SurfaceHigh)
-                                .clickable { viewModel.onEvent(MatchEvent.OpenChat(match.id)) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("💬", fontSize = 18.sp)
-                        }
+                        Text(
+                            text = "→",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = ProCircuit.Ink,
+                        )
                     }
                 }
+                // I claimed — small acknowledgment row, no background, no
+                // competing action. Next thing that matters is ZAPISZ WYNIK,
+                // which gets all the visual weight.
                 match.reservedBy == myId -> {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.Lime.copy(alpha = 0.1f))
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text("🏟️", fontSize = 16.sp)
-                            Text("Ty rezerwujesz kort", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp, color = ProCircuit.Lime)
-                        }
-                        Box(
-                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.SurfaceHigh)
-                                .clickable { viewModel.onEvent(MatchEvent.OpenChat(match.id)) },
-                            contentAlignment = Alignment.Center
-                        ) { Text("💬", fontSize = 18.sp) }
+                        Text("✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 14.sp, color = ProCircuit.Lime)
+                        Text(
+                            text = "Ty zajmujesz się rezerwacją",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            color = ProCircuit.Lime,
+                        )
                     }
                 }
+                // Opponent claimed — informational, muted.
                 else -> {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.SurfaceHigh)
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text("🏟️", fontSize = 16.sp)
-                            Text("$opponentName rezerwuje kort", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp, color = ProCircuit.OnBg)
-                        }
-                        Box(
-                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.SurfaceHigh)
-                                .clickable { viewModel.onEvent(MatchEvent.OpenChat(match.id)) },
-                            contentAlignment = Alignment.Center
-                        ) { Text("💬", fontSize = 18.sp) }
+                        Text("🏟️", fontSize = 14.sp)
+                        Text(
+                            text = "$opponentName zajmuje się rezerwacją",
+                            fontFamily = AppBodyFontFamily,
+                            fontSize = 12.sp,
+                            color = ProCircuit.OnSurface,
+                        )
                     }
                 }
             }
