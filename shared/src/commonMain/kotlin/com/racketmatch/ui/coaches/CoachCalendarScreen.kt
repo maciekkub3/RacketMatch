@@ -1,6 +1,7 @@
 package com.racketmatch.ui.coaches
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -183,20 +184,28 @@ object CoachCalendarScreen : Screen {
                                 monthStart = s.monthStart,
                                 events = visibleEvents,
                                 today = today,
+                                selectedDate = selectedDate,
                                 tz = tz,
-                                onDayJump = { date ->
-                                    // Switch to Week view focused on the tapped day.
-                                    selectedDate = date
-                                    weekStart = date.startOfIsoWeek()
-                                    viewMode = CalendarView.WEEK
-                                },
+                                onDaySelected = { date -> selectedDate = date },
+                                onEventTap = { detailEvent = it },
                                 onPrevMonth = {
                                     val prev = prevMonthStart(s.monthStart, tz)
                                     viewModel.onEvent(CoachCalendarEvent.LoadMonth(prev))
+                                    // Keep selectedDate in the newly-loaded
+                                    // month so the events list re-syncs.
+                                    val prevDate = prev.toLocalDateTime(tz).date
+                                    if (today.year == prevDate.year && today.monthNumber == prevDate.monthNumber) {
+                                        selectedDate = today
+                                    } else {
+                                        selectedDate = prevDate
+                                    }
                                 },
                                 onNextMonth = {
                                     val next = nextMonthStart(s.monthStart, tz)
                                     viewModel.onEvent(CoachCalendarEvent.LoadMonth(next))
+                                    val nextDate = next.toLocalDateTime(tz).date
+                                    selectedDate = if (today.year == nextDate.year && today.monthNumber == nextDate.monthNumber)
+                                        today else nextDate
                                 },
                             )
                         }
@@ -681,17 +690,19 @@ private fun weekLabel(weekStart: LocalDate): String {
 /**
  * Full-screen month overview. Each day cell is a heat-tile whose background
  * intensity scales with the number of sessions that day (0 → blank,
- * 1 → lime 15%, 2 → lime 30%, 3+ → lime 50%). No drill-down panel below —
- * tapping a day switches the parent screen to Week view for that week, so
- * the detailed timeline lives in one place (weekly grid) rather than two.
+ * 1 → lime 15%, 2 → lime 30%, 3+ → lime 50%). Tapping a day selects it —
+ * its session list renders below the grid, scrollable if long. Detail
+ * sheets for events fire via onEventTap.
  */
 @Composable
 private fun MonthHeatmap(
     monthStart: Instant,
     events: List<CalendarEvent>,
     today: LocalDate,
+    selectedDate: LocalDate,
     tz: TimeZone,
-    onDayJump: (LocalDate) -> Unit,
+    onDaySelected: (LocalDate) -> Unit,
+    onEventTap: (CalendarEvent) -> Unit,
     onPrevMonth: () -> Unit,
     onNextMonth: () -> Unit,
 ) {
@@ -818,8 +829,9 @@ private fun MonthHeatmap(
                                 date = date,
                                 sessionCount = count,
                                 isToday = date == today,
+                                isSelected = date == selectedDate,
                                 modifier = Modifier.weight(1f),
-                                onTap = { onDayJump(date) },
+                                onTap = { onDaySelected(date) },
                             )
                         }
                     }
@@ -827,38 +839,127 @@ private fun MonthHeatmap(
             }
         }
 
-        // Legend
-        Row(
+        HorizontalDivider(color = ProCircuit.SurfaceHigh, thickness = 1.dp)
+
+        // Selected-day events list.
+        val selectedDayStart = LocalDateTime(selectedDate, LocalTime(0, 0)).toInstant(tz)
+        val selectedNextDay = LocalDateTime(selectedDate.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
+        val dayEvents = remember(events, selectedDate) {
+            events
+                .filter { it.startsAt < selectedNextDay && it.endsAt > selectedDayStart }
+                .sortedBy { it.startsAt }
+        }
+        val selectedLabel = "${dayOfWeekShortLabel(selectedDate.dayOfWeek)} · " +
+            "${selectedDate.dayOfMonth}.${selectedDate.monthNumber.toString().padStart(2, '0')}"
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = "INTENSYWNOŚĆ",
-                fontFamily = AppFontFamily,
-                fontWeight = FontWeight.Black,
-                fontSize = 9.sp,
-                letterSpacing = 1.2.sp,
-                color = ProCircuit.OnSurface.copy(alpha = 0.7f),
-            )
-            Spacer(Modifier.weight(1f))
-            listOf(0, 1, 2, 3).forEach { count ->
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(heatmapColor(count)),
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = selectedLabel,
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnBg,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = if (dayEvents.isEmpty()) "0 sesji"
+                    else "${dayEvents.size} " + if (dayEvents.size == 1) "sesja" else "sesje",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface,
                 )
             }
-            Spacer(Modifier.width(4.dp))
+            if (dayEvents.isEmpty()) {
+                Text(
+                    text = "Brak sesji tego dnia.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp,
+                    color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+                )
+            } else {
+                dayEvents.forEach { evt ->
+                    MonthDayEventRow(event = evt, tz = tz, onTap = { onEventTap(evt) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthDayEventRow(event: CalendarEvent, tz: TimeZone, onTap: () -> Unit) {
+    val start = event.startsAt.toLocalDateTime(tz)
+    val end = event.endsAt.toLocalDateTime(tz)
+    val hh = start.hour.toString().padStart(2, '0')
+    val mm = start.minute.toString().padStart(2, '0')
+    val eh = end.hour.toString().padStart(2, '0')
+    val em = end.minute.toString().padStart(2, '0')
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(ProCircuit.SurfaceLow)
+            .clickable(onClick = onTap)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.width(58.dp),
+            horizontalAlignment = Alignment.Start,
+        ) {
             Text(
-                text = "0 → 3+ sesji",
-                fontFamily = AppBodyFontFamily,
-                fontSize = 10.sp,
-                color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+                text = "$hh:$mm",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 14.sp,
+                color = ProCircuit.Lime,
             )
+            Text(
+                text = "$eh:$em",
+                fontFamily = AppFontFamily,
+                fontSize = 10.sp,
+                color = ProCircuit.OnSurface,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(width = 3.dp, height = 32.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
+                    when (event.eventType) {
+                        CalendarEventType.BOOKING -> ProCircuit.Lime
+                        CalendarEventType.EXTERNAL_CLIENT -> ProCircuit.Lime.copy(alpha = 0.55f)
+                        CalendarEventType.BLOCKED -> ProCircuit.OnSurface.copy(alpha = 0.4f)
+                    }
+                ),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = event.title ?: when (event.eventType) {
+                    CalendarEventType.BOOKING -> "Sesja"
+                    CalendarEventType.EXTERNAL_CLIENT -> "Klient zewnętrzny"
+                    CalendarEventType.BLOCKED -> "Zablokowany czas"
+                },
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = ProCircuit.OnBg,
+                maxLines = 1,
+            )
+            if (!event.notes.isNullOrBlank()) {
+                Text(
+                    text = event.notes,
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -868,16 +969,24 @@ private fun HeatmapCell(
     date: LocalDate,
     sessionCount: Int,
     isToday: Boolean,
+    isSelected: Boolean,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
 ) {
     val bg = heatmapColor(sessionCount)
-    val todayRing = if (isToday) Modifier.clip(RoundedCornerShape(10.dp)) else Modifier
+    val borderMod = if (isSelected) {
+        Modifier.border(
+            width = 2.dp,
+            color = ProCircuit.Lime,
+            shape = RoundedCornerShape(10.dp),
+        )
+    } else Modifier
     Column(
         modifier = modifier
             .height(54.dp)
-            .then(todayRing)
+            .clip(RoundedCornerShape(10.dp))
             .background(bg)
+            .then(borderMod)
             .clickable(onClick = onTap)
             .padding(6.dp),
         verticalArrangement = Arrangement.SpaceBetween,
