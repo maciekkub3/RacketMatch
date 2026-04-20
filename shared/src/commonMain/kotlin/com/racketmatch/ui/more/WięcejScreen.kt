@@ -43,6 +43,7 @@ import com.racketmatch.domain.repository.AuthRepository
 import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.ui.auth.LoginScreen
+import com.racketmatch.ui.coaches.CoachAvailabilityScreen
 import com.racketmatch.ui.coaches.CoachServicesScreen
 import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.common.Ava
@@ -154,19 +155,27 @@ object WięcejScreen : Screen {
                 )
             }
 
-            // Trenerzy
-            Section("Trenerzy") {
-                MoreRow(
-                    icon = Icons.Default.SportsTennis,
-                    label = "Znajdź trenera",
-                    badge = badgeState.bookingActionCount,
-                    onClick = { tabNavigator.push(CoachesScreen(isCoachMode = isCoachMode)) },
-                )
+            // Trenerzy — non-coach users get "find a coach", coaches get
+            // service + availability management (moved here from the bottom
+            // bar when CoachDzienTab took its spot).
+            Section(if (isCoachMode) "Trener" else "Trenerzy") {
                 if (isCoachMode) {
                     MoreRow(
-                        icon = Icons.Default.CalendarMonth,
+                        icon = Icons.Default.SportsTennis,
                         label = "Moje usługi",
                         onClick = { tabNavigator.push(CoachServicesScreen) },
+                    )
+                    MoreRow(
+                        icon = Icons.Default.CalendarMonth,
+                        label = "Dostępność",
+                        onClick = { tabNavigator.push(CoachAvailabilityScreen) },
+                    )
+                } else {
+                    MoreRow(
+                        icon = Icons.Default.SportsTennis,
+                        label = "Znajdź trenera",
+                        badge = badgeState.bookingActionCount,
+                        onClick = { tabNavigator.push(CoachesScreen(isCoachMode = isCoachMode)) },
                     )
                 }
             }

@@ -70,13 +70,25 @@ object MainScreen : Screen {
 
         if (isCoach && coachModeActive) {
             // ── Coach mode ───────────────────────────────────────────────────
-            TabNavigator(tab = CoachCalendarTab) { coachTabNavigator ->
+            TabNavigator(tab = CoachDzienTab) { coachTabNavigator ->
+                // Tab-switch signals (e.g. CoachDzienScreen's "Zobacz rezerwacje"
+                // jump to the bookings tab).
+                val pendingSwitch = TabSwitchSignal.pending()
+                LaunchedEffect(pendingSwitch) {
+                    val target = when (pendingSwitch) {
+                        "coachDzien" -> CoachDzienTab
+                        "coachBookings" -> CoachBookingsTab
+                        "coachCalendar" -> CoachCalendarTab
+                        "wiecej" -> WięcejTab
+                        else -> null
+                    }
+                    if (target != null) {
+                        coachTabNavigator.current = target
+                        TabSwitchSignal.consume()
+                    }
+                }
                 Scaffold(
                     containerColor = ProCircuit.Bg,
-                    // Coach-mode top bar retired. Avatar + mode switch moved
-                    // into WięcejScreen; bell access via notifications row
-                    // there too (Coach Dzień dashboard will eventually host
-                    // an inline bell like player Today does).
                     topBar = { },
                     bottomBar = {
                         CoachNavBar(current = coachTabNavigator.current) { selected ->
@@ -250,6 +262,7 @@ internal fun Tab.tabKey(): String = when (this) {
     RankingsTab -> "rankings"
     MatchesTab -> "matches"
     WięcejTab -> "wiecej"
+    CoachDzienTab -> "coachDzien"
     CoachCalendarTab -> "coachCalendar"
     CoachBookingsTab -> "coachBookings"
     CoachServicesTab -> "coachServices"
@@ -348,9 +361,18 @@ object FeedTab : Tab {
 
 // ─── Coach Tabs ───────────────────────────────────────────────────────────────
 
+object CoachDzienTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 0u, title = "Dzień", icon = rememberVectorPainter(Icons.Default.Bolt))
+    @Composable
+    override fun Content() = Navigator(com.racketmatch.ui.coaches.CoachDzienScreen) {
+        popToRootOn("coachDzien", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
 object CoachCalendarTab : Tab {
     override val options: TabOptions
-        @Composable get() = TabOptions(index = 0u, title = "Kalendarz", icon = rememberVectorPainter(Icons.Default.DateRange))
+        @Composable get() = TabOptions(index = 2u, title = "Kalendarz", icon = rememberVectorPainter(Icons.Default.DateRange))
     @Composable
     override fun Content() = Navigator(CoachCalendarScreen) {
         popToRootOn("coachCalendar", LocalNavigator.currentOrThrow); CurrentScreen()
@@ -389,7 +411,7 @@ object CoachAvailabilityTab : Tab {
 
 @Composable
 private fun CoachNavBar(current: Tab, onTabSelect: (Tab) -> Unit) {
-    val coachTabs = listOf(CoachCalendarTab, CoachBookingsTab, CoachAvailabilityTab, WięcejTab)
+    val coachTabs = listOf(CoachDzienTab, CoachBookingsTab, CoachCalendarTab, WięcejTab)
 
     Box(
         modifier = Modifier.fillMaxWidth()
