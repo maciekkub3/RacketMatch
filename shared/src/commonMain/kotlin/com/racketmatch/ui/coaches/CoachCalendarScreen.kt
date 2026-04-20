@@ -556,9 +556,12 @@ private fun DayEventColumn(
                 }
             }
         }
-        // Watermark centered in fully-blocked columns. Text is rotated 90°
-        // so "Niedostępne" reads naturally along the narrow column instead
-        // of getting hacked into 3 hyphenated lines.
+        // Watermark centered in fully-blocked columns. Rotated 90° so the
+        // label flows vertically. The `wrapContentSize(unbounded = true)` is
+        // load-bearing — without it the Text first wraps to the narrow
+        // column width (so "Niedostępne" became "niedoste\npne") and only
+        // then rotates. Unbounded sizing lets the text measure itself
+        // against its natural width *before* rotation.
         if (isFullyBlocked) {
             Text(
                 text = "Niedostępne",
@@ -568,8 +571,10 @@ private fun DayEventColumn(
                 letterSpacing = 2.sp,
                 color = ProCircuit.OnSurface.copy(alpha = 0.6f),
                 maxLines = 1,
+                softWrap = false,
                 modifier = Modifier
                     .align(Alignment.Center)
+                    .wrapContentSize(unbounded = true)
                     .rotate(-90f),
             )
         }
@@ -1676,14 +1681,19 @@ private fun AddCalendarEventSheet(
     // run over 3h), longer presets for BLOCKED time (which is often a half-
     // day, full day, long weekend, or week vacation).
     var durationMinutes by remember { mutableStateOf(60) }
+    // Custom end — only used for BLOCKED when no preset fits (e.g. "urlop do
+    // piątku 12:00"). null means "use duration preset".
+    var customEndMillis by remember { mutableStateOf<Long?>(null) }
 
-    // Reset duration to a sensible default when switching type so the picked
+    // Reset duration + clear custom end when switching type so the picked
     // preset stays valid: short for client sessions, day-sized for blocks.
     LaunchedEffect(eventType) {
         durationMinutes = if (eventType == "BLOCKED") 1440 else 60
+        customEndMillis = null
     }
 
-    val canSave = startMillis != null
+    val canSave = startMillis != null &&
+        (customEndMillis == null || customEndMillis!! > startMillis!!)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1788,8 +1798,44 @@ private fun AddCalendarEventSheet(
                 presets.forEach { (mins, label) ->
                     SheetChip(
                         label = label,
-                        selected = durationMinutes == mins,
-                        onClick = { durationMinutes = mins },
+                        selected = customEndMillis == null && durationMinutes == mins,
+                        onClick = {
+                            durationMinutes = mins
+                            customEndMillis = null
+                        },
+                    )
+                }
+                // Escape hatch for BLOCKED: any of the presets not fit? pick
+                // the exact end date/time by hand.
+                if (eventType == "BLOCKED") {
+                    SheetChip(
+                        label = if (customEndMillis != null) "Własny koniec ✓" else "Własny koniec…",
+                        selected = customEndMillis != null,
+                        onClick = {
+                            // Seed with start + 1 day so the picker opens near
+                            // a plausible value rather than "today now".
+                            val seed = (startMillis ?: Clock.System.now().toEpochMilliseconds()) +
+                                24L * 60L * 60L * 1000L
+                            customEndMillis = seed
+                        },
+                    )
+                }
+            }
+
+            // Manual end-date picker, shown only when the user engaged the
+            // custom-end chip.
+            if (customEndMillis != null) {
+                SheetSectionLabel("KONIEC")
+                com.racketmatch.ui.players.QuickDateTimePicker(
+                    selectedMillis = customEndMillis,
+                    onMillisSelected = { customEndMillis = it },
+                )
+                if (startMillis != null && customEndMillis!! <= startMillis!!) {
+                    Text(
+                        text = "Koniec musi być po początku.",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 11.sp,
+                        color = ProCircuit.LossRed,
                     )
                 }
             }
@@ -1803,7 +1849,7 @@ private fun AddCalendarEventSheet(
                     .background(if (canSave) ProCircuit.Lime else ProCircuit.SurfaceHigh)
                     .clickable(enabled = canSave) {
                         val start = startMillis!!
-                        val end = start + durationMinutes * 60L * 1000L
+                        val end = customEndMillis ?: (start + durationMinutes * 60L * 1000L)
                         onConfirm(
                             title.ifBlank { null },
                             null,
