@@ -90,6 +90,8 @@ sealed class CoachAvailabilityEvent {
     data class CopyDayTo(val fromDayOfWeek: Int, val toDays: Set<Int>) : CoachAvailabilityEvent()
     data class AddException(val startsAt: Instant, val endsAt: Instant, val label: String?) : CoachAvailabilityEvent()
     data class DeleteException(val id: String) : CoachAvailabilityEvent()
+    /** Re-runs the initial load — used by the retry button on the error state. */
+    object Refresh : CoachAvailabilityEvent()
 }
 
 sealed class CoachAvailabilityEffect {
@@ -111,6 +113,12 @@ class CoachAvailabilityViewModel(
     init { load() }
 
     fun onEvent(event: CoachAvailabilityEvent) {
+        // Refresh must work from Error/Loading states too — handled before the
+        // Content cast which would otherwise short-circuit the dispatch.
+        if (event is CoachAvailabilityEvent.Refresh) {
+            load()
+            return
+        }
         val current = (_state.value as? CoachAvailabilityState.Content) ?: return
         when (event) {
             is CoachAvailabilityEvent.Save -> {

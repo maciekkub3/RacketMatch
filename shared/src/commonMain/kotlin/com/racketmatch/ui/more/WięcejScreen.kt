@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Feed
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsTennis
@@ -53,6 +54,7 @@ import com.racketmatch.ui.common.Tiny
 import com.racketmatch.ui.feed.FeedScreen
 import com.racketmatch.ui.friends.FriendsScreen
 import com.racketmatch.ui.messages.MessagesScreen
+import com.racketmatch.ui.notifications.NotificationsScreen
 import com.racketmatch.ui.profile.ProfileScreen
 import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
@@ -111,6 +113,26 @@ object WięcejScreen : Screen {
                 onClick = { tabNavigator.push(ProfileScreen) },
             )
 
+            // Mode switch — visible only when the user has both a player and
+            // a coach profile. Previously this toggle lived in MainTopBar;
+            // after that bar was retired the toggle moved here so dual-users
+            // can still switch between the two app modes.
+            if (tokenStorage.isCoach && tokenStorage.hasPlayerProfile) {
+                ModeSwitchCard(
+                    coachModeActive = isCoachMode,
+                    onSelect = { targetCoachMode ->
+                        if (targetCoachMode != isCoachMode) {
+                            tokenStorage.coachModeActive = targetCoachMode
+                            // Remount MainScreen so the tab structure
+                            // (coach vs player) rebuilds with the new mode.
+                            rootNavigator.replaceAll(
+                                com.racketmatch.ui.navigation.MainScreen
+                            )
+                        }
+                    },
+                )
+            }
+
             // Społeczność
             Section("Społeczność") {
                 MoreRow(
@@ -152,6 +174,11 @@ object WięcejScreen : Screen {
             // Konto — focused flows push to root (hide bottom nav).
             Section("Konto") {
                 MoreRow(
+                    icon = Icons.Default.Notifications,
+                    label = "Powiadomienia",
+                    onClick = { rootNavigator.push(NotificationsScreen) },
+                )
+                MoreRow(
                     icon = Icons.Default.Settings,
                     label = "Ustawienia",
                     onClick = { rootNavigator.push(SettingsScreen) },
@@ -169,6 +196,52 @@ object WięcejScreen : Screen {
                         }
                     },
                 )
+            }
+        }
+    }
+}
+
+// ─── Mode switch card ─────────────────────────────────────────────────────
+
+@Composable
+private fun ModeSwitchCard(coachModeActive: Boolean, onSelect: (Boolean) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(ProCircuit.SurfaceLow)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Tiny("Tryb aplikacji")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(ProCircuit.Bg2)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            listOf("🎾 Gracz" to false, "🏆 Trener" to true).forEach { (label, isCoach) ->
+                val selected = coachModeActive == isCoach
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (selected) ProCircuit.Lime else Color.Transparent)
+                        .clickable { onSelect(isCoach) }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        letterSpacing = 0.3.sp,
+                        color = if (selected) ProCircuit.LimeInk else ProCircuit.OnSurface,
+                    )
+                }
             }
         }
     }

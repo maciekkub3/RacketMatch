@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -87,22 +88,26 @@ object CoachServicesScreen : Screen {
                 .background(ProCircuit.Bg)
                 .windowInsetsPadding(WindowInsets.statusBars),
         ) {
-            // ─ Editorial header ─
-            Column(
+            // ─ Editorial header: back button + title side by side so the
+            //   nav icon doesn't sit alone above the heading.
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .padding(top = 8.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconCircleButton(
                     icon = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Wstecz",
                     onClick = { navigator.pop() },
                 )
-                Spacer(Modifier.height(14.dp))
-                Eyebrow("Katalog treningów")
-                Spacer(Modifier.height(6.dp))
-                H1("Moje usługi")
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Eyebrow("Katalog treningów")
+                    Spacer(Modifier.height(4.dp))
+                    H1("Moje usługi")
+                }
             }
 
             when (val s = state) {
@@ -134,7 +139,7 @@ object CoachServicesScreen : Screen {
                         ?.div(100)
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 20.dp, bottom = 120.dp),
+                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 120.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         if (s.services.isNotEmpty()) {

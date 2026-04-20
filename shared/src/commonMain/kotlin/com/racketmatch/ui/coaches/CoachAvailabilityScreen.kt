@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,6 +50,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -134,17 +136,10 @@ object CoachAvailabilityScreen : Screen {
                     contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator(color = ProCircuit.Lime) }
 
-                CoachAvailabilityState.Error -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "Błąd ładowania",
-                        fontFamily = AppBodyFontFamily,
-                        fontSize = 14.sp,
-                        color = ProCircuit.OnSurface,
-                    )
-                }
+                CoachAvailabilityState.Error -> AvailabilityErrorState(
+                    onBack = { navigator.pop() },
+                    onRetry = { viewModel.onEvent(CoachAvailabilityEvent.Refresh) },
+                )
 
                 is CoachAvailabilityState.Content -> AvailabilityContent(
                     state = s,
@@ -160,6 +155,75 @@ object CoachAvailabilityScreen : Screen {
     }
 }
 
+/** Full-screen error with back + retry. Keeps the editorial header pattern
+ *  so users know where they are even when load failed. */
+@Composable
+private fun AvailabilityErrorState(onBack: () -> Unit, onRetry: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 8.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconCircleButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Wstecz",
+                onClick = onBack,
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("Kiedy jesteś dostępny")
+                Spacer(Modifier.height(4.dp))
+                H1("Dostępność")
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(text = "⚠", fontSize = 40.sp)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "Nie udało się załadować dostępności",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = ProCircuit.OnBg,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Sprawdź połączenie i czy jesteś zalogowany jako trener. Szczegółowy błąd widać w logcat (CoachAvailabilityViewModel).",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                color = ProCircuit.OnSurface,
+            )
+            Spacer(Modifier.height(20.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(ProCircuit.Lime)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = 22.dp, vertical = 12.dp),
+            ) {
+                Text(
+                    text = "SPRÓBUJ PONOWNIE",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.4.sp,
+                    color = ProCircuit.LimeInk,
+                )
+            }
+        }
+    }
+}
+
 // ─── Content ─────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -171,29 +235,36 @@ private fun AvailabilityContent(
 ) {
     var settingsExpanded by remember { mutableStateOf(false) }
     var showAddException by remember { mutableStateOf(false) }
+    // Day editor sheet — primary bulk-edit path. Tap a day label in the
+    // grid header to open range editor for that day.
+    var editingDayOfWeek by remember { mutableStateOf<Int?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 120.dp),
     ) {
-        // Header
+        // Header — back button + title side by side, hint line below.
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .padding(top = 8.dp, bottom = 18.dp),
+                    .padding(top = 8.dp, bottom = 14.dp),
             ) {
-                IconCircleButton(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Wstecz",
-                    onClick = onBack,
-                )
-                Spacer(Modifier.height(14.dp))
-                Eyebrow("Kiedy jesteś dostępny")
-                Spacer(Modifier.height(6.dp))
-                H1("Dostępność")
-                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconCircleButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Wstecz",
+                        onClick = onBack,
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Eyebrow("Kiedy jesteś dostępny")
+                        Spacer(Modifier.height(4.dp))
+                        H1("Dostępność")
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
                     text = "Tapnij pole, żeby włączyć/wyłączyć dany 30-minutowy slot.",
                     fontFamily = AppBodyFontFamily,
@@ -203,22 +274,16 @@ private fun AvailabilityContent(
             }
         }
 
-        // Presets row
+        item { Spacer(Modifier.height(8.dp)) }
+
+        // Weekly grid — tap a day label in the header to open the bulk
+        // range editor for that day. Cells stay tappable for fine-tuning.
         item {
-            PresetsRow(
-                onApply = { preset ->
-                    preset.apply(state.days).forEach { (dow, windows) ->
-                        onEvent(CoachAvailabilityEvent.SetDayWindows(dow, windows))
-                    }
-                },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            DayHeaderRow(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                onDayClick = { dow -> editingDayOfWeek = dow },
             )
         }
-
-        item { Spacer(Modifier.height(12.dp)) }
-
-        // Weekly grid
-        item { DayHeaderRow(modifier = Modifier.padding(horizontal = 20.dp)) }
 
         val slotStarts = (GRID_START_MIN until GRID_END_MIN step SLOT_MIN).toList()
         items(slotStarts, key = { it }) { slotStart ->
@@ -321,23 +386,47 @@ private fun AvailabilityContent(
             },
         )
     }
+
+    editingDayOfWeek?.let { dow ->
+        val day = state.days.first { it.dayOfWeek == dow }
+        DayEditSheet(
+            day = day,
+            allDays = state.days,
+            onDismiss = { editingDayOfWeek = null },
+            onSetWindows = { windows ->
+                onEvent(CoachAvailabilityEvent.SetDayWindows(dow, windows))
+            },
+            onCopyTo = { targetDays ->
+                onEvent(CoachAvailabilityEvent.CopyDayTo(dow, targetDays))
+            },
+        )
+    }
 }
 
 // ─── Grid ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun DayHeaderRow(modifier: Modifier = Modifier) {
-    val days = listOf("PON", "WT", "ŚR", "CZW", "PT", "SOB", "ND")
+private fun DayHeaderRow(
+    modifier: Modifier = Modifier,
+    onDayClick: (dayOfWeek: Int) -> Unit,
+) {
+    val days = listOf(1 to "PON", 2 to "WT", 3 to "ŚR", 4 to "CZW", 5 to "PT", 6 to "SOB", 7 to "ND")
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Spacer(Modifier.size(width = 44.dp, height = 22.dp))
-        days.forEach { label ->
+        Spacer(Modifier.size(width = 44.dp, height = 32.dp))
+        days.forEach { (dow, label) ->
             Box(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 1.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(ProCircuit.SurfaceLow)
+                    .clickable { onDayClick(dow) }
+                    .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -346,7 +435,7 @@ private fun DayHeaderRow(modifier: Modifier = Modifier) {
                     fontWeight = FontWeight.Black,
                     fontSize = 10.sp,
                     letterSpacing = 1.sp,
-                    color = ProCircuit.OnSurface,
+                    color = ProCircuit.Lime,
                 )
             }
         }
@@ -452,76 +541,207 @@ internal fun Set<Int>.toWindows(): List<TimeWindow> {
     return out
 }
 
-// ─── Presets ─────────────────────────────────────────────────────────────
+// ─── Day edit sheet ──────────────────────────────────────────────────────
 
 /**
- * Typical Polish coach schedules. Each preset returns a per-day window list
- * keyed by dayOfWeek (1=Mon … 7=Sun). Presets fully replace existing days.
+ * Primary editing surface — opened by tapping a day label in the weekly grid.
+ * Lists all time ranges for the day, lets the user add/remove/edit each
+ * with tap-a-time-chip interaction, and offers one-tap copy-to-days so the
+ * typical "Pn-Pt 17-22" schedule is 2 taps per day + 1 copy tap.
  */
-internal enum class AvailabilityPreset(val label: String) {
-    WEEKDAY_AFTERNOONS("Popołudnia Pon-Pt"),
-    WEEKEND_MORNINGS("Weekendy 10-16"),
-    FULL_TIME("Pełny etat"),
-    CLEAR("Wyczyść");
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun DayEditSheet(
+    day: DayAvailability,
+    allDays: List<DayAvailability>,
+    onDismiss: () -> Unit,
+    onSetWindows: (List<TimeWindow>) -> Unit,
+    onCopyTo: (Set<Int>) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Local editing buffer — any mutation immediately pushes upstream via
+    // onSetWindows, so auto-save picks it up.
+    var windows by remember(day.dayOfWeek, day.windows) {
+        mutableStateOf(day.windows.toList())
+    }
+    var showNewRangeEditor by remember { mutableStateOf(false) }
+    var copyTargets by remember { mutableStateOf(emptySet<Int>()) }
 
-    fun apply(days: List<DayAvailability>): Map<Int, List<TimeWindow>> {
-        val range: (Int, Int) -> List<TimeWindow> = { from, to ->
-            listOf(TimeWindow(from * 60, to * 60))
-        }
-        return when (this) {
-            WEEKDAY_AFTERNOONS -> (1..7).associateWith { dow ->
-                if (dow in 1..5) range(17, 22) else emptyList()
-            }
-            WEEKEND_MORNINGS -> (1..7).associateWith { dow ->
-                if (dow in 6..7) range(10, 16) else emptyList()
-            }
-            FULL_TIME -> (1..7).associateWith { dow ->
-                when (dow) {
-                    in 1..5 -> range(8, 20)
-                    else -> range(10, 16)
+    fun commit(next: List<TimeWindow>) {
+        windows = next
+        onSetWindows(next)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = ProCircuit.SurfaceLow,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(ProCircuit.Outline),
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = day.dayName,
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 22.sp,
+                color = ProCircuit.OnBg,
+            )
+
+            Text(
+                text = "ZAKRESY DOSTĘPNOŚCI",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 10.sp,
+                letterSpacing = 1.6.sp,
+                color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+            )
+
+            if (windows.isEmpty() && !showNewRangeEditor) {
+                Text(
+                    text = "Brak zakresów — dzień wyłączony.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            } else {
+                windows.forEachIndexed { index, w ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(ProCircuit.Lime.copy(alpha = 0.14f))
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${minutesLabel(w.startMinutes)}–${minutesLabel(w.endMinutes)}",
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = ProCircuit.Lime,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { commit(windows.toMutableList().also { it.removeAt(index) }) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            androidx.compose.material3.Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Usuń zakres",
+                                tint = ProCircuit.Lime,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                 }
             }
-            CLEAR -> (1..7).associateWith { emptyList() }
-        }
-    }
-}
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PresetsRow(onApply: (AvailabilityPreset) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(
-            text = "SZYBKI SZABLON",
-            fontFamily = AppFontFamily,
-            fontWeight = FontWeight.Black,
-            fontSize = 10.sp,
-            letterSpacing = 1.6.sp,
-            color = ProCircuit.OnSurface.copy(alpha = 0.7f),
-        )
-        Spacer(Modifier.height(6.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            AvailabilityPreset.entries.forEach { preset ->
+            if (showNewRangeEditor) {
+                RangeEditor(
+                    existingEnd = windows.lastOrNull()?.endMinutes,
+                    onAdd = { start, end ->
+                        commit(windows + TimeWindow(start, end))
+                        showNewRangeEditor = false
+                    },
+                    onCancel = { showNewRangeEditor = false },
+                )
+            } else {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(
-                            if (preset == AvailabilityPreset.CLEAR)
-                                ProCircuit.LossRed.copy(alpha = 0.14f)
-                            else ProCircuit.SurfaceHigh
-                        )
-                        .clickable { onApply(preset) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ProCircuit.SurfaceHigh)
+                        .clickable { showNewRangeEditor = true }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = preset.label,
+                        text = "+ Dodaj zakres",
                         fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = ProCircuit.Lime,
+                    )
+                }
+            }
+
+            if (windows.isNotEmpty() && allDays.size > 1) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "SKOPIUJ TEN GRAFIK DO",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.6.sp,
+                    color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    allDays.filter { it.dayOfWeek != day.dayOfWeek }.forEach { other ->
+                        val selected = other.dayOfWeek in copyTargets
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+                                .clickable {
+                                    copyTargets = if (selected) copyTargets - other.dayOfWeek
+                                    else copyTargets + other.dayOfWeek
+                                }
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                        ) {
+                            Text(
+                                text = other.dayName.take(3),
+                                fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = if (selected) ProCircuit.LimeInk else ProCircuit.OnBg,
+                            )
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (copyTargets.isNotEmpty()) ProCircuit.Lime
+                            else ProCircuit.SurfaceHigh
+                        )
+                        .clickable(enabled = copyTargets.isNotEmpty()) {
+                            onCopyTo(copyTargets)
+                            copyTargets = emptySet()
+                        }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = if (copyTargets.isEmpty()) "WYBIERZ DNI"
+                        else "SKOPIUJ DO ${copyTargets.size} DNI",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
                         fontSize = 12.sp,
-                        color = if (preset == AvailabilityPreset.CLEAR) ProCircuit.LossRed
-                        else ProCircuit.OnBg,
+                        letterSpacing = 1.3.sp,
+                        color = if (copyTargets.isNotEmpty()) ProCircuit.LimeInk
+                        else ProCircuit.OnSurface,
                     )
                 }
             }
@@ -529,12 +749,148 @@ private fun PresetsRow(onApply: (AvailabilityPreset) -> Unit, modifier: Modifier
     }
 }
 
+/**
+ * Time-strip based range editor. Two scrollable chip lists for Od + Do at
+ * 30-min step. Initially pre-populated with a sensible default (18:00–22:00
+ * or right after the last existing range).
+ */
+@Composable
+private fun RangeEditor(
+    existingEnd: Int?,
+    onAdd: (start: Int, end: Int) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val defaultStart = existingEnd?.let { (it + SLOT_MIN).coerceAtMost(21 * 60) } ?: (17 * 60)
+    var start by remember { mutableStateOf(defaultStart) }
+    var end by remember { mutableStateOf((defaultStart + 3 * 60).coerceAtMost(23 * 60)) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.SurfaceHigh)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        TimeStripRow(
+            label = "OD",
+            selected = start,
+            min = 6 * 60,
+            max = 23 * 60,
+            onPick = {
+                start = it
+                if (end <= it) end = (it + 60).coerceAtMost(23 * 60 + 30)
+            },
+        )
+        TimeStripRow(
+            label = "DO",
+            selected = end,
+            min = start + SLOT_MIN,
+            max = 23 * 60 + 30,
+            onPick = { end = it },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Transparent)
+                    .clickable(onClick = onCancel)
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Anuluj",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(ProCircuit.Lime)
+                    .clickable { onAdd(start, end) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Dodaj",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    color = ProCircuit.LimeInk,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimeStripRow(
+    label: String,
+    selected: Int,
+    min: Int,
+    max: Int,
+    onPick: (Int) -> Unit,
+) {
+    val options = remember(min, max) {
+        (min..max step SLOT_MIN).toList()
+    }
+    val listState = rememberLazyListState()
+    LaunchedEffect(selected) {
+        val idx = options.indexOf(selected).takeIf { it >= 0 } ?: return@LaunchedEffect
+        listState.animateScrollToItem(idx)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = 10.sp,
+            letterSpacing = 1.4.sp,
+            color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+        )
+        androidx.compose.foundation.lazy.LazyRow(
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            items(options, key = { it }) { m ->
+                val isSel = m == selected
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSel) ProCircuit.Lime else ProCircuit.SurfaceLow)
+                        .clickable { onPick(m) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = minutesLabel(m),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = if (isSel) ProCircuit.LimeInk else ProCircuit.OnBg,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun minutesLabel(m: Int): String {
+    val h = m / 60
+    val mm = m % 60
+    return "${h.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}"
+}
+
 // ─── Settings (collapsed by default) ─────────────────────────────────────
 
 @Composable
 private fun SettingsToggle(
     expanded: Boolean,
-    settings: com.racketmatch.presentation.viewmodel.BookingSettings,
+    settings: com.racketmatch.domain.model.BookingSettings,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {

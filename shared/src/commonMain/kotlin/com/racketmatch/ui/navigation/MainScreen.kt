@@ -8,7 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -19,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import com.racketmatch.ui.common.UserAvatar
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,7 +34,6 @@ import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
-import com.racketmatch.presentation.viewmodel.NotificationViewModel
 import com.racketmatch.ui.more.WięcejScreen
 import com.racketmatch.ui.coaches.CoachAvailabilityScreen
 import com.racketmatch.ui.coaches.CoachBookingsScreen
@@ -58,7 +55,6 @@ import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
 import org.koin.compose.koinInject
-import org.koin.core.parameter.parametersOf
 
 object MainScreen : Screen {
 
@@ -66,43 +62,22 @@ object MainScreen : Screen {
     override fun Content() {
         val tokenStorage: TokenStorage = koinInject()
         val exploreViewModel: ExploreViewModel = kmpViewModel()
-        val exploreState by exploreViewModel.stateFlow.collectAsState()
-        val myAvatarUrl = exploreState.myAvatarUrl
-        val avatarLetter = exploreState.myName.firstOrNull()?.uppercase() ?: "?"
-        val userId = tokenStorage.currentUserId ?: ""
-        val notifVm: NotificationViewModel = kmpViewModel { parametersOf(userId) }
-        val notifState by notifVm.state.collectAsState()
         val badgeVm: ActionBadgeViewModel = kmpViewModel()
         val badgeState by badgeVm.state.collectAsState()
         var onboardingComplete by remember { mutableStateOf(true) }
-        val outerNavigator = LocalNavigator.currentOrThrow
         val isCoach = tokenStorage.isCoach
-        val hasPlayerProfile = tokenStorage.hasPlayerProfile
-        var coachModeActive by remember { mutableStateOf(tokenStorage.coachModeActive) }
+        val coachModeActive = tokenStorage.coachModeActive
 
         if (isCoach && coachModeActive) {
             // ── Coach mode ───────────────────────────────────────────────────
             TabNavigator(tab = CoachCalendarTab) { coachTabNavigator ->
                 Scaffold(
                     containerColor = ProCircuit.Bg,
-                    topBar = {
-                        if (coachTabNavigator.current != WięcejTab) {
-                            MainTopBar(
-                                avatarLetter = avatarLetter,
-                                avatarUrl = myAvatarUrl,
-                                unreadCount = notifState.unreadCount,
-                                onAvatarClick = { outerNavigator.push(CoachProfileScreen) },
-                                onBellClick = { outerNavigator.push(NotificationsScreen) },
-                                isCoach = true,
-                                hasPlayerProfile = hasPlayerProfile,
-                                coachModeActive = true,
-                                onModeSwitch = { targetCoachMode ->
-                                    tokenStorage.coachModeActive = targetCoachMode
-                                    coachModeActive = targetCoachMode
-                                }
-                            )
-                        }
-                    },
+                    // Coach-mode top bar retired. Avatar + mode switch moved
+                    // into WięcejScreen; bell access via notifications row
+                    // there too (Coach Dzień dashboard will eventually host
+                    // an inline bell like player Today does).
+                    topBar = { },
                     bottomBar = {
                         CoachNavBar(current = coachTabNavigator.current) { selected ->
                             val wasActive = coachTabNavigator.current == selected
@@ -191,80 +166,6 @@ object MainScreen : Screen {
                     }
 
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MainTopBar(
-    avatarLetter: String,
-    avatarUrl: String?,
-    unreadCount: Int,
-    onAvatarClick: () -> Unit,
-    onBellClick: () -> Unit,
-    isCoach: Boolean = false,
-    hasPlayerProfile: Boolean = true,
-    coachModeActive: Boolean = false,
-    onModeSwitch: (Boolean) -> Unit = {}
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(ProCircuit.SurfaceLow)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        UserAvatar(
-            displayName = avatarLetter,
-            avatarUrl = avatarUrl,
-            size = 36.dp,
-            modifier = Modifier.clickable(onClick = onAvatarClick)
-        )
-        Spacer(Modifier.weight(1f))
-        Text("RACKETMATCH", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-            fontSize = 13.sp, letterSpacing = 2.sp, color = ProCircuit.OnBg)
-        Spacer(Modifier.weight(1f))
-        if (isCoach && hasPlayerProfile) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(ProCircuit.SurfaceLow)
-                    .padding(2.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                listOf("🎾 GRACZ" to false, "🏆 TRENER" to true).forEach { (label, isCoachMode) ->
-                    val selected = coachModeActive == isCoachMode
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(if (selected) ProCircuit.Lime else Color.Transparent)
-                            .clickable { onModeSwitch(isCoachMode) }
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 9.sp, letterSpacing = 0.5.sp,
-                            color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface
-                        )
-                    }
-                }
-            }
-        }
-        BadgedBox(
-            badge = {
-                if (unreadCount > 0) {
-                    Badge {
-                        Text(if (unreadCount > 9) "9+" else unreadCount.toString())
-                    }
-                }
-            }
-        ) {
-            IconButton(onClick = onBellClick) {
-                Icon(Icons.Default.Notifications, contentDescription = "Powiadomienia",
-                    tint = ProCircuit.OnBg)
             }
         }
     }
