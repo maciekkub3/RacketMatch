@@ -116,7 +116,23 @@ class MatchController(
     ): MatchDto {
         val userId = UUID.fromString(authentication.name)
         val match = findMatchForParticipant(id, userId)
-        if (match.status != "PENDING") throw ResponseStatusException(HttpStatus.CONFLICT, "Match is not pending")
+        // Allowed on PENDING (proposing details on a fresh challenge) and
+        // on SCHEDULED (changing details of an already-accepted match).
+        if (match.status !in setOf("PENDING", "SCHEDULED"))
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Details cannot be proposed in status ${match.status}")
+
+        // If there are already-agreed details and no in-flight proposal yet,
+        // snapshot them into previous_* so the other party can see a diff.
+        // If there's already an in-flight proposal (detailsProposedBy != null),
+        // keep the existing snapshot — the "original" is still the last-agreed
+        // state, not the previous proposal.
+        val noProposalInFlight = match.detailsProposedBy == null
+        val hadAgreedDetails = match.locationName != null || match.scheduledAt != null
+        if (noProposalInFlight && hadAgreedDetails) {
+            match.previousLocationName = match.locationName
+            match.previousScheduledAt = match.scheduledAt
+        }
+
         match.locationName = request.locationName
         match.scheduledAt = request.scheduledAt
         match.detailsProposedBy = userId
@@ -127,6 +143,85 @@ class MatchController(
             type = "DETAILS_PROPOSED",
             title = "Zaproponowano szczegóły meczu",
             body = request.locationName ?: "Lokalizacja do ustalenia",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
+    }
+
+    @PutMapping("/{id}/accept-details")
+    @Transactional
+    fun acceptDetails(authentication: Authentication, @PathVariable id: UUID): MatchDto {
+        val userId = UUID.fromString(authentication.name)
+        val match = findMatchForParticipant(id, userId)
+        val proposer = match.detailsProposedBy
+            ?: throw ResponseStatusException(HttpStatus.CONFLICT, "No details have been proposed")
+        if (proposer == userId)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot accept your own proposal")
+        match.detailsProposedBy = null
+        match.previousLocationName = null
+        match.previousScheduledAt = null
+        matchRepository.save(match)
+        notificationService.send(
+            recipientId = proposer,
+            type = "DETAILS_ACCEPTED",
+            title = "Zaakceptowano szczegóły meczu",
+            body = match.locationName ?: "Szczegóły potwierdzone",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
+    }
+
+    @PutMapping("/{id}/withdraw-details")
+    @Transactional
+    fun withdrawDetails(authentication: Authentication, @PathVariable id: UUID): MatchDto {
+        val userId = UUID.fromString(authentication.name)
+        val match = findMatchForParticipant(id, userId)
+        val proposer = match.detailsProposedBy
+            ?: throw ResponseStatusException(HttpStatus.CONFLICT, "No details have been proposed")
+        if (proposer != userId)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only the proposer can withdraw")
+        // Revert to previously-agreed details and clear the proposal flag.
+        match.locationName = match.previousLocationName
+        match.scheduledAt = match.previousScheduledAt
+        match.previousLocationName = null
+        match.previousScheduledAt = null
+        match.detailsProposedBy = null
+        matchRepository.save(match)
+        val recipient = if (match.challenger.id == userId) match.challenged.id!! else match.challenger.id!!
+        notificationService.send(
+            recipientId = recipient,
+            type = "DETAILS_WITHDRAWN",
+            title = "Wycofano propozycję",
+            body = "Szczegóły meczu wróciły do wcześniej ustalonych",
+            data = mapOf("matchId" to id.toString())
+        )
+        return match.toDto()
+    }
+
+    @PutMapping("/{id}/discard-details")
+    @Transactional
+    fun discardDetails(authentication: Authentication, @PathVariable id: UUID): MatchDto {
+        val userId = UUID.fromString(authentication.name)
+        val match = findMatchForParticipant(id, userId)
+        val proposer = match.detailsProposedBy
+            ?: throw ResponseStatusException(HttpStatus.CONFLICT, "No details have been proposed")
+        if (proposer == userId)
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot discard your own proposal")
+
+        // Revert to the last-agreed details if we had a snapshot. If there was
+        // nothing agreed before (PENDING challenge with details attached), the
+        // snapshot is null and the match goes back to having no details.
+        match.locationName = match.previousLocationName
+        match.scheduledAt = match.previousScheduledAt
+        match.previousLocationName = null
+        match.previousScheduledAt = null
+        match.detailsProposedBy = null
+        matchRepository.save(match)
+        notificationService.send(
+            recipientId = proposer,
+            type = "DETAILS_DISCARDED",
+            title = "Odrzucono szczegóły meczu",
+            body = "Ustalcie nowe szczegóły",
             data = mapOf("matchId" to id.toString())
         )
         return match.toDto()

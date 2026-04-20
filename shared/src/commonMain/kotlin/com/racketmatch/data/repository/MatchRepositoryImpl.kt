@@ -70,4 +70,8 @@ class MatchRepositoryImpl(
     override suspend fun discardDetails(matchId: String): Match =
         matchApi.discardDetails(matchId).toDomain()
             .also { tokenStorage.incrementMatchesVersion() }
+
+    override suspend fun withdrawDetails(matchId: String): Match =
+        matchApi.withdrawDetails(matchId).toDomain()
+            .also { tokenStorage.incrementMatchesVersion() }
 }

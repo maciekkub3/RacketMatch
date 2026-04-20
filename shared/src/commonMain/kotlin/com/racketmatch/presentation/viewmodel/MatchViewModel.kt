@@ -38,6 +38,7 @@ sealed class MatchEvent {
     data class ClaimReservation(val matchId: String) : MatchEvent()
     data class AcceptDetails(val matchId: String) : MatchEvent()
     data class DiscardDetails(val matchId: String) : MatchEvent()
+    data class WithdrawDetails(val matchId: String) : MatchEvent()
     data class OpenChat(val matchId: String) : MatchEvent()
     object LoadMatches : MatchEvent()
 }
@@ -92,6 +93,7 @@ class MatchViewModel(
             is MatchEvent.ClaimReservation -> claimReservation(event.matchId)
             is MatchEvent.AcceptDetails    -> acceptDetails(event.matchId)
             is MatchEvent.DiscardDetails   -> discardDetails(event.matchId)
+            is MatchEvent.WithdrawDetails  -> withdrawDetails(event.matchId)
             is MatchEvent.OpenChat         -> openChat(event.matchId)
         }
     }
@@ -234,6 +236,17 @@ class MatchViewModel(
         viewModelScope.launch(dispatcher) {
             try {
                 matchRepository.discardDetails(matchId)
+                loadMatches()
+            } catch (e: Exception) {
+                _effects.emit(MatchEffect.ShowError(e.toUserMessage()))
+            }
+        }
+    }
+
+    private fun withdrawDetails(matchId: String) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                matchRepository.withdrawDetails(matchId)
                 loadMatches()
             } catch (e: Exception) {
                 _effects.emit(MatchEffect.ShowError(e.toUserMessage()))

@@ -16,6 +16,8 @@ data class Match(
     val sport: Sport,
     val scheduledAt: String? = null,
     val locationName: String? = null,
+    val previousScheduledAt: String? = null,
+    val previousLocationName: String? = null,
     val detailsProposedBy: String? = null,
     val reservedBy: String? = null,
     val eloChanges: Map<String, Int>? = null,
