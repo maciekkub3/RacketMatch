@@ -107,7 +107,7 @@ object TodayScreen : Screen {
 
     @Composable
     override fun Content() {
-        val exploreViewModel: ExploreViewModel = org.koin.compose.koinInject()
+        val exploreViewModel: ExploreViewModel = kmpViewModel()
         val explore by exploreViewModel.stateFlow.collectAsState()
         val matchViewModel: MatchViewModel = kmpViewModel()
         val matchState by matchViewModel.stateFlow.collectAsState()
@@ -154,6 +154,23 @@ object TodayScreen : Screen {
                 )
             }
         }
+
+        // Celebrate challenges sent from this tab (via SuggestionsHero).
+        val outerNavigator = navigator.parent?.parent ?: navigator
+        LaunchedEffect(Unit) {
+            exploreViewModel.effectFlow.collect { effect ->
+                if (effect is com.racketmatch.presentation.viewmodel.ExploreEffect.ChallengeSent) {
+                    outerNavigator.push(
+                        com.racketmatch.ui.players.InviteSentScreen(
+                            opponentName = effect.name,
+                            opponentElo = effect.opponentElo,
+                            opponentCity = effect.opponentCity,
+                            myElo = effect.myElo,
+                        )
+                    )
+                }
+            }
+        }
         val eloDisplay = eloAnim.value.toInt()
         // Next match: soonest SCHEDULED match where I participate.
         // Use MatchListState.currentUserId as the source of truth (it's set
@@ -180,6 +197,34 @@ object TodayScreen : Screen {
 
             withTime.firstOrNull()?.let { (m, ms) -> m.toNextMatchUi(matchUserId, ms) }
                 ?: mine.firstOrNull()?.toNextMatchUi(matchUserId, null)
+        }
+
+        // Results proposed by the opponent — waiting for my confirmation.
+        // Top priority hero: blocks ELO calculation until I act.
+        val resultToConfirm: ResultToConfirmUi? = remember(matchState, matchUserId) {
+            val matches = matchContent?.matches.orEmpty()
+            if (matchUserId.isBlank()) return@remember null
+            matches
+                .asSequence()
+                .filter {
+                    it.status == MatchStatus.RESULT_PROPOSED &&
+                        it.proposedBy != null && it.proposedBy != matchUserId &&
+                        (it.challengerId == matchUserId || it.challengedId == matchUserId)
+                }
+                .map { m ->
+                    val iAmChallenger = m.challengerId == matchUserId
+                    val myScore = (if (iAmChallenger) m.proposedScoreChallenger else m.proposedScoreChallenged) ?: 0
+                    val oppScore = (if (iAmChallenger) m.proposedScoreChallenged else m.proposedScoreChallenger) ?: 0
+                    val oppName = (if (iAmChallenger) m.challengedName else m.challengerName).ifBlank { "Rywal" }
+                    ResultToConfirmUi(
+                        matchId = m.id,
+                        opponentName = oppName,
+                        initials = oppName.initials2(),
+                        myScore = myScore,
+                        oppScore = oppScore,
+                    )
+                }
+                .firstOrNull()
         }
 
         // Invites: incoming challenges where I'm the challenged, awaiting my answer.
@@ -217,6 +262,7 @@ object TodayScreen : Screen {
         }
 
         val hero: TodayHero = when {
+            resultToConfirm != null -> TodayHero.ResultToConfirm(resultToConfirm)
             nextMatch != null -> TodayHero.NextMatch(nextMatch)
             invites.isNotEmpty() -> TodayHero.Invites(invites)
             suggestions.isNotEmpty() -> TodayHero.Suggestions(suggestions)
@@ -264,7 +310,14 @@ object TodayScreen : Screen {
 
             // ── Hero (contextual) ─────────────────────────────────────────
             val goExplore: () -> Unit = { tabNavigator?.current = PlayersTab }
+            val goMatches: () -> Unit = {
+                com.racketmatch.ui.navigation.TabSwitchSignal.request("matches")
+            }
             when (hero) {
+                is TodayHero.ResultToConfirm -> ResultToConfirmHero(
+                    data = hero.data,
+                    onTap = goMatches,
+                )
                 is TodayHero.NextMatch -> NextMatchHero(hero.match)
                 is TodayHero.Invites -> InvitesHero(
                     invites = hero.invites,
@@ -711,10 +764,135 @@ private fun Month.polishGenitive(): String = when (this) {
 // ─── Hero variants ────────────────────────────────────────────────────────
 
 private sealed class TodayHero {
+    /** Top priority — opponent proposed a result and needs my confirmation. */
+    data class ResultToConfirm(val data: ResultToConfirmUi) : TodayHero()
     data class NextMatch(val match: NextMatchUi) : TodayHero()
     data class Invites(val invites: List<InviteUi>) : TodayHero()
     data class Suggestions(val players: List<User>) : TodayHero()
     object FirstMatch : TodayHero()
+}
+
+private data class ResultToConfirmUi(
+    val matchId: String,
+    val opponentName: String,
+    val initials: String,
+    val myScore: Int,
+    val oppScore: Int,
+)
+
+/**
+ * Top-priority hero: the opponent wpisał wynik and we're blocking ELO until
+ * the current user confirms or disputes. Tapping hops to the Matches tab
+ * where the existing POTWIERDŹ / KWESTIONUJ buttons live on the
+ * ResultProposedCard.
+ */
+@Composable
+private fun ResultToConfirmHero(data: ResultToConfirmUi, onTap: () -> Unit) {
+    val firstName = data.opponentName.split(' ').firstOrNull() ?: data.opponentName
+    DarkHeroCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onTap)) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(ProCircuit.Lime),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "POTWIERDŹ WYNIK",
+                    fontFamily = AppFontFamily,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.54.sp,
+                    color = ProCircuit.Lime,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = "${data.myScore}",
+                    fontFamily = AppFontFamily,
+                    fontSize = 64.sp,
+                    lineHeight = 64.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-2).sp,
+                    color = ProCircuit.ForestInk,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = ":",
+                    fontFamily = AppFontFamily,
+                    fontSize = 56.sp,
+                    lineHeight = 56.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ProCircuit.ForestInk.copy(alpha = 0.55f),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${data.oppScore}",
+                    fontFamily = AppFontFamily,
+                    fontSize = 64.sp,
+                    lineHeight = 64.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-2).sp,
+                    color = ProCircuit.ForestInk,
+                )
+                Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "w setach",
+                fontFamily = AppFontFamily,
+                fontSize = 13.sp,
+                color = ProCircuit.ForestInk.copy(alpha = 0.6f),
+            )
+            Spacer(Modifier.height(18.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Ava(
+                    initials = data.initials,
+                    size = 50.dp,
+                    tone = AvaTone.Lime,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "WPISANE PRZEZ",
+                        fontFamily = AppFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.1.sp,
+                        color = ProCircuit.ForestInk.copy(alpha = 0.55f),
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = firstName,
+                        fontFamily = AppFontFamily,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ProCircuit.ForestInk,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(999.dp))
+                        .background(ProCircuit.Lime)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = "Sprawdź ›",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = ProCircuit.LimeInk,
+                        letterSpacing = 0.4.sp,
+                    )
+                }
+            }
+        }
+    }
 }
 
 /** Hero when the user has pending invites — same visual weight as next-match. */

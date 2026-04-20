@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,16 +30,18 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.data.remote.TokenStorage
-import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.domain.repository.FriendRepository
-import com.racketmatch.domain.repository.MatchRepository
+import com.racketmatch.presentation.viewmodel.ExploreEffect
+import com.racketmatch.presentation.viewmodel.ExploreEvent
+import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import com.racketmatch.util.kmpViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -49,11 +52,13 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val friendRepo: FriendRepository = koinInject()
-        val matchRepo: MatchRepository = koinInject()
         val tokenStorage: TokenStorage = koinInject()
+        // Shared challenge sheet lives in ExploreViewModel so Today,
+        // Explore and this profile screen all use the same UX.
+        val exploreVm: ExploreViewModel = kmpViewModel()
+        val exploreState by exploreVm.stateFlow.collectAsState()
         var isFriend by remember { mutableStateOf(initialIsFriend) }
         var requestSent by remember { mutableStateOf(false) }
-        var showChallengeDialog by remember { mutableStateOf(false) }
         var challengeSent by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
@@ -68,18 +73,27 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
             } catch (_: Exception) {}
         }
 
-        if (showChallengeDialog) {
-            ProfileChallengeDialog(
-                playerName = player.displayName,
-                availableSports = player.sports.ifEmpty { listOf(Sport.TENNIS) },
-                onConfirm = { type, sport ->
-                    showChallengeDialog = false
-                    scope.launch {
-                        runCatching { matchRepo.sendChallenge(player.id, type, sport) }
-                        challengeSent = true
-                    }
-                },
-                onDismiss = { showChallengeDialog = false }
+        LaunchedEffect(Unit) {
+            exploreVm.effectFlow.collect { effect ->
+                if (effect is ExploreEffect.ChallengeSent) {
+                    challengeSent = true
+                    navigator.push(
+                        InviteSentScreen(
+                            opponentName = effect.name,
+                            opponentElo = effect.opponentElo,
+                            opponentCity = effect.opponentCity,
+                            myElo = effect.myElo,
+                        )
+                    )
+                }
+            }
+        }
+
+        if (exploreState.challengeDialog != null) {
+            ChallengeDialog(
+                dialogState = exploreState.challengeDialog!!,
+                courts = exploreState.courts,
+                onEvent = { exploreVm.onEvent(it) },
             )
         }
 
@@ -199,7 +213,19 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                             }
                         } else {
                             Button(
-                                onClick = { showChallengeDialog = true },
+                                onClick = {
+                                    // ExploreViewModel may not have this user
+                                    // in its cached players list (we're on a
+                                    // profile navigated to from friends/DM
+                                    // etc., potentially out-of-city) — pass
+                                    // the full User as fallback.
+                                    exploreVm.onEvent(
+                                        ExploreEvent.ShowChallengeDialog(
+                                            userId = player.id,
+                                            fallbackPlayer = player,
+                                        )
+                                    )
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.OnBg)
                             ) {
                                 Text("⚔ Wyzwij", fontFamily = AppFontFamily,
@@ -312,78 +338,6 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
         }
         } // end Scaffold
     }
-}
-
-@Composable
-private fun ProfileChallengeDialog(
-    playerName: String,
-    availableSports: List<Sport>,
-    onConfirm: (MatchType, Sport) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var selectedType by remember { mutableStateOf(MatchType.CASUAL) }
-    var selectedSport by remember { mutableStateOf(availableSports.firstOrNull() ?: Sport.TENNIS) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = ProCircuit.SurfaceLow,
-        title = {
-            Text("Wyzwij $playerName", fontFamily = AppFontFamily,
-                fontWeight = FontWeight.Black, fontSize = 18.sp, color = ProCircuit.OnBg)
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(MatchType.CASUAL to "TOWARZYSKI", MatchType.RANKED to "RANKINGOWY").forEach { (type, label) ->
-                        val selected = selectedType == type
-                        Box(
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                                .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
-                                .clickable { selectedType = type }
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
-                        ) {
-                            Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 11.sp, letterSpacing = 1.sp,
-                                color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
-                        }
-                    }
-                }
-                if (availableSports.size > 1) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        availableSports.forEach { sport ->
-                            val label = when (sport) { Sport.TENNIS -> "🎾 Tenis"; Sport.PADEL -> "🏸 Padel" }
-                            val selected = selectedSport == sport
-                            Box(
-                                modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                                    .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
-                                    .clickable { selectedSport = sport }
-                                    .padding(horizontal = 16.dp, vertical = 10.dp)
-                            ) {
-                                Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp, color = if (selected) ProCircuit.Bg else ProCircuit.OnSurface)
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(selectedType, selectedSport) },
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-            ) {
-                Text("WYŚLIJ WYZWANIE", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 12.sp, letterSpacing = 1.sp)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp, color = ProCircuit.OnSurface)
-            }
-        }
-    )
 }
 
 @Composable

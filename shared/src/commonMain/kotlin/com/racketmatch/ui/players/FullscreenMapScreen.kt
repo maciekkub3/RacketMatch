@@ -56,7 +56,7 @@ object FullscreenMapScreen : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val vm: ExploreViewModel = org.koin.compose.koinInject()
+        val vm: ExploreViewModel = kmpViewModel()
         val state by vm.stateFlow.collectAsState()
         val courtSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         val uriHandler = LocalUriHandler.current

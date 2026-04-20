@@ -91,8 +91,13 @@ sealed class ExploreEvent {
     object ConfirmPostSession : ExploreEvent()
     data class JoinSession(val sessionId: String) : ExploreEvent()
     data class CancelMySession(val sessionId: String) : ExploreEvent()
-    // Direct challenge (list view)
-    data class ShowChallengeDialog(val userId: String) : ExploreEvent()
+    // Direct challenge (list view). `fallbackPlayer` lets entry points
+    // outside the nearby-players list (e.g. the other-player profile screen)
+    // open the dialog for a user we don't have cached in state.
+    data class ShowChallengeDialog(
+        val userId: String,
+        val fallbackPlayer: User? = null,
+    ) : ExploreEvent()
     object DismissChallengeDialog : ExploreEvent()
     data class ChallengeTypeSelected(val type: MatchType) : ExploreEvent()
     data class ChallengeSportSelected(val sport: Sport) : ExploreEvent()
@@ -141,7 +146,13 @@ class ExploreViewModel(
     init {
         loadAll()
         viewModelScope.launch {
-            tokenStorage.loginVersionFlow.drop(1).collect { loadAll() }
+            // On re-login, flush any carry-over fields (city, myName, etc.)
+            // so the previous account can't flash through between the bump
+            // firing and loadAll's first copy().
+            tokenStorage.loginVersionFlow.drop(1).collect {
+                _state.value = ExploreState()
+                loadAll()
+            }
         }
         viewModelScope.launch {
             // Match changes can shift my own ELO, pending counts, sessions.
@@ -202,7 +213,7 @@ class ExploreViewModel(
             is ExploreEvent.ConfirmPostSession -> confirmPostSession()
             is ExploreEvent.JoinSession -> joinSession(event.sessionId)
             is ExploreEvent.CancelMySession -> cancelSession(event.sessionId)
-            is ExploreEvent.ShowChallengeDialog -> showChallengeDialog(event.userId)
+            is ExploreEvent.ShowChallengeDialog -> showChallengeDialog(event.userId, event.fallbackPlayer)
             is ExploreEvent.DismissChallengeDialog -> _state.value = _state.value.copy(challengeDialog = null)
             is ExploreEvent.ChallengeTypeSelected -> {
                 val d = _state.value.challengeDialog ?: return
@@ -335,8 +346,15 @@ class ExploreViewModel(
         }
     }
 
-    private fun showChallengeDialog(userId: String) {
-        val player = _state.value.nearbyPlayers.find { it.id == userId } ?: return
+    private fun showChallengeDialog(userId: String, fallbackPlayer: User? = null) {
+        // Prefer nearbyPlayers (fully hydrated from city fetch). Fall back to
+        // allPlayers (covers out-of-city), then to the explicit fallback
+        // passed by the caller — needed for Player Profile entry where the
+        // user may not be in either list.
+        val player = _state.value.nearbyPlayers.find { it.id == userId }
+            ?: _state.value.allPlayers.find { it.id == userId }
+            ?: fallbackPlayer
+            ?: return
         val mySports = _state.value.mySports
         val availableSports = if (mySports.isEmpty()) player.sports.ifEmpty { listOf(Sport.TENNIS) }
                               else player.sports.filter { it in mySports }.ifEmpty { mySports }

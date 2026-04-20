@@ -80,7 +80,7 @@ object WięcejScreen : Screen {
         val badgeVm: ActionBadgeViewModel = kmpViewModel()
         val badgeState by badgeVm.state.collectAsState()
 
-        val exploreVm: ExploreViewModel = org.koin.compose.koinInject()
+        val exploreVm: ExploreViewModel = kmpViewModel()
         val explore by exploreVm.stateFlow.collectAsState()
 
         LaunchedEffect(Unit) { badgeVm.refresh() }

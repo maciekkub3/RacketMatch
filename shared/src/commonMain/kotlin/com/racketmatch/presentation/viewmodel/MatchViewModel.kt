@@ -50,7 +50,8 @@ sealed class MatchEffect {
     object ChallengeCancelled : MatchEffect()
     object ResultSubmitted : MatchEffect()
     object ResultProposed : MatchEffect()
-    object ResultConfirmed : MatchEffect()
+    /** Carries the updated match so the UI can push the reveal celebration. */
+    data class ResultConfirmed(val match: Match) : MatchEffect()
     object ResultDisputed : MatchEffect()
     data class OpenMatchChat(val matchId: String, val currentUserId: String, val otherUserName: String) : MatchEffect()
     data class ShowError(val msg: String) : MatchEffect()
@@ -189,8 +190,8 @@ class MatchViewModel(
     private fun confirmResult(matchId: String) {
         viewModelScope.launch(dispatcher) {
             try {
-                matchRepository.confirmResult(matchId)
-                _effects.emit(MatchEffect.ResultConfirmed)
+                val updated = matchRepository.confirmResult(matchId)
+                _effects.emit(MatchEffect.ResultConfirmed(updated))
                 loadMatches()
             } catch (e: Exception) {
                 _effects.emit(MatchEffect.ShowError(e.toUserMessage()))

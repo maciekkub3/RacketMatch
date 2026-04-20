@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,12 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
-import com.racketmatch.ui.common.DateTimePickerRow
 import com.racketmatch.ui.common.monthPl
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
@@ -58,12 +55,25 @@ object MatchListScreen : Screen {
     override fun Content() {
         val viewModel: MatchViewModel = kmpViewModel()
         val badgeVm: ActionBadgeViewModel = kmpViewModel()
+        // Profile VM's user.eloRating is the source of truth for the user's
+        // current ELO. Snapshot it at the moment POTWIERDŹ is tapped so the
+        // reveal can animate old→new even though the backend has already
+        // applied the change by the time the effect fires.
+        val profileVm: com.racketmatch.presentation.viewmodel.ProfileViewModel = kmpViewModel()
+        val profileState by profileVm.stateFlow.collectAsState()
+        // Explore VM provides the city-scoped courts list feeding the
+        // ProposeDetailsDialog's court dropdown, shared with the challenge
+        // bottom sheet.
+        val exploreVm: com.racketmatch.presentation.viewmodel.ExploreViewModel = kmpViewModel()
+        val exploreState by exploreVm.stateFlow.collectAsState()
         val state by viewModel.stateFlow.collectAsState()
-        var resultDialogMatch by remember { mutableStateOf<Match?>(null) }
-        var disputeMatch by remember { mutableStateOf<Match?>(null) }
         var activeTab by remember { mutableStateOf(MatchTab.UPCOMING) }
         val navigator = LocalNavigator.currentOrThrow
+        // Result entry + dispute push on the outer Navigator so the bottom
+        // nav is hidden during this focused checkout-style flow.
+        val rootNavigator = navigator.parent?.parent ?: navigator
         val snackbarHostState = remember { SnackbarHostState() }
+        var preConfirmElo by remember { mutableStateOf<Int?>(null) }
 
         LaunchedEffect(Unit) {
             badgeVm.refresh()
@@ -71,9 +81,33 @@ object MatchListScreen : Screen {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is MatchEffect.OpenMatchChat ->
-                        (navigator.parent?.parent ?: navigator).push(ChatScreen(effect.matchId, effect.currentUserId, effect.otherUserName))
+                        rootNavigator.push(ChatScreen(effect.matchId, effect.currentUserId, effect.otherUserName))
                     is MatchEffect.ShowError ->
                         snackbarHostState.showSnackbar(effect.msg)
+                    is MatchEffect.ResultConfirmed -> {
+                        val myId = (state as? MatchListState.Content)?.currentUserId
+                        val m = effect.match
+                        if (myId != null) {
+                            val delta = m.eloChanges?.get(myId) ?: 0
+                            val iAmChallenger = m.challengerId == myId
+                            val myScore = (if (iAmChallenger) m.scoreChallenger else m.scoreChallenged) ?: 0
+                            val oppScore = (if (iAmChallenger) m.scoreChallenged else m.scoreChallenger) ?: 0
+                            val oppName = if (iAmChallenger) m.challengedName else m.challengerName
+                            val currentElo = (profileState as? com.racketmatch.presentation.viewmodel.ProfileState.Content)?.user?.eloRating ?: 1200
+                            val oldElo = preConfirmElo ?: currentElo
+                            rootNavigator.push(
+                                ResultRevealScreen(
+                                    iWon = myScore > oppScore,
+                                    opponentName = oppName,
+                                    myScoreInSets = myScore,
+                                    oppScoreInSets = oppScore,
+                                    oldElo = oldElo,
+                                    newElo = oldElo + delta,
+                                )
+                            )
+                            preConfirmElo = null
+                        }
+                    }
                     else -> Unit
                 }
             }
@@ -116,8 +150,17 @@ object MatchListScreen : Screen {
                                 parts = parts,
                                 myId = myId,
                                 viewModel = viewModel,
-                                onSetResult = { resultDialogMatch = it },
-                                onDispute = { disputeMatch = it },
+                                courts = exploreState.courts,
+                                onSetResult = { rootNavigator.push(EnterResultScreen(it, myId)) },
+                                onDispute = { rootNavigator.push(EnterResultScreen(it, myId)) },
+                                onConfirmResult = { match ->
+                                    // Snapshot ELO synchronously — by the time
+                                    // ResultConfirmed fires the backend has
+                                    // already bumped the user's rating and
+                                    // ProfileViewModel's reload may have raced in.
+                                    preConfirmElo = (profileState as? com.racketmatch.presentation.viewmodel.ProfileState.Content)?.user?.eloRating
+                                    viewModel.onEvent(MatchEvent.ConfirmResult(match.id))
+                                },
                             )
                             MatchTab.HISTORY -> historySection(
                                 history = parts.history,
@@ -135,31 +178,6 @@ object MatchListScreen : Screen {
             }
         }
 
-        resultDialogMatch?.let { match ->
-            ProposeResultDialog(
-                match = match,
-                myId = (state as? MatchListState.Content)?.currentUserId ?: "",
-                onConfirm = { sc, sd ->
-                    viewModel.onEvent(MatchEvent.ProposeResult(match.id, sc, sd))
-                    resultDialogMatch = null
-                },
-                onDismiss = { resultDialogMatch = null }
-            )
-        }
-
-        disputeMatch?.let { match ->
-            ProposeResultDialog(
-                match = match,
-                myId = (state as? MatchListState.Content)?.currentUserId ?: "",
-                prefillScoreChallenger = match.proposedScoreChallenger,
-                prefillScoreChallenged = match.proposedScoreChallenged,
-                onConfirm = { sc, sd ->
-                    viewModel.onEvent(MatchEvent.ProposeResult(match.id, sc, sd))
-                    disputeMatch = null
-                },
-                onDismiss = { disputeMatch = null }
-            )
-        }
     }
 }
 
@@ -261,20 +279,22 @@ private fun androidx.compose.foundation.lazy.LazyListScope.upcomingSections(
     parts: MatchPartitions,
     myId: String,
     viewModel: MatchViewModel,
+    courts: List<com.racketmatch.domain.model.Court>,
     onSetResult: (Match) -> Unit,
     onDispute: (Match) -> Unit,
+    onConfirmResult: (Match) -> Unit,
 ) {
     if (parts.incomingPending.isNotEmpty()) {
         item { SectionLabel("Przychodzące wyzwania", parts.incomingPending.size) }
         items(parts.incomingPending, key = { it.id }) { match ->
-            IncomingChallengeCard(match = match, myId = myId, viewModel = viewModel)
+            IncomingChallengeCard(match = match, myId = myId, viewModel = viewModel, courts = courts)
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
     if (parts.outgoingPending.isNotEmpty()) {
         item { SectionLabel("Wysłane wyzwania", null) }
         items(parts.outgoingPending, key = { it.id }) { match ->
-            OutgoingChallengeCard(match = match, myId = myId, viewModel = viewModel)
+            OutgoingChallengeCard(match = match, myId = myId, viewModel = viewModel, courts = courts)
         }
         item { Spacer(Modifier.height(8.dp)) }
     }
@@ -284,7 +304,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.upcomingSections(
             ResultProposedCard(
                 match = match,
                 myId = myId,
-                viewModel = viewModel,
+                onConfirm = { onConfirmResult(match) },
                 onDispute = onDispute,
             )
         }
@@ -297,6 +317,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.upcomingSections(
                 match = match,
                 myId = myId,
                 viewModel = viewModel,
+                courts = courts,
                 onSetResult = { onSetResult(match) },
             )
         }
@@ -418,7 +439,7 @@ private fun HistoryEmptyState() {
 
 // Someone challenged you — show their name, ELO, sport type, with Accept/Decline/Counter
 @Composable
-private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel) {
+private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel, courts: List<com.racketmatch.domain.model.Court>) {
     var showProposeDialog by remember { mutableStateOf(false) }
     var showAcceptConfirm by remember { mutableStateOf(false) }
 
@@ -453,6 +474,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
         ProposeDetailsDialog(
             prefillLocation = match.locationName,
             prefillMillis = match.scheduledAt?.let { parseScheduledAt(it) },
+            courts = courts,
             onConfirm = { locationName, scheduledAt ->
                 showProposeDialog = false
                 viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
@@ -464,6 +486,7 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
     val theyProposed = match.detailsProposedBy != null && match.detailsProposedBy != myId
     val iWaited = match.detailsProposedBy == myId
     val hasDetails = !match.locationName.isNullOrBlank() || !match.scheduledAt.isNullOrBlank()
+    val hasDiff = match.previousLocationName != null || match.previousScheduledAt != null
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
@@ -511,8 +534,27 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
             MatchTypeBadge(match.type)
         }
 
-        // Details row (proposed court/time)
-        if (hasDetails) {
+        // Details row (proposed court/time). When the backend has a
+        // previous_* snapshot (someone counter-proposed), render the full
+        // DetailsDiffBox with strikethrough so the user can see what
+        // changed vs. the earlier proposal — same look as the SCHEDULED
+        // card uses. Falls back to the simple "proposed" tile when this
+        // is the first proposal (no snapshot yet).
+        if (hasDiff) {
+            Spacer(Modifier.height(12.dp))
+            DetailsDiffBox(
+                fromLocation = match.previousLocationName,
+                toLocation = match.locationName,
+                fromScheduledAt = match.previousScheduledAt,
+                toScheduledAt = match.scheduledAt,
+                byOpponent = theyProposed,
+            )
+            if (theyProposed) {
+                Spacer(Modifier.height(6.dp))
+                Text("Upewnij się, że kort jest zarezerwowany",
+                    fontFamily = AppBodyFontFamily, fontSize = 11.sp, color = ProCircuit.OnSurface)
+            }
+        } else if (hasDetails) {
             Spacer(Modifier.height(12.dp))
             val labelColor = if (iWaited) ProCircuit.OnSurface else ProCircuit.Lime.copy(alpha = 0.7f)
             Row(
@@ -612,13 +654,14 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 
 // You challenged someone — show their info + "Waiting for reply" state
 @Composable
-private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel) {
+private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel, courts: List<com.racketmatch.domain.model.Court>) {
     var showProposeDialog by remember { mutableStateOf(false) }
 
     if (showProposeDialog) {
         ProposeDetailsDialog(
             prefillLocation = match.locationName,
             prefillMillis = match.scheduledAt?.let { parseScheduledAt(it) },
+            courts = courts,
             onConfirm = { locationName, scheduledAt ->
                 showProposeDialog = false
                 viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
@@ -630,6 +673,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
     val theyCountered = match.detailsProposedBy != null && match.detailsProposedBy != myId
     val iProposed = match.detailsProposedBy == myId
     val hasDetails = !match.locationName.isNullOrBlank() || !match.scheduledAt.isNullOrBlank()
+    val hasDiff = match.previousLocationName != null || match.previousScheduledAt != null
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
@@ -685,8 +729,18 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
             MatchTypeBadge(match.type)
         }
 
-        // Details row
-        if (hasDetails) {
+        // Details row — see IncomingChallengeCard for the hasDiff / hasDetails
+        // rationale. Same layout, different labels depending on who proposed.
+        if (hasDiff) {
+            Spacer(Modifier.height(12.dp))
+            DetailsDiffBox(
+                fromLocation = match.previousLocationName,
+                toLocation = match.locationName,
+                fromScheduledAt = match.previousScheduledAt,
+                toScheduledAt = match.scheduledAt,
+                byOpponent = theyCountered,
+            )
+        } else if (hasDetails) {
             Spacer(Modifier.height(12.dp))
             val detailLabelColor = if (theyCountered) ProCircuit.Tertiary else ProCircuit.Lime.copy(alpha = 0.7f)
             Row(
@@ -785,7 +839,7 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 
 // Scheduled match — show opponent info + reservation section + "Set Result" button
 @Composable
-private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewModel, onSetResult: () -> Unit) {
+private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewModel, courts: List<com.racketmatch.domain.model.Court>, onSetResult: () -> Unit) {
     val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
     val opponentElo  = if (match.challengerId == myId) match.challengedElo  else match.challengerElo
     val hasLocation = !match.locationName.isNullOrBlank()
@@ -798,6 +852,7 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
         ProposeDetailsDialog(
             prefillLocation = match.locationName,
             prefillMillis = match.scheduledAt?.let { parseScheduledAt(it) },
+            courts = courts,
             onConfirm = { locationName, scheduledAt ->
                 showDetailsDialog = false
                 viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
@@ -1219,7 +1274,12 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
 
 // Result has been proposed — show different UI based on who proposed
 @Composable
-private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewModel, onDispute: (Match) -> Unit) {
+private fun ResultProposedCard(
+    match: Match,
+    myId: String,
+    onConfirm: () -> Unit,
+    onDispute: (Match) -> Unit,
+) {
     val iProposed = match.proposedBy == myId
     val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
     val sc = match.proposedScoreChallenger ?: 0
@@ -1307,7 +1367,7 @@ private fun ResultProposedCard(match: Match, myId: String, viewModel: MatchViewM
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
-                    onClick = { viewModel.onEvent(MatchEvent.ConfirmResult(match.id)) },
+                    onClick = onConfirm,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
@@ -1442,145 +1502,6 @@ private fun MatchTypeBadge(type: MatchType) {
 }
 
 @Composable
-private fun ProposeResultDialog(
-    match: Match,
-    myId: String,
-    onConfirm: (Int, Int) -> Unit,
-    onDismiss: () -> Unit,
-    prefillScoreChallenger: Int? = null,
-    prefillScoreChallenged: Int? = null
-) {
-    val iAmChallenger = match.challengerId == myId
-    var myScoreText by remember {
-        mutableStateOf(
-            if (iAmChallenger) prefillScoreChallenger?.toString() ?: ""
-            else prefillScoreChallenged?.toString() ?: ""
-        )
-    }
-    var theirScoreText by remember {
-        mutableStateOf(
-            if (iAmChallenger) prefillScoreChallenged?.toString() ?: ""
-            else prefillScoreChallenger?.toString() ?: ""
-        )
-    }
-
-    val myName = if (iAmChallenger) match.challengerName else match.challengedName
-    val opponentName = if (iAmChallenger) match.challengedName else match.challengerName
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = ProCircuit.SurfaceLow,
-        title = {
-            Text(
-                text = "PODAJ WYNIK",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 16.sp, letterSpacing = 1.sp, color = ProCircuit.OnBg
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    text = "vs $opponentName · ${match.sport.namePl}",
-                    fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = myName.substringBefore(" "),
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp, color = ProCircuit.OnSurface, textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        OutlinedTextField(
-                            value = myScoreText,
-                            onValueChange = { if (it.length <= 2 && it.all(Char::isDigit)) myScoreText = it },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                fontFamily = AppFontFamily,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 28.sp,
-                                textAlign = TextAlign.Center,
-                                color = ProCircuit.OnBg
-                            ),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = ProCircuit.Lime,
-                                unfocusedBorderColor = ProCircuit.SurfaceHigh
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    Text(
-                        text = ":",
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 28.sp, color = ProCircuit.OnSurface
-                    )
-                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = opponentName.substringBefore(" "),
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp, color = ProCircuit.OnSurface, textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        OutlinedTextField(
-                            value = theirScoreText,
-                            onValueChange = { if (it.length <= 2 && it.all(Char::isDigit)) theirScoreText = it },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                fontFamily = AppFontFamily,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 28.sp,
-                                textAlign = TextAlign.Center,
-                                color = ProCircuit.OnBg
-                            ),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = ProCircuit.Lime,
-                                unfocusedBorderColor = ProCircuit.SurfaceHigh
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-                Text(
-                    text = "Przeciwnik będzie musiał potwierdzić ten wynik.",
-                    fontFamily = AppBodyFontFamily, fontSize = 11.sp,
-                    color = ProCircuit.OnSurface.copy(alpha = 0.6f), textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            val myScore = myScoreText.toIntOrNull()
-            val theirScore = theirScoreText.toIntOrNull()
-            Button(
-                onClick = {
-                    if (myScore != null && theirScore != null) {
-                        val (sc, sd) = if (iAmChallenger)
-                            myScore to theirScore
-                        else
-                            theirScore to myScore
-                        onConfirm(sc, sd)
-                    }
-                },
-                enabled = myScoreText.isNotEmpty() && theirScoreText.isNotEmpty(),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-            ) {
-                Text("WYŚLIJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = ProCircuit.OnSurface)
-            }
-        }
-    )
-}
-
-@Composable
 private fun MatchesEmptyState() {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
@@ -1604,13 +1525,23 @@ private fun MatchesEmptyState() {
     }
 }
 
+/**
+ * Bottom sheet for proposing (or counter-proposing) a match's court + time.
+ * Same visual language as the challenge sheet in PlayersScreen: compact
+ * day+time chip strips plus a court dropdown. Submit is disabled until at
+ * least one field actually changes vs. the prefill — prevents sending a
+ * "proposal" identical to what's already agreed.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProposeDetailsDialog(
     prefillLocation: String?,
     prefillMillis: Long?,
+    courts: List<com.racketmatch.domain.model.Court>,
     onConfirm: (locationName: String?, scheduledAt: Long?) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var courtName by remember { mutableStateOf(prefillLocation ?: "") }
     var selectedMillis by remember { mutableStateOf<Long?>(prefillMillis) }
 
@@ -1618,54 +1549,87 @@ private fun ProposeDetailsDialog(
     val hasContent = courtName.isNotBlank() || selectedMillis != null
     val canConfirm = somethingChanged && hasContent
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = ProCircuit.SurfaceLow,
-        title = {
-            Text("Zaproponuj kort i czas", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 18.sp, color = ProCircuit.OnBg)
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(ProCircuit.Outline),
+            )
         },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Możesz zmienić przed potwierdzeniem",
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
-                OutlinedTextField(
-                    value = courtName,
-                    onValueChange = { courtName = it },
-                    placeholder = { Text("Kort / miejsce", fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface.copy(alpha = 0.5f)) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = ProCircuit.OnBg,
-                        unfocusedTextColor = ProCircuit.OnBg,
-                        focusedBorderColor = ProCircuit.Lime,
-                        unfocusedBorderColor = ProCircuit.OnSurface.copy(alpha = 0.3f),
-                        cursorColor = ProCircuit.Lime
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = if (prefillMillis != null || !prefillLocation.isNullOrBlank())
+                        "Zaproponuj kontrę"
+                    else "Zaproponuj szczegóły",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp,
+                    color = ProCircuit.OnBg,
                 )
-                DateTimePickerRow(
-                    selectedMillis = selectedMillis,
-                    onMillisSelected = { selectedMillis = it }
+                Text(
+                    text = "Zmień kort lub godzinę — rywal może zaakceptować lub zaproponować inaczej.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp,
+                    color = ProCircuit.OnSurface,
                 )
-                Button(
-                    onClick = { onConfirm(courtName.takeIf { it.isNotBlank() }, selectedMillis) },
-                    enabled = canConfirm,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg,
-                        disabledContainerColor = ProCircuit.SurfaceHigh, disabledContentColor = ProCircuit.OnSurface
-                    )
-                ) {
-                    Text("WYŚLIJ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 12.sp, letterSpacing = 2.sp)
-                }
             }
-        },
-        confirmButton = {}
-    )
+
+            com.racketmatch.ui.players.QuickDateTimePicker(
+                selectedMillis = selectedMillis,
+                onMillisSelected = { selectedMillis = it },
+            )
+
+            com.racketmatch.ui.players.CourtPicker(
+                courtName = courtName,
+                courts = courts,
+                onNameChanged = { courtName = it },
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (canConfirm) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+                    .clickable(enabled = canConfirm) {
+                        onConfirm(courtName.takeIf { it.isNotBlank() }, selectedMillis)
+                    }
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "WYŚLIJ PROPOZYCJĘ",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    letterSpacing = 1.6.sp,
+                    color = if (canConfirm) ProCircuit.LimeInk else ProCircuit.OnSurface,
+                )
+            }
+            if (!somethingChanged && hasContent) {
+                Text(
+                    text = "Zmień kort lub godzinę żeby wysłać propozycję.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
 }
 
 private val Sport.namePl: String

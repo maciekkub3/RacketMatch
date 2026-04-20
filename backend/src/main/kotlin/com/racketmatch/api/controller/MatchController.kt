@@ -121,14 +121,19 @@ class MatchController(
         if (match.status !in setOf("PENDING", "SCHEDULED"))
             throw ResponseStatusException(HttpStatus.CONFLICT, "Details cannot be proposed in status ${match.status}")
 
-        // If there are already-agreed details and no in-flight proposal yet,
-        // snapshot them into previous_* so the other party can see a diff.
-        // If there's already an in-flight proposal (detailsProposedBy != null),
-        // keep the existing snapshot — the "original" is still the last-agreed
-        // state, not the previous proposal.
-        val noProposalInFlight = match.detailsProposedBy == null
-        val hadAgreedDetails = match.locationName != null || match.scheduledAt != null
-        if (noProposalInFlight && hadAgreedDetails) {
+        // Snapshot the current values into previous_* whenever the proposer
+        // changes (including the first proposal on top of agreed details, OR
+        // a counter from a different user on top of an in-flight proposal).
+        // When the same user edits their own proposal, keep the existing
+        // snapshot so the diff stays relative to the other party.
+        //
+        // This covers three client-visible cases:
+        //  1. SCHEDULED + counter        → previous_* = agreed values
+        //  2. PENDING w/ initial + ctr   → previous_* = initial (agreed)
+        //  3. PENDING null + A → B ctr   → previous_* = A's proposal
+        // so the recipient can always see "what changed" with a strikethrough.
+        val changingProposer = match.detailsProposedBy == null || match.detailsProposedBy != userId
+        if (changingProposer) {
             match.previousLocationName = match.locationName
             match.previousScheduledAt = match.scheduledAt
         }
