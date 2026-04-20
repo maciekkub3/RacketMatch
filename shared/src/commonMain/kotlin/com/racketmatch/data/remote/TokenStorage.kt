@@ -24,7 +24,17 @@ interface TokenStorage {
     val friendsVersionFlow: StateFlow<Int>
     val dmVersionFlow: StateFlow<Int>
     val bookingsVersionFlow: StateFlow<Int>
+    /** For login/register. Bumps loginVersionFlow → all ViewModels reload. */
     fun saveTokens(access: String, refresh: String)
+    /**
+     * For silent token refresh from the Ktor Auth plugin. Must NOT bump
+     * loginVersionFlow — the user's identity didn't change, only the bearer
+     * did. Bumping here triggered simultaneous full reloads across every
+     * screen, which caused the cascade of load errors (ranking / explore /
+     * today / matches all failing) that the user would see right after a
+     * propose/withdraw, and that healed only via logout + login.
+     */
+    fun updateTokens(access: String, refresh: String)
     fun incrementMatchesVersion()
     fun incrementProfileVersion()
     fun incrementFriendsVersion()
@@ -67,6 +77,11 @@ open class InMemoryTokenStorage : TokenStorage {
         accessToken = access
         refreshToken = refresh
         _loginVersionFlow.value++
+    }
+
+    override fun updateTokens(access: String, refresh: String) {
+        accessToken = access
+        refreshToken = refresh
     }
 
     override fun incrementMatchesVersion() {

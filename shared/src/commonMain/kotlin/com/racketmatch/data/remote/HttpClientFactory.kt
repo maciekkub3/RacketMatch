@@ -60,7 +60,13 @@ object HttpClientFactory {
                                 contentType(ContentType.Application.Json)
                                 setBody(RefreshRequestDto(refresh))
                             }.body()
-                            tokenStorage.saveTokens(response.accessToken, response.refreshToken)
+                            // Silent swap — do NOT bump loginVersionFlow.
+                            // Identity unchanged; only the bearer got
+                            // rotated. Bumping here caused every VM to
+                            // simultaneously reload, racing each other
+                            // and surfacing as cascade load errors right
+                            // after any propose/withdraw/accept action.
+                            tokenStorage.updateTokens(response.accessToken, response.refreshToken)
                             BearerTokens(response.accessToken, response.refreshToken)
                         }.getOrElse {
                             // Refresh failed — refresh token expired, revoked, or
