@@ -213,7 +213,9 @@ private fun NotificationType.icon(): ImageVector = when (this) {
     NotificationType.CHALLENGE_ACCEPTED,
     NotificationType.CHALLENGE_DECLINED      -> Icons.Default.SportsTennis
     NotificationType.DETAILS_PROPOSED,
-    NotificationType.DETAILS_ACCEPTED        -> Icons.Default.EditCalendar
+    NotificationType.DETAILS_ACCEPTED,
+    NotificationType.DETAILS_WITHDRAWN,
+    NotificationType.DETAILS_DISCARDED       -> Icons.Default.EditCalendar
     NotificationType.MATCH_CANCELLED         -> Icons.Default.Cancel
     NotificationType.RESULT_PROPOSED,
     NotificationType.RESULT_CONFIRMED,
@@ -261,11 +263,13 @@ private fun NotificationType.category(): Category = when (this) {
     NotificationType.BOOKING_CONFIRMED -> Category.POSITIVE
     NotificationType.CHALLENGE_DECLINED,
     NotificationType.MATCH_CANCELLED,
+    NotificationType.DETAILS_DISCARDED,
     NotificationType.BOOKING_DECLINED,
     NotificationType.BOOKING_CANCELLED,
     NotificationType.RESULT_DISPUTED -> Category.NEGATIVE
     NotificationType.CHALLENGE_RECEIVED,
     NotificationType.DETAILS_PROPOSED,
+    NotificationType.DETAILS_WITHDRAWN,
     NotificationType.RESULT_PROPOSED,
     NotificationType.FRIEND_REQUEST_RECEIVED,
     NotificationType.NEW_MESSAGE,

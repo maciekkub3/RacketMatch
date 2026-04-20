@@ -73,6 +73,8 @@ class NotificationEventBus(
                 NotificationType.CHALLENGE_DECLINED,
                 NotificationType.DETAILS_PROPOSED,
                 NotificationType.DETAILS_ACCEPTED,
+                NotificationType.DETAILS_WITHDRAWN,
+                NotificationType.DETAILS_DISCARDED,
                 NotificationType.MATCH_CANCELLED,
                 NotificationType.RESULT_PROPOSED,
                 NotificationType.RESULT_CONFIRMED,
