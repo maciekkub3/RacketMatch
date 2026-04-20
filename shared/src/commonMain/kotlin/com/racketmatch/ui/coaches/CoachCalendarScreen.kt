@@ -3,6 +3,7 @@ package com.racketmatch.ui.coaches
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -1666,10 +1667,16 @@ private fun AddCalendarEventSheet(
     var title by remember { mutableStateOf("") }
     var eventType by remember { mutableStateOf("EXTERNAL_CLIENT") }
     var startMillis by remember { mutableStateOf<Long?>(null) }
-    // Duration in minutes — picked via chip row instead of a second date/time
-    // picker. Keeps the sheet a single-screen height on phones; >95% of coach
-    // events fall in the 30m / 1h / 1.5h / 2h / 3h range.
+    // Duration in minutes. Short presets for client sessions (which rarely
+    // run over 3h), longer presets for BLOCKED time (which is often a half-
+    // day, full day, long weekend, or week vacation).
     var durationMinutes by remember { mutableStateOf(60) }
+
+    // Reset duration to a sensible default when switching type so the picked
+    // preset stays valid: short for client sessions, day-sized for blocks.
+    LaunchedEffect(eventType) {
+        durationMinutes = if (eventType == "BLOCKED") 1440 else 60
+    }
 
     val canSave = startMillis != null
 
@@ -1750,8 +1757,30 @@ private fun AddCalendarEventSheet(
             )
 
             SheetSectionLabel("CZAS TRWANIA")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(30 to "30 min", 60 to "1h", 90 to "1.5h", 120 to "2h", 180 to "3h").forEach { (mins, label) ->
+            val presets = if (eventType == "BLOCKED") {
+                // N × 24h from picked start — pick start at 00:00 for clean
+                // calendar-day blocks, or any time for rolling 24h windows.
+                listOf(
+                    240 to "4h",
+                    480 to "8h",
+                    1440 to "1 dzień",
+                    2880 to "2 dni",
+                    10080 to "7 dni",
+                )
+            } else {
+                listOf(
+                    30 to "30 min",
+                    60 to "1h",
+                    90 to "1.5h",
+                    120 to "2h",
+                    180 to "3h",
+                )
+            }
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                presets.forEach { (mins, label) ->
                     SheetChip(
                         label = label,
                         selected = durationMinutes == mins,
