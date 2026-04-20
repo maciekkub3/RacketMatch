@@ -64,6 +64,7 @@ class PlayerBookingsViewModel(
     val effects = _effects.asSharedFlow()
 
     private var segment: BookingSegment = BookingSegment.PENDING
+    private var segmentDecided: Boolean = false
 
     init {
         load()
@@ -76,6 +77,7 @@ class PlayerBookingsViewModel(
         when (intent) {
             is PlayerBookingsIntent.SelectSegment -> {
                 segment = intent.segment
+                segmentDecided = true
                 val current = _state.value
                 if (current is PlayerBookingsState.Content) {
                     _state.value = current.copy(segment = segment)
@@ -99,16 +101,30 @@ class PlayerBookingsViewModel(
             try {
                 val all = coachRepository.listBookings()
                 val now = clock()
+                val pending = all.filter { it.status == "PENDING" }
+                    .sortedBy { it.startsAt }
+                val confirmed = all.filter { it.status == "CONFIRMED" && it.startsAt >= now }
+                    .sortedBy { it.startsAt }
+                val history = all.filter {
+                    it.status in setOf("COMPLETED", "CANCELLED", "DECLINED") ||
+                        (it.status == "CONFIRMED" && it.startsAt < now)
+                }.sortedByDescending { it.startsAt }
+
+                // Smart default on first load — mirror CoachBookingsViewModel:
+                // land on "Oczekujące" only when the coach has countered and
+                // the player needs to respond; otherwise start on upcoming.
+                if (!segmentDecided) {
+                    val needsMyResponse = pending.count { it.proposedByCoach }
+                    segment = if (needsMyResponse > 0) BookingSegment.PENDING
+                    else BookingSegment.CONFIRMED
+                    segmentDecided = true
+                }
+
                 _state.value = PlayerBookingsState.Content(
                     segment = segment,
-                    pending = all.filter { it.status == "PENDING" }
-                        .sortedBy { it.startsAt },
-                    confirmed = all.filter { it.status == "CONFIRMED" && it.startsAt >= now }
-                        .sortedBy { it.startsAt },
-                    history = all.filter {
-                        it.status in setOf("COMPLETED", "CANCELLED", "DECLINED") ||
-                            (it.status == "CONFIRMED" && it.startsAt < now)
-                    }.sortedByDescending { it.startsAt }
+                    pending = pending,
+                    confirmed = confirmed,
+                    history = history,
                 )
             } catch (_: Exception) {
                 _state.value = PlayerBookingsState.Error

@@ -233,9 +233,13 @@ object TodayScreen : Screen {
         // Recent result — opponent confirmed a match I proposed and I haven't
         // seen the reveal yet. Persistent via tokenStorage.seenResultMatchIds
         // so the celebration fires exactly once per match (first app open
-        // after confirmation).
-        val seenResultIds = remember(tokenStorage.seenResultMatchIds) {
-            tokenStorage.seenResultMatchIds
+        // after confirmation). We mirror the CSV into a mutableStateOf so
+        // writing new seen ids triggers recomposition — otherwise the hero
+        // would stay on-screen after tap because tokenStorage is just a var,
+        // not a Compose-observable.
+        var seenResultCsv by remember { mutableStateOf(tokenStorage.seenResultMatchIds) }
+        val seenResultIds = remember(seenResultCsv) {
+            seenResultCsv
                 .split(",")
                 .filter { it.isNotBlank() }
                 .toSet()
@@ -369,6 +373,9 @@ object TodayScreen : Screen {
             val markResultSeenAndReveal: (RecentResultUi) -> Unit = { data ->
                 val newSeen = (seenResultIds + data.matchId).joinToString(",")
                 tokenStorage.seenResultMatchIds = newSeen
+                // Mirror into local state so Compose recomposes and the
+                // hero disappears now that the match is marked seen.
+                seenResultCsv = newSeen
                 // Reveal animates (currentElo - delta) → currentElo: the
                 // proposer's ELO was already bumped when opponent confirmed,
                 // so we reconstruct the pre-match rating for the count-up.

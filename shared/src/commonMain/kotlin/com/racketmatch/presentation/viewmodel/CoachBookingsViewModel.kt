@@ -63,6 +63,11 @@ class CoachBookingsViewModel(
     val effects = _effects.asSharedFlow()
 
     private var segment: BookingSegment = BookingSegment.PENDING
+    // True once the segment has been set — either by the user tapping a
+    // chip, or by the smart-default in the first load. Prevents the smart
+    // default from flipping the tab out from under the user on subsequent
+    // reloads.
+    private var segmentDecided: Boolean = false
 
     init {
         load()
@@ -75,6 +80,7 @@ class CoachBookingsViewModel(
         when (intent) {
             is CoachBookingsIntent.SelectSegment -> {
                 segment = intent.segment
+                segmentDecided = true
                 val current = _state.value
                 if (current is CoachBookingsState.Content) {
                     _state.value = current.copy(segment = segment)
@@ -98,16 +104,32 @@ class CoachBookingsViewModel(
             try {
                 val all = coachRepository.listBookings()
                 val now = clock()
+                val pending = all.filter { it.status == "PENDING" }
+                    .sortedBy { it.startsAt }
+                val confirmed = all.filter { it.status == "CONFIRMED" && it.startsAt >= now }
+                    .sortedBy { it.startsAt }
+                val history = all.filter {
+                    it.status in setOf("COMPLETED", "CANCELLED", "DECLINED") ||
+                        (it.status == "CONFIRMED" && it.startsAt < now)
+                }.sortedByDescending { it.startsAt }
+
+                // Smart default: on first entry, only land on "Oczekujące"
+                // if there are requests that actually need the coach's
+                // response (player made the latest proposal). Otherwise
+                // start on "Potwierdzone" — the everyday view most coaches
+                // want to see when they open the Rezerwacje tab.
+                if (!segmentDecided) {
+                    val needsMyResponse = pending.count { !it.proposedByCoach }
+                    segment = if (needsMyResponse > 0) BookingSegment.PENDING
+                    else BookingSegment.CONFIRMED
+                    segmentDecided = true
+                }
+
                 _state.value = CoachBookingsState.Content(
                     segment = segment,
-                    pending = all.filter { it.status == "PENDING" }
-                        .sortedBy { it.startsAt },
-                    confirmed = all.filter { it.status == "CONFIRMED" && it.startsAt >= now }
-                        .sortedBy { it.startsAt },
-                    history = all.filter {
-                        it.status in setOf("COMPLETED", "CANCELLED", "DECLINED") ||
-                            (it.status == "CONFIRMED" && it.startsAt < now)
-                    }.sortedByDescending { it.startsAt }
+                    pending = pending,
+                    confirmed = confirmed,
+                    history = history,
                 )
             } catch (_: Exception) {
                 _state.value = CoachBookingsState.Error
