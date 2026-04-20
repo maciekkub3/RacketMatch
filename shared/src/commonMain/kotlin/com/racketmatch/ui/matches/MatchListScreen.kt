@@ -1245,7 +1245,11 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                 }
             }
             // Normal scheduled state — edit details or record result.
-            else -> {
+            // When !hasTime the big "Ustal termin" banner above already
+            // owns the primary action (picks date + court), so we skip
+            // the redundant details button and SET RESULT (you can't
+            // record a result for a match that isn't scheduled yet).
+            else -> if (hasTime) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = { showDetailsDialog = true },
