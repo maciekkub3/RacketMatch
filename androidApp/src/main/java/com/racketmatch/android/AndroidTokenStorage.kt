@@ -42,4 +42,8 @@ class AndroidTokenStorage(context: Context) : InMemoryTokenStorage() {
     override var hasPlayerProfile: Boolean
         get() = prefs.getBoolean("has_player_profile", true)
         set(value) { prefs.edit().putBoolean("has_player_profile", value).apply() }
+
+    override var seenResultMatchIds: String
+        get() = prefs.getString("seen_result_match_ids", "") ?: ""
+        set(value) { prefs.edit().putString("seen_result_match_ids", value).apply() }
 }

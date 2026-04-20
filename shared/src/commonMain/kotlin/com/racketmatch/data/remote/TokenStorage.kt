@@ -12,6 +12,12 @@ interface TokenStorage {
     var isCoach: Boolean
     var coachModeActive: Boolean
     var hasPlayerProfile: Boolean
+    /**
+     * Comma-separated match IDs the current user has already seen the result
+     * reveal for. Prevents the Today "nowy wynik" hero from re-showing for
+     * the same match on every app open. Cleared on logout.
+     */
+    var seenResultMatchIds: String
     val loginVersionFlow: StateFlow<Int>
     val matchesVersionFlow: StateFlow<Int>
     val profileVersionFlow: StateFlow<Int>
@@ -37,6 +43,7 @@ open class InMemoryTokenStorage : TokenStorage {
     override var isCoach: Boolean = false
     override var coachModeActive: Boolean = false
     override var hasPlayerProfile: Boolean = true
+    override var seenResultMatchIds: String = ""
 
     private val _loginVersionFlow = kotlinx.coroutines.flow.MutableStateFlow(0)
     override val loginVersionFlow: StateFlow<Int> = _loginVersionFlow
@@ -91,5 +98,6 @@ open class InMemoryTokenStorage : TokenStorage {
         coachModeActive = false
         isNewUser = false
         isOnboardingComplete = false
+        seenResultMatchIds = ""
     }
 }

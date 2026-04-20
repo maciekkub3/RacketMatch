@@ -42,4 +42,8 @@ class IosTokenStorage : InMemoryTokenStorage() {
     override var hasPlayerProfile: Boolean
         get() = defaults.boolForKey("has_player_profile")
         set(value) { defaults.setBool(value, forKey = "has_player_profile") }
+
+    override var seenResultMatchIds: String
+        get() = defaults.stringForKey("seen_result_match_ids") ?: ""
+        set(value) { defaults.setObject(value, "seen_result_match_ids") }
 }

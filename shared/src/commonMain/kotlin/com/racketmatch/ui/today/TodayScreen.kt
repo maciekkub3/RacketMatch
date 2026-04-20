@@ -50,7 +50,9 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.domain.model.EloPoint
 import com.racketmatch.domain.model.Match
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.MatchStatus
+import org.koin.compose.koinInject
 import com.racketmatch.domain.model.User
 import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
@@ -113,6 +115,7 @@ object TodayScreen : Screen {
         val matchState by matchViewModel.stateFlow.collectAsState()
         val profileViewModel: ProfileViewModel = kmpViewModel()
         val profileState by profileViewModel.stateFlow.collectAsState()
+        val tokenStorage: TokenStorage = koinInject()
         val navigator = LocalNavigator.currentOrThrow
         val tabNavigator = LocalTabNavigator.current
 
@@ -227,6 +230,48 @@ object TodayScreen : Screen {
                 .firstOrNull()
         }
 
+        // Recent result — opponent confirmed a match I proposed and I haven't
+        // seen the reveal yet. Persistent via tokenStorage.seenResultMatchIds
+        // so the celebration fires exactly once per match (first app open
+        // after confirmation).
+        val seenResultIds = remember(tokenStorage.seenResultMatchIds) {
+            tokenStorage.seenResultMatchIds
+                .split(",")
+                .filter { it.isNotBlank() }
+                .toSet()
+        }
+        val recentResult: RecentResultUi? = remember(matchState, matchUserId, seenResultIds) {
+            val matches = matchContent?.matches.orEmpty()
+            if (matchUserId.isBlank()) return@remember null
+            matches.asSequence()
+                .filter {
+                    it.status == MatchStatus.COMPLETED &&
+                        (it.challengerId == matchUserId || it.challengedId == matchUserId) &&
+                        it.eloChanges?.get(matchUserId) != null &&
+                        it.id !in seenResultIds
+                }
+                // Latest first — match.scheduledAt is an ISO string sortable as text.
+                .sortedByDescending { it.scheduledAt ?: "" }
+                .firstOrNull()
+                ?.let { m ->
+                    val iAmChallenger = m.challengerId == matchUserId
+                    val myScore = (if (iAmChallenger) m.scoreChallenger else m.scoreChallenged) ?: 0
+                    val oppScore = (if (iAmChallenger) m.scoreChallenged else m.scoreChallenger) ?: 0
+                    val oppName = (if (iAmChallenger) m.challengedName else m.challengerName)
+                        .ifBlank { "Rywal" }
+                    val delta = m.eloChanges?.get(matchUserId) ?: 0
+                    RecentResultUi(
+                        matchId = m.id,
+                        opponentName = oppName,
+                        initials = oppName.initials2(),
+                        iWon = myScore > oppScore,
+                        myScore = myScore,
+                        oppScore = oppScore,
+                        eloDelta = delta,
+                    )
+                }
+        }
+
         // Invites: incoming challenges where I'm the challenged, awaiting my answer.
         val invites: List<InviteUi> = remember(matchState, myId) {
             val matches = (matchState as? MatchListState.Content)?.matches.orEmpty()
@@ -261,12 +306,20 @@ object TodayScreen : Screen {
                 .toList()
         }
 
+        val hasEverPlayed = ((user?.wins ?: 0) + (user?.losses ?: 0)) > 0
+
         val hero: TodayHero = when {
             resultToConfirm != null -> TodayHero.ResultToConfirm(resultToConfirm)
+            recentResult != null -> TodayHero.RecentResult(recentResult)
             nextMatch != null -> TodayHero.NextMatch(nextMatch)
             invites.isNotEmpty() -> TodayHero.Invites(invites)
             suggestions.isNotEmpty() -> TodayHero.Suggestions(suggestions)
-            else -> TodayHero.FirstMatch
+            // "First match" nudge only for users who have genuinely never
+            // played. Previously it fell through whenever no other hero
+            // applied, so returning users with nothing pending saw a
+            // "zagraj swój pierwszy mecz" despite having history.
+            !hasEverPlayed -> TodayHero.FirstMatch
+            else -> TodayHero.None
         }
 
         val onChallengePlayer: (User) -> Unit = { player ->
@@ -313,10 +366,33 @@ object TodayScreen : Screen {
             val goMatches: () -> Unit = {
                 com.racketmatch.ui.navigation.TabSwitchSignal.request("matches")
             }
+            val markResultSeenAndReveal: (RecentResultUi) -> Unit = { data ->
+                val newSeen = (seenResultIds + data.matchId).joinToString(",")
+                tokenStorage.seenResultMatchIds = newSeen
+                // Reveal animates (currentElo - delta) → currentElo: the
+                // proposer's ELO was already bumped when opponent confirmed,
+                // so we reconstruct the pre-match rating for the count-up.
+                val current = elo
+                outerNavigator.push(
+                    com.racketmatch.ui.matches.ResultRevealScreen(
+                        iWon = data.iWon,
+                        opponentName = data.opponentName,
+                        myScoreInSets = data.myScore,
+                        oppScoreInSets = data.oppScore,
+                        oldElo = current - data.eloDelta,
+                        newElo = current,
+                        eloHistory = eloSeries.map { it.toInt() },
+                    )
+                )
+            }
             when (hero) {
                 is TodayHero.ResultToConfirm -> ResultToConfirmHero(
                     data = hero.data,
                     onTap = goMatches,
+                )
+                is TodayHero.RecentResult -> RecentResultHero(
+                    data = hero.data,
+                    onTap = { markResultSeenAndReveal(hero.data) },
                 )
                 is TodayHero.NextMatch -> NextMatchHero(hero.match)
                 is TodayHero.Invites -> InvitesHero(
@@ -330,6 +406,7 @@ object TodayScreen : Screen {
                     onSeeMore = goExplore,
                 )
                 TodayHero.FirstMatch -> FirstMatchHero(onStart = goExplore)
+                TodayHero.None -> Unit
             }
 
             // ── Stat tiles ────────────────────────────────────────────────
@@ -766,10 +843,19 @@ private fun Month.polishGenitive(): String = when (this) {
 private sealed class TodayHero {
     /** Top priority — opponent proposed a result and needs my confirmation. */
     data class ResultToConfirm(val data: ResultToConfirmUi) : TodayHero()
+    /**
+     * Proposer-side celebration: opponent confirmed a match I proposed
+     * earlier, my ELO has already been applied, but I haven't seen the
+     * reveal animation. Tapping the card pushes ResultRevealScreen and
+     * marks the match as seen so it doesn't show again.
+     */
+    data class RecentResult(val data: RecentResultUi) : TodayHero()
     data class NextMatch(val match: NextMatchUi) : TodayHero()
     data class Invites(val invites: List<InviteUi>) : TodayHero()
     data class Suggestions(val players: List<User>) : TodayHero()
     object FirstMatch : TodayHero()
+    /** No hero — user has history but no pending action. Just stats + progress. */
+    object None : TodayHero()
 }
 
 private data class ResultToConfirmUi(
@@ -779,6 +865,121 @@ private data class ResultToConfirmUi(
     val myScore: Int,
     val oppScore: Int,
 )
+
+private data class RecentResultUi(
+    val matchId: String,
+    val opponentName: String,
+    val initials: String,
+    val iWon: Boolean,
+    val myScore: Int,
+    val oppScore: Int,
+    val eloDelta: Int,
+)
+
+/**
+ * Proposer-side celebration hero. Shown when the user proposed a match
+ * result, the opponent already confirmed it, and the user hasn't yet
+ * watched the reveal. Tap pushes ResultRevealScreen with the correct
+ * old→new ELO range reconstructed from eloDelta.
+ */
+@Composable
+private fun RecentResultHero(data: RecentResultUi, onTap: () -> Unit) {
+    val firstName = data.opponentName.split(' ').firstOrNull() ?: data.opponentName
+    DarkHeroCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onTap)) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(ProCircuit.Lime),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (data.iWon) "NOWY WYNIK · WYGRANA" else "NOWY WYNIK",
+                    fontFamily = AppFontFamily,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.54.sp,
+                    color = ProCircuit.Lime,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = if (data.eloDelta >= 0) "+${data.eloDelta}" else data.eloDelta.toString(),
+                    fontFamily = AppFontFamily,
+                    fontSize = 64.sp,
+                    lineHeight = 64.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-2).sp,
+                    color = if (data.eloDelta >= 0) ProCircuit.Lime else Color(0xFFFF8A8A),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "ELO",
+                    fontFamily = AppFontFamily,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.2.sp,
+                    color = ProCircuit.ForestInk.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "${data.myScore}-${data.oppScore} w setach",
+                fontFamily = AppFontFamily,
+                fontSize = 13.sp,
+                color = ProCircuit.ForestInk.copy(alpha = 0.6f),
+            )
+            Spacer(Modifier.height(18.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Ava(
+                    initials = data.initials,
+                    size = 50.dp,
+                    tone = AvaTone.Lime,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "PRZECIWNIK",
+                        fontFamily = AppFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.1.sp,
+                        color = ProCircuit.ForestInk.copy(alpha = 0.55f),
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = firstName,
+                        fontFamily = AppFontFamily,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ProCircuit.ForestInk,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(999.dp))
+                        .background(ProCircuit.Lime)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = "Zobacz ›",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = ProCircuit.LimeInk,
+                        letterSpacing = 0.4.sp,
+                    )
+                }
+            }
+        }
+    }
+}
 
 /**
  * Top-priority hero: the opponent wpisał wynik and we're blocking ELO until
