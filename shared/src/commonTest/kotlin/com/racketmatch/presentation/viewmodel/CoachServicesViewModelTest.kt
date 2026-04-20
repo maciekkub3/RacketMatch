@@ -25,12 +25,12 @@ class CoachServicesViewModelTest {
     @BeforeTest
     fun setUp() {
         MockKAnnotations.init(this)
-        coEvery { repository.getCoachServices(any()) } returns listOf(testService)
+        coEvery { repository.getMyServices() } returns listOf(testService)
     }
 
     @Test
     fun `initial state is Loading`() = runTest {
-        coEvery { repository.getCoachServices(any()) } returns emptyList()
+        coEvery { repository.getMyServices() } returns emptyList()
         viewModel = CoachServicesViewModel(repository, dispatcher)
         viewModel.stateFlow.value shouldBe CoachServicesState.Loading
     }
@@ -64,7 +64,7 @@ class CoachServicesViewModelTest {
     @Test
     fun `DeactivateService calls deleteService and reloads`() = runTest {
         coJustRun { repository.deleteService("1") }
-        coEvery { repository.getCoachServices(any()) } returns emptyList()
+        coEvery { repository.getMyServices() } returns emptyList()
         viewModel = CoachServicesViewModel(repository, dispatcher)
         dispatcher.scheduler.advanceUntilIdle()
 

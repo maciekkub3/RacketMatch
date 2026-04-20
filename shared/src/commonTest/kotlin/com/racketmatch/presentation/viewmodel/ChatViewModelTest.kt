@@ -87,7 +87,11 @@ class ChatViewModelTest {
         viewModel.effectFlow.test {
             viewModel.onEvent(ChatEvent.SendMessage("test"))
             dispatcher.scheduler.advanceUntilIdle()
-            awaitItem() shouldBe ChatEffect.ShowError("Coś poszło nie tak. Spróbuj ponownie.")
+            // ErrorMapper appends "[ClassName]" as a debug-aid suffix on the
+            // fall-through branch. Assert on the stable prefix so the test
+            // doesn't couple to that suffix format.
+            val effect = awaitItem() as ChatEffect.ShowError
+            effect.msg.startsWith("Coś poszło nie tak. Spróbuj ponownie.") shouldBe true
         }
     }
 }

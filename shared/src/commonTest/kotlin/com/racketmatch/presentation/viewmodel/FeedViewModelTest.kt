@@ -56,7 +56,7 @@ class FeedViewModelTest {
     @Test
     fun `init loads feed events and shows Content state`() = runTest {
         coEvery { repo.getFeed(before = null) } returns listOf(mockFeedEvent)
-        viewModel = FeedViewModel(repo = repo)
+        viewModel = FeedViewModel(repo = repo, pollingEnabled = false)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe FeedState.Loading
@@ -71,7 +71,7 @@ class FeedViewModelTest {
     @Test
     fun `load error sets Error state`() = runTest {
         coEvery { repo.getFeed(before = null) } throws Exception("Network error")
-        viewModel = FeedViewModel(repo = repo)
+        viewModel = FeedViewModel(repo = repo, pollingEnabled = false)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe FeedState.Loading
@@ -84,7 +84,7 @@ class FeedViewModelTest {
     @Test
     fun `onRefresh updates content with fresh events`() = runTest {
         coEvery { repo.getFeed(before = null) } returns listOf(mockFeedEvent)
-        viewModel = FeedViewModel(repo = repo)
+        viewModel = FeedViewModel(repo = repo, pollingEnabled = false)
         dispatcher.scheduler.advanceUntilIdle() // finish init load
 
         coEvery { repo.getFeed(before = null) } returns listOf(mockFeedEvent, anotherFeedEvent)
@@ -109,7 +109,7 @@ class FeedViewModelTest {
     @Test
     fun `onRefresh on error keeps existing content without refreshing indicator`() = runTest {
         coEvery { repo.getFeed(before = null) } returns listOf(mockFeedEvent)
-        viewModel = FeedViewModel(repo = repo)
+        viewModel = FeedViewModel(repo = repo, pollingEnabled = false)
         dispatcher.scheduler.advanceUntilIdle() // finish init load
 
         coEvery { repo.getFeed(before = null) } throws Exception("Refresh failed")
@@ -134,7 +134,7 @@ class FeedViewModelTest {
     @Test
     fun `init load success shows Content with all returned events`() = runTest {
         coEvery { repo.getFeed(before = null) } returns listOf(mockFeedEvent, anotherFeedEvent)
-        viewModel = FeedViewModel(repo = repo)
+        viewModel = FeedViewModel(repo = repo, pollingEnabled = false)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe FeedState.Loading

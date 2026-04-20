@@ -88,7 +88,10 @@ class CoachDetailViewModelTest {
                 CoachDetailEvent.BookSlot("s1", testSlot.startsAt, testSlot.endsAt, 60)
             )
             dispatcher.scheduler.advanceUntilIdle()
-            awaitItem() shouldBe CoachDetailEffect.ShowError("Coś poszło nie tak. Spróbuj ponownie.")
+            // Prefix match — ErrorMapper's fall-through branch appends a
+            // "[ClassName]" debug suffix that's irrelevant to the contract.
+            val effect = awaitItem() as CoachDetailEffect.ShowError
+            effect.msg.startsWith("Coś poszło nie tak. Spróbuj ponownie.") shouldBe true
         }
     }
 }
