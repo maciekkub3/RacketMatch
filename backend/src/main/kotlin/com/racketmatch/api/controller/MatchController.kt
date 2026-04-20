@@ -148,6 +148,20 @@ class MatchController(
         match.locationName = request.locationName
         match.scheduledAt = request.scheduledAt
         match.detailsProposedBy = userId
+
+        // If the *challenged* user is the one proposing details on a match
+        // that's still PENDING, treat this as an implicit acceptance of the
+        // challenge. In practice nobody proposes a time/court unless they
+        // actually want to play — the old two-step "accept then propose"
+        // flow left the challenger stuck looking at a PENDING match with
+        // details filled in but not knowing whether the other side agreed
+        // to play at all. Challenger editing their own PENDING challenge
+        // is exempt: they already initiated, the accept still has to come
+        // from the other side.
+        if (match.status == "PENDING" && userId == match.challenged.id) {
+            match.status = "SCHEDULED"
+        }
+
         matchRepository.save(match)
         val recipient = if (match.challenger.id == userId) match.challenged.id!! else match.challenger.id!!
         notificationService.send(
@@ -226,16 +240,23 @@ class MatchController(
         if (proposer == userId)
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot discard your own proposal")
 
-        // Discard is a hard reject from the recipient: clear everything,
-        // including the previous proposer. If in a chain (A → B → A
-        // discards B), both proposals are dropped; both users can propose
-        // again from AGREED. Different from withdraw, which restores the
-        // prior proposer (undo-my-own-action semantics).
+        // Discard restores the full prior state — values AND proposer —
+        // exactly as if the rejected proposal never happened. So if in a
+        // chain (A proposes → B counters → A discards B), A's original
+        // proposal resurfaces as pending for B. Symmetric with withdraw
+        // on the state level; only the authorization differs (withdraw =
+        // the proposer cancelling own action, discard = the recipient
+        // rejecting the other side's action).
+        //
+        // Previously this cleared detailsProposedBy to null which had a
+        // subtle bug: A's old values would re-appear but flagged as
+        // "agreed" without B having accepted — silent acceptance-via-
+        // discard by the wrong party.
         match.locationName = match.previousLocationName
         match.scheduledAt = match.previousScheduledAt
+        match.detailsProposedBy = match.previousDetailsProposedBy
         match.previousLocationName = null
         match.previousScheduledAt = null
-        match.detailsProposedBy = null
         match.previousDetailsProposedBy = null
         matchRepository.save(match)
         notificationService.send(
