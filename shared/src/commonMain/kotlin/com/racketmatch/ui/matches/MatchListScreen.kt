@@ -1218,30 +1218,21 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                         fontSize = 10.sp, letterSpacing = 1.sp)
                 }
             }
-            // I proposed → withdraw or tweak the proposal. Result entry hidden
-            // since the details aren't finalized yet.
+            // I proposed → single action: withdraw. To change the proposal
+            // the user withdraws and proposes again, which is semantically
+            // cleaner than layering multiple concurrent edits on top of
+            // each other. Result entry stays hidden — details aren't
+            // finalized yet.
             iProposedDetails -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { viewModel.onEvent(MatchEvent.WithdrawDetails(match.id)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                    ) {
-                        Text("WYCOFAJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp, maxLines = 1)
-                    }
-                    OutlinedButton(
-                        onClick = { showDetailsDialog = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                    ) {
-                        Text("EDYTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp, maxLines = 1)
-                    }
+                OutlinedButton(
+                    onClick = { viewModel.onEvent(MatchEvent.WithdrawDetails(match.id)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
+                ) {
+                    Text("WYCOFAJ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp, letterSpacing = 1.sp, maxLines = 1)
                 }
             }
             // Normal scheduled state — edit details or record result.
