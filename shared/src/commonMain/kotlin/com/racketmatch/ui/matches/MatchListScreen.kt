@@ -943,17 +943,25 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                 modifier = Modifier.weight(1f),
             )
             StatusPill(text = pillText, background = pillBg, contentColor = pillFg)
-            Spacer(Modifier.width(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(ProCircuit.Bg2)
-                    .clickable { showCancelConfirm = true },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("✕", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp, color = ProCircuit.Ink2)
+            // Cancel-match X is only shown when no details negotiation is in
+            // flight. Previously it sat right next to ODRZUĆ/AKCEPTUJ and
+            // users could easily tap it thinking it rejects the proposal —
+            // actually it nukes the whole match. If the user really wants
+            // to cancel mid-negotiation, they can first handle (accept /
+            // reject / withdraw) the proposal, then the X reappears.
+            if (!theyProposed && !iProposed) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(ProCircuit.Bg2)
+                        .clickable { showCancelConfirm = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("✕", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp, color = ProCircuit.Ink2)
+                }
             }
         }
 
@@ -1193,8 +1201,8 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
                         border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
                     ) {
-                        Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
+                        Text("ODRZUĆ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp, letterSpacing = 1.sp, maxLines = 1)
                     }
                     Button(
                         onClick = { viewModel.onEvent(MatchEvent.AcceptDetails(match.id)) },

@@ -78,6 +78,7 @@ class MatchController(
         if (match.status != "PENDING") throw ResponseStatusException(HttpStatus.CONFLICT, "Match is not pending")
         match.status = "SCHEDULED"
         match.detailsProposedBy = null
+        match.previousDetailsProposedBy = null
         matchRepository.save(match)
         notificationService.send(
             recipientId = match.challenger.id!!,
@@ -136,6 +137,12 @@ class MatchController(
         if (changingProposer) {
             match.previousLocationName = match.locationName
             match.previousScheduledAt = match.scheduledAt
+            // Also remember who was proposing before we took over. On
+            // withdraw, this lets us restore the prior proposer (not just
+            // the prior values) so a counter-withdraw correctly reveals
+            // the original proposal as still pending, instead of making
+            // the match read as "agreed" with no one waiting.
+            match.previousDetailsProposedBy = match.detailsProposedBy
         }
 
         match.locationName = request.locationName
@@ -165,6 +172,7 @@ class MatchController(
         match.detailsProposedBy = null
         match.previousLocationName = null
         match.previousScheduledAt = null
+        match.previousDetailsProposedBy = null
         matchRepository.save(match)
         notificationService.send(
             recipientId = proposer,
@@ -185,12 +193,17 @@ class MatchController(
             ?: throw ResponseStatusException(HttpStatus.CONFLICT, "No details have been proposed")
         if (proposer != userId)
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only the proposer can withdraw")
-        // Revert to previously-agreed details and clear the proposal flag.
+        // Revert to the full prior state: values AND the previous proposer.
+        // If previousDetailsProposedBy is another user, their original
+        // proposal resurfaces as pending (user experience: "I undid my
+        // counter, now I see their proposal again"). If it's null, the
+        // match had no proposal before mine, so we fall back to AGREED.
         match.locationName = match.previousLocationName
         match.scheduledAt = match.previousScheduledAt
+        match.detailsProposedBy = match.previousDetailsProposedBy
         match.previousLocationName = null
         match.previousScheduledAt = null
-        match.detailsProposedBy = null
+        match.previousDetailsProposedBy = null
         matchRepository.save(match)
         val recipient = if (match.challenger.id == userId) match.challenged.id!! else match.challenger.id!!
         notificationService.send(
@@ -213,14 +226,17 @@ class MatchController(
         if (proposer == userId)
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot discard your own proposal")
 
-        // Revert to the last-agreed details if we had a snapshot. If there was
-        // nothing agreed before (PENDING challenge with details attached), the
-        // snapshot is null and the match goes back to having no details.
+        // Discard is a hard reject from the recipient: clear everything,
+        // including the previous proposer. If in a chain (A → B → A
+        // discards B), both proposals are dropped; both users can propose
+        // again from AGREED. Different from withdraw, which restores the
+        // prior proposer (undo-my-own-action semantics).
         match.locationName = match.previousLocationName
         match.scheduledAt = match.previousScheduledAt
         match.previousLocationName = null
         match.previousScheduledAt = null
         match.detailsProposedBy = null
+        match.previousDetailsProposedBy = null
         matchRepository.save(match)
         notificationService.send(
             recipientId = proposer,
