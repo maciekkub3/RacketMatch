@@ -620,23 +620,9 @@ private fun IncomingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 // You challenged someone — show their info + "Waiting for reply" state
 @Composable
 private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchViewModel, courts: List<com.racketmatch.domain.model.Court>) {
-    var showProposeDialog by remember { mutableStateOf(false) }
     var showCancelConfirm by remember { mutableStateOf(false) }
 
     val opponentName = if (match.challengerId == myId) match.challengedName else match.challengerName
-
-    if (showProposeDialog) {
-        ProposeDetailsDialog(
-            prefillLocation = match.locationName,
-            prefillMillis = match.scheduledAt?.let { parseScheduledAt(it) },
-            courts = courts,
-            onConfirm = { locationName, scheduledAt ->
-                showProposeDialog = false
-                viewModel.onEvent(MatchEvent.ProposeDetails(match.id, locationName, scheduledAt))
-            },
-            onDismiss = { showProposeDialog = false }
-        )
-    }
 
     if (showCancelConfirm) {
         AlertDialog(
@@ -778,62 +764,39 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 
         Spacer(Modifier.height(14.dp))
         if (theyCountered) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { viewModel.onEvent(MatchEvent.AcceptMatch(match.id)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-                    ) {
-                        Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.onEvent(MatchEvent.CancelChallenge(match.id)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
-                    ) {
-                        Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                }
-                OutlinedButton(
-                    onClick = { showProposeDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                ) {
-                    Text("ZAPROPONUJ KONTRĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
-                }
-            }
+            // Rare branch after the backend auto-accept rule — opponent
+            // normally flips status to SCHEDULED by proposing details on
+            // my PENDING challenge. This only triggers on legacy matches
+            // that predate the rule. Treat it like the SCHEDULED
+            // theyProposed flow: accept as-is, counter, or reject.
+            EditableDetailsSection(
+                match = match,
+                courts = courts,
+                acceptLabel = "AKCEPTUJ",
+                onAcceptAsIs = { viewModel.onEvent(MatchEvent.AcceptMatch(match.id)) },
+                onCounterPropose = { loc, scheduled ->
+                    viewModel.onEvent(MatchEvent.ProposeDetails(match.id, loc, scheduled))
+                },
+                onReject = { showCancelConfirm = true },
+                rejectLabel = "✕ Anuluj wyzwanie",
+            )
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { showProposeDialog = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                ) {
-                    Text("EDYTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
-                }
-                OutlinedButton(
-                    onClick = { showCancelConfirm = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
-                ) {
-                    Text("ANULUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
-                }
-            }
+            // My own pending challenge — nothing to accept, I'm waiting
+            // on them. Tiles let me tweak my proposal inline; the only
+            // destructive out is cancel (confirmed via dialog).
+            EditableDetailsSection(
+                match = match,
+                courts = courts,
+                acceptLabel = null,
+                onAcceptAsIs = null,
+                onCounterPropose = { loc, scheduled ->
+                    viewModel.onEvent(MatchEvent.ProposeDetails(match.id, loc, scheduled))
+                },
+                dirtyCtaLabel = "ZAKTUALIZUJ PROPOZYCJĘ",
+                idleText = "Czekasz aż druga strona odpowie…",
+                onReject = { showCancelConfirm = true },
+                rejectLabel = "✕ Anuluj wyzwanie",
+            )
         }
         } // inner Column
     }
@@ -1193,57 +1156,41 @@ private fun ScheduledMatchCard(match: Match, myId: String, viewModel: MatchViewM
         }
 
         when {
-            // They proposed → Accept / Reject + counter-propose below.
+            // They proposed → tap-to-edit tiles + dynamic CTA. No edit =
+            // AKCEPTUJ; any edit = WYŚLIJ PROPOZYCJĘ (counter). Rejection
+            // is a quiet text-link — reversible, no confirm needed since
+            // the other party can just propose again.
             theyProposedDetails -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { viewModel.onEvent(MatchEvent.DiscardDetails(match.id)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.Error),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.Error.copy(alpha = 0.4f))
-                    ) {
-                        Text("ODRZUĆ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                    Button(
-                        onClick = { viewModel.onEvent(MatchEvent.AcceptDetails(match.id)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-                    ) {
-                        Text("AKCEPTUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 10.sp, letterSpacing = 1.sp)
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = { showDetailsDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                ) {
-                    Text("ZAPROPONUJ INACZEJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp)
-                }
+                EditableDetailsSection(
+                    match = match,
+                    courts = courts,
+                    acceptLabel = "AKCEPTUJ",
+                    onAcceptAsIs = { viewModel.onEvent(MatchEvent.AcceptDetails(match.id)) },
+                    onCounterPropose = { loc, scheduled ->
+                        viewModel.onEvent(MatchEvent.ProposeDetails(match.id, loc, scheduled))
+                    },
+                    onReject = { viewModel.onEvent(MatchEvent.DiscardDetails(match.id)) },
+                    rejectLabel = "✕ Odrzuć te szczegóły",
+                )
             }
-            // I proposed → single action: withdraw. To change the proposal
-            // the user withdraws and proposes again, which is semantically
-            // cleaner than layering multiple concurrent edits on top of
-            // each other. Result entry stays hidden — details aren't
-            // finalized yet.
+            // I proposed → same tiles, but there's nothing to "accept"
+            // (I can't accept my own). Idle shows a status line, edits
+            // flip the CTA to ZAKTUALIZUJ. Withdraw is the only out —
+            // no confirm, it's reversible by proposing again.
             iProposedDetails -> {
-                OutlinedButton(
-                    onClick = { viewModel.onEvent(MatchEvent.WithdrawDetails(match.id)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ProCircuit.OnBg),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ProCircuit.OnSurface.copy(alpha = 0.4f))
-                ) {
-                    Text("WYCOFAJ PROPOZYCJĘ", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp, letterSpacing = 1.sp, maxLines = 1)
-                }
+                EditableDetailsSection(
+                    match = match,
+                    courts = courts,
+                    acceptLabel = null,
+                    onAcceptAsIs = null,
+                    onCounterPropose = { loc, scheduled ->
+                        viewModel.onEvent(MatchEvent.ProposeDetails(match.id, loc, scheduled))
+                    },
+                    dirtyCtaLabel = "ZAKTUALIZUJ PROPOZYCJĘ",
+                    idleText = "Czekasz aż druga strona odpowie…",
+                    onReject = { viewModel.onEvent(MatchEvent.WithdrawDetails(match.id)) },
+                    rejectLabel = "✕ Wycofaj propozycję",
+                )
             }
             // Normal scheduled state — edit details or record result.
             // When !hasTime the big "Ustal termin" banner above already
@@ -1986,9 +1933,20 @@ private fun CourtPickerSheet(
 private fun EditableDetailsSection(
     match: Match,
     courts: List<com.racketmatch.domain.model.Court>,
-    acceptLabel: String,
-    onAcceptAsIs: () -> Unit,
+    // Accept path — used in "respond to their proposal" cards where tapping
+    // WYŚLIJ without any edit means "accept as-is". For "my own proposal"
+    // cards there's nothing to accept, so pass null + set idleText instead.
+    acceptLabel: String?,
+    onAcceptAsIs: (() -> Unit)?,
+    // Counter/update — fired when user tapped WYŚLIJ while some tile was dirty.
     onCounterPropose: (locationName: String?, scheduledAt: Long?) -> Unit,
+    // What to label the dirty CTA as (defaults to "WYŚLIJ PROPOZYCJĘ").
+    // Use "ZAKTUALIZUJ PROPOZYCJĘ" on I-proposed cards, "ZAPROPONUJ ZMIANĘ"
+    // when editing already-agreed details, etc.
+    dirtyCtaLabel: String = "WYŚLIJ PROPOZYCJĘ",
+    // Optional line shown *instead* of the accept CTA when onAcceptAsIs is
+    // null and nothing was edited — e.g., "Czekasz na odpowiedź…".
+    idleText: String? = null,
     onReject: () -> Unit,
     rejectLabel: String = "✕ Odrzuć",
 ) {
@@ -2031,29 +1989,55 @@ private fun EditableDetailsSection(
             )
         }
 
-        // Primary CTA — switches based on whether something was edited.
-        Button(
-            onClick = {
-                if (anyDirty) {
+        // Primary CTA — dirty wins: if anything was staged, always offer
+        // WYŚLIJ. If nothing was edited and we have an accept path, show
+        // that. If neither (e.g. I already proposed, just waiting), show
+        // an idle status line instead of a button.
+        when {
+            anyDirty -> Button(
+                onClick = {
                     onCounterPropose(pendingCourt.takeIf { it.isNotBlank() }, pendingMillis)
-                } else {
-                    onAcceptAsIs()
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ProCircuit.Lime,
-                contentColor = ProCircuit.LimeInk,
-            ),
-        ) {
-            Text(
-                text = if (anyDirty) "WYŚLIJ PROPOZYCJĘ" else acceptLabel,
-                fontFamily = AppFontFamily,
-                fontWeight = FontWeight.Black,
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ProCircuit.Lime,
+                    contentColor = ProCircuit.LimeInk,
+                ),
+            ) {
+                Text(
+                    text = dirtyCtaLabel,
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                )
+            }
+            onAcceptAsIs != null && acceptLabel != null -> Button(
+                onClick = onAcceptAsIs,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ProCircuit.Lime,
+                    contentColor = ProCircuit.LimeInk,
+                ),
+            ) {
+                Text(
+                    text = acceptLabel,
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                )
+            }
+            idleText != null -> Text(
+                text = idleText,
+                fontFamily = AppBodyFontFamily,
                 fontSize = 12.sp,
-                letterSpacing = 1.2.sp,
-                modifier = Modifier.padding(vertical = 6.dp),
+                color = ProCircuit.OnSurface,
+                modifier = Modifier.padding(vertical = 8.dp),
             )
         }
 
