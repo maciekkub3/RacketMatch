@@ -17,12 +17,12 @@ import kotlinx.datetime.plus
 
 sealed class CoachCalendarState {
     object Loading : CoachCalendarState()
-    data class Content(val events: List<CalendarEvent>, val weekStart: Instant) : CoachCalendarState()
+    data class Content(val events: List<CalendarEvent>, val monthStart: Instant) : CoachCalendarState()
     object Error : CoachCalendarState()
 }
 
 sealed class CoachCalendarEvent {
-    data class LoadWeek(val weekStart: Instant) : CoachCalendarEvent()
+    data class LoadMonth(val monthStart: Instant) : CoachCalendarEvent()
     data class AddEvent(
         val title: String?,
         val notes: String?,
@@ -41,28 +41,29 @@ class CoachCalendarViewModel(
     private val _state = MutableStateFlow<CoachCalendarState>(CoachCalendarState.Loading)
     val stateFlow = _state.asStateFlow()
 
-    private var currentWeekStart: Instant = Clock.System.now()
+    private var currentMonthStart: Instant = Clock.System.now()
 
     init {
-        loadWeek(currentWeekStart)
+        loadMonth(currentMonthStart)
     }
 
     fun onEvent(event: CoachCalendarEvent) {
         when (event) {
-            is CoachCalendarEvent.LoadWeek -> loadWeek(event.weekStart)
+            is CoachCalendarEvent.LoadMonth -> loadMonth(event.monthStart)
             is CoachCalendarEvent.AddEvent -> addEvent(event)
             is CoachCalendarEvent.DeleteEvent -> deleteEvent(event.eventId)
         }
     }
 
-    private fun loadWeek(weekStart: Instant) {
-        currentWeekStart = weekStart
+    private fun loadMonth(monthStart: Instant) {
+        currentMonthStart = monthStart
         viewModelScope.launch(dispatcher) {
             _state.value = CoachCalendarState.Loading
             try {
-                val weekEnd = weekStart.plus(7, DateTimeUnit.DAY, TimeZone.UTC)
-                val events = coachRepository.getCalendarEvents(weekStart, weekEnd)
-                _state.value = CoachCalendarState.Content(events, weekStart)
+                // Load 32 days to always cover the full month regardless of month length
+                val monthEnd = monthStart.plus(32, DateTimeUnit.DAY, TimeZone.UTC)
+                val events = coachRepository.getCalendarEvents(monthStart, monthEnd)
+                _state.value = CoachCalendarState.Content(events, monthStart)
             } catch (e: Exception) {
                 _state.value = CoachCalendarState.Error
             }
@@ -73,7 +74,7 @@ class CoachCalendarViewModel(
         viewModelScope.launch(dispatcher) {
             try {
                 coachRepository.createCalendarEvent(event.title, event.notes, event.eventType, event.startsAt, event.endsAt)
-                loadWeek(currentWeekStart)
+                loadMonth(currentMonthStart)
             } catch (e: Exception) {
                 _state.value = CoachCalendarState.Error
             }
@@ -84,7 +85,7 @@ class CoachCalendarViewModel(
         viewModelScope.launch(dispatcher) {
             try {
                 coachRepository.deleteCalendarEvent(eventId)
-                loadWeek(currentWeekStart)
+                loadMonth(currentMonthStart)
             } catch (e: Exception) {
                 _state.value = CoachCalendarState.Error
             }

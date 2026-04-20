@@ -34,7 +34,6 @@ import com.racketmatch.presentation.viewmodel.CoachBookingsViewModel
 import com.racketmatch.presentation.viewmodel.CoachCalendarEvent
 import com.racketmatch.presentation.viewmodel.CoachCalendarState
 import com.racketmatch.presentation.viewmodel.CoachCalendarViewModel
-import com.racketmatch.ui.common.DateTimePickerRow
 import com.racketmatch.ui.common.Eyebrow
 import com.racketmatch.ui.common.H1
 import com.racketmatch.ui.theme.AppBodyFontFamily
@@ -151,7 +150,13 @@ object CoachCalendarScreen : Screen {
                                     evt.bookingId !in declinedBookingIds
                             }
                         }
-                        val todayEventCount = visibleEvents.count { evt ->
+                        // Stats ignore BLOCKED events (coach's own exceptions /
+                        // vacations) — a blocked slot means "niedostępne",
+                        // not a session that counts toward hours or load.
+                        val sessionEvents = remember(visibleEvents) {
+                            visibleEvents.filter { it.eventType != CalendarEventType.BLOCKED }
+                        }
+                        val todayEventCount = sessionEvents.count { evt ->
                             val startDate = evt.startsAt.toLocalDateTime(tz).date
                             startDate == today
                         }
@@ -336,9 +341,12 @@ private fun WeekView(
         }
     }
     val weekSummary = remember(events, weekStart) {
+        // Count only real sessions — BLOCKED events are vacations/exceptions,
+        // not bookings that contribute to hours or load.
         val inWeek = events.filter {
             val d = it.startsAt.toLocalDateTime(tz).date
-            d >= weekStart && d < weekStart.plus(7, DateTimeUnit.DAY)
+            d >= weekStart && d < weekStart.plus(7, DateTimeUnit.DAY) &&
+                it.eventType != CalendarEventType.BLOCKED
         }
         val hours = inWeek.sumOf {
             ((it.endsAt - it.startsAt).inWholeMinutes / 60.0).coerceAtLeast(0.0)
@@ -537,6 +545,16 @@ private fun DayEventColumn(
             val heightPx = ((visibleEnd - visibleStart).toFloat() / 60f) * hourHeightPx
             val topDp = with(density) { topPx.toDp() }
             val heightDp = with(density) { heightPx.toDp() }
+            val isBlockedEvt = event.eventType == CalendarEventType.BLOCKED
+            val textColor = if (isBlockedEvt) ProCircuit.OnSurface else ProCircuit.LimeInk
+            val extraMod = if (isBlockedEvt) {
+                // Dashed-looking border so blocked slots read as "off limits".
+                Modifier.border(
+                    width = 1.dp,
+                    color = ProCircuit.OnSurface.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(6.dp),
+                )
+            } else Modifier
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -545,26 +563,32 @@ private fun DayEventColumn(
                     .height(heightDp.coerceAtLeast(18.dp))
                     .clip(RoundedCornerShape(6.dp))
                     .background(eventColor(event))
+                    .then(extraMod)
                     .clickable { onEventTap(event) }
                     .padding(horizontal = 4.dp, vertical = 2.dp),
             ) {
                 val hh = event.startsAt.toLocalDateTime(tz).hour.toString().padStart(2, '0')
                 val mm = event.startsAt.toLocalDateTime(tz).minute.toString().padStart(2, '0')
                 Text(
-                    text = "$hh:$mm",
+                    text = if (isBlockedEvt) "🚫 $hh:$mm" else "$hh:$mm",
                     fontFamily = AppFontFamily,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Black,
-                    color = ProCircuit.LimeInk,
+                    color = textColor,
                     maxLines = 1,
                 )
-                if (!event.title.isNullOrBlank()) {
+                val label = when {
+                    isBlockedEvt -> event.title?.takeIf { it.isNotBlank() } ?: "Niedostępne"
+                    !event.title.isNullOrBlank() -> event.title
+                    else -> null
+                }
+                if (label != null) {
                     Text(
-                        text = event.title,
+                        text = label,
                         fontFamily = AppFontFamily,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = ProCircuit.LimeInk,
+                        color = textColor,
                         maxLines = 2,
                     )
                 }
@@ -710,23 +734,44 @@ private fun MonthHeatmap(
     val daysInMonth = firstDay.daysInMonth()
     val firstDayOffset = firstDay.dayOfWeek.isoDayNumber - 1
 
-    val eventsByDate = remember(events, monthStart) {
+    // Heat intensity + counters use SESSION-like events only (BOOKING +
+    // EXTERNAL_CLIENT). BLOCKED events are tracked separately so the cells
+    // can still hint "this day has a vacation" with a small marker, without
+    // inflating the session count or hours totals.
+    val sessionsByDate = remember(events, monthStart) {
         val map = HashMap<LocalDate, Int>()
         for (dayNum in 1..daysInMonth) {
             val date = LocalDate(firstDay.year, firstDay.monthNumber, dayNum)
             val dayStart = LocalDateTime(date, LocalTime(0, 0)).toInstant(tz)
             val nextDay = LocalDateTime(date.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
-            val count = events.count { it.startsAt < nextDay && it.endsAt > dayStart }
+            val count = events.count {
+                it.startsAt < nextDay && it.endsAt > dayStart &&
+                    it.eventType != CalendarEventType.BLOCKED
+            }
             if (count > 0) map[date] = count
         }
         map
     }
-    val monthTotalSessions = eventsByDate.values.sum()
+    val blockedDates = remember(events, monthStart) {
+        buildSet {
+            for (dayNum in 1..daysInMonth) {
+                val date = LocalDate(firstDay.year, firstDay.monthNumber, dayNum)
+                val dayStart = LocalDateTime(date, LocalTime(0, 0)).toInstant(tz)
+                val nextDay = LocalDateTime(date.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
+                if (events.any {
+                    it.startsAt < nextDay && it.endsAt > dayStart &&
+                        it.eventType == CalendarEventType.BLOCKED
+                }) add(date)
+            }
+        }
+    }
+    val monthTotalSessions = sessionsByDate.values.sum()
     val monthTotalHours = remember(events, monthStart) {
         events
             .filter {
                 val d = it.startsAt.toLocalDateTime(tz).date
-                d.year == firstDay.year && d.monthNumber == firstDay.monthNumber
+                d.year == firstDay.year && d.monthNumber == firstDay.monthNumber &&
+                    it.eventType != CalendarEventType.BLOCKED
             }
             .sumOf { ((it.endsAt - it.startsAt).inWholeMinutes / 60.0).coerceAtLeast(0.0) }
             .toInt()
@@ -824,12 +869,13 @@ private fun MonthHeatmap(
                             Spacer(modifier = Modifier.weight(1f).height(54.dp))
                         } else {
                             val date = LocalDate(firstDay.year, firstDay.monthNumber, dayNumber)
-                            val count = eventsByDate[date] ?: 0
+                            val count = sessionsByDate[date] ?: 0
                             HeatmapCell(
                                 date = date,
                                 sessionCount = count,
                                 isToday = date == today,
                                 isSelected = date == selectedDate,
+                                isBlocked = date in blockedDates,
                                 modifier = Modifier.weight(1f),
                                 onTap = { onDaySelected(date) },
                             )
@@ -970,6 +1016,7 @@ private fun HeatmapCell(
     sessionCount: Int,
     isToday: Boolean,
     isSelected: Boolean,
+    isBlocked: Boolean,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
 ) {
@@ -1018,13 +1065,24 @@ private fun HeatmapCell(
                 )
             }
         }
-        if (isToday) {
-            Box(
-                modifier = Modifier
-                    .size(4.dp)
-                    .clip(CircleShape)
-                    .background(ProCircuit.Lime),
-            )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (isToday) {
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(ProCircuit.Lime),
+                )
+            }
+            if (isBlocked) {
+                // Gray dash indicates "niedostępne" day (exception / vacation).
+                Box(
+                    modifier = Modifier
+                        .size(width = 10.dp, height = 3.dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(ProCircuit.OnSurface.copy(alpha = 0.45f)),
+                )
+            }
         }
     }
 }
@@ -1526,84 +1584,199 @@ private operator fun Dp.div(factor: Float): Dp = (this.value / factor).dp
 @Composable
 private fun AddCalendarEventSheet(
     onDismiss: () -> Unit,
-    onConfirm: (String?, String?, String, Instant, Instant) -> Unit
+    onConfirm: (String?, String?, String, Instant, Instant) -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var title by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var eventType by remember { mutableStateOf("EXTERNAL_CLIENT") }
     var startMillis by remember { mutableStateOf<Long?>(null) }
     var endMillis by remember { mutableStateOf<Long?>(null) }
 
+    // When start shifts, snap end to start + 1h if end is now too early or
+    // unset — cuts the number of taps to get a valid range down to one.
+    LaunchedEffect(startMillis) {
+        val s = startMillis ?: return@LaunchedEffect
+        val e = endMillis
+        if (e == null || e <= s) {
+            endMillis = s + 60L * 60L * 1000L
+        }
+    }
+
+    val canSave = startMillis != null && endMillis != null && endMillis!! > startMillis!!
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = ProCircuit.SurfaceLow,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(ProCircuit.Outline),
+            )
+        },
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
-                "Dodaj zdarzenie", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 20.sp, color = ProCircuit.OnBg
+                text = "Dodaj zdarzenie",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp,
+                color = ProCircuit.OnBg,
             )
-            Spacer(Modifier.height(16.dp))
 
+            // Type chips — same pill look as the challenge / propose-details sheets.
+            SheetSectionLabel("RODZAJ")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("EXTERNAL_CLIENT" to "Klient zewn.", "BLOCKED" to "Zablokowany").forEach { (type, label) ->
-                    FilterChip(
+                listOf(
+                    "EXTERNAL_CLIENT" to "Klient zewn.",
+                    "BLOCKED" to "Zablokowany czas",
+                ).forEach { (type, label) ->
+                    SheetChip(
+                        label = label,
                         selected = eventType == type,
                         onClick = { eventType = type },
-                        label = { Text(label, fontFamily = AppFontFamily, fontSize = 11.sp) }
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
 
+            SheetSectionLabel("TYTUŁ (OPCJONALNIE)")
             OutlinedTextField(
-                value = title, onValueChange = { title = it },
-                label = { Text("Tytuł (opcjonalnie)") }, modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = notes, onValueChange = { notes = it },
-                label = { Text("Notatka (opcjonalnie)") }, modifier = Modifier.fillMaxWidth(), maxLines = 2
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text(
-                "POCZĄTEK", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                fontSize = 10.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface
-            )
-            Spacer(Modifier.height(6.dp))
-            DateTimePickerRow(selectedMillis = startMillis, onMillisSelected = { startMillis = it })
-            Spacer(Modifier.height(12.dp))
-
-            Text(
-                "KONIEC", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                fontSize = 10.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface
-            )
-            Spacer(Modifier.height(6.dp))
-            DateTimePickerRow(selectedMillis = endMillis, onMillisSelected = { endMillis = it })
-            Spacer(Modifier.height(20.dp))
-
-            Button(
-                onClick = {
-                    onConfirm(
-                        title.ifBlank { null }, notes.ifBlank { null }, eventType,
-                        Instant.fromEpochMilliseconds(startMillis!!),
-                        Instant.fromEpochMilliseconds(endMillis!!)
+                value = title,
+                onValueChange = { title = it },
+                placeholder = {
+                    Text(
+                        text = if (eventType == "BLOCKED") "np. Urlop"
+                        else "np. Dawid, prywatny klient",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 13.sp,
+                        color = ProCircuit.OnSurface.copy(alpha = 0.5f),
                     )
                 },
-                enabled = startMillis != null && endMillis != null,
-                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = ProCircuit.OnBg,
+                    unfocusedTextColor = ProCircuit.OnBg,
+                    focusedBorderColor = ProCircuit.Lime,
+                    unfocusedBorderColor = ProCircuit.OnSurface.copy(alpha = 0.3f),
+                    cursorColor = ProCircuit.Lime,
+                ),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            SheetSectionLabel("NOTATKA (OPCJONALNIE)")
+            OutlinedTextField(
+                value = notes,
+                onValueChange = { notes = it },
+                placeholder = {
+                    Text(
+                        text = "Szczegóły widoczne tylko dla Ciebie",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 13.sp,
+                        color = ProCircuit.OnSurface.copy(alpha = 0.5f),
+                    )
+                },
+                maxLines = 2,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = ProCircuit.OnBg,
+                    unfocusedTextColor = ProCircuit.OnBg,
+                    focusedBorderColor = ProCircuit.Lime,
+                    unfocusedBorderColor = ProCircuit.OnSurface.copy(alpha = 0.3f),
+                    cursorColor = ProCircuit.Lime,
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            SheetSectionLabel("POCZĄTEK")
+            com.racketmatch.ui.players.QuickDateTimePicker(
+                selectedMillis = startMillis,
+                onMillisSelected = { startMillis = it },
+            )
+
+            SheetSectionLabel("KONIEC")
+            com.racketmatch.ui.players.QuickDateTimePicker(
+                selectedMillis = endMillis,
+                onMillisSelected = { endMillis = it },
+            )
+            if (startMillis != null && endMillis != null && endMillis!! <= startMillis!!) {
+                Text(
+                    text = "Koniec musi być po początku.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.LossRed,
+                )
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (canSave) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+                    .clickable(enabled = canSave) {
+                        onConfirm(
+                            title.ifBlank { null },
+                            notes.ifBlank { null },
+                            eventType,
+                            Instant.fromEpochMilliseconds(startMillis!!),
+                            Instant.fromEpochMilliseconds(endMillis!!),
+                        )
+                    }
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "DODAJ ZDARZENIE", fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black, fontSize = 12.sp
+                    text = "DODAJ ZDARZENIE",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    letterSpacing = 1.4.sp,
+                    color = if (canSave) ProCircuit.LimeInk else ProCircuit.OnSurface,
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SheetSectionLabel(text: String) {
+    Text(
+        text = text,
+        fontFamily = AppFontFamily,
+        fontWeight = FontWeight.Black,
+        fontSize = 10.sp,
+        letterSpacing = 1.6.sp,
+        color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+    )
+}
+
+@Composable
+private fun SheetChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceHigh)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+    ) {
+        Text(
+            text = label,
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            color = if (selected) ProCircuit.LimeInk else ProCircuit.OnBg,
+        )
     }
 }
