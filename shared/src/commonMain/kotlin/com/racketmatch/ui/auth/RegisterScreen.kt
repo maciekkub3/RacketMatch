@@ -16,7 +16,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,6 +83,8 @@ fun RegisterScreenContent(viewModel: RegisterViewModel) {
 
     var step           by remember { mutableStateOf(0) }
     var errorMessage   by remember { mutableStateOf<String?>(null) }
+    var cityError      by remember { mutableStateOf<String?>(null) }
+    var sportsError    by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.effectFlow.collect { effect ->
@@ -159,18 +163,19 @@ fun RegisterScreenContent(viewModel: RegisterViewModel) {
                     city = city,
                     selectedSports = selectedSports,
                     isLoading = state is RegisterState.Loading,
-                    onCityChange = { city = it },
+                    cityError = cityError,
+                    sportsError = sportsError,
+                    onCityChange = { city = it; cityError = null },
                     onSportToggle = { sport ->
                         selectedSports = if (sport in selectedSports) selectedSports - sport else selectedSports + sport
+                        sportsError = null
                     },
-                    onBack = { step = 1; errorMessage = null },
+                    onBack = { step = 1; errorMessage = null; cityError = null; sportsError = null },
                     onSubmit = {
                         errorMessage = null
-                        if (city.isBlank()) {
-                            errorMessage = "Podaj miasto"
-                        } else if (selectedSports.isEmpty()) {
-                            errorMessage = "Wybierz co najmniej jeden sport"
-                        } else {
+                        cityError = if (city.isBlank()) "Podaj miasto" else null
+                        sportsError = if (selectedSports.isEmpty()) "Wybierz co najmniej jeden sport" else null
+                        if (cityError == null && sportsError == null) {
                             val isCoach = selectedRole >= 1
                             val hasPlayerProfile = selectedRole != 1
                             viewModel.onEvent(RegisterEvent.Submit(email, password, displayName, city, isCoach, hasPlayerProfile, selectedSports.toList()))
@@ -273,13 +278,17 @@ private fun Step1Content(
     var nameError     by remember { mutableStateOf<String?>(null) }
     var emailError    by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
+    val emailFocus    = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
 
     fun validate(): Boolean {
+        val eTrim = email.trim()
         nameError     = if (displayName.isBlank()) "Podaj imię i nazwisko" else null
         emailError    = when {
-            email.isBlank()      -> "Podaj adres email"
-            !email.contains("@") -> "Nieprawidłowy adres email"
-            else                 -> null
+            eTrim.isBlank() -> "Podaj adres email"
+            !eTrim.contains('@') || !eTrim.substringAfter('@').contains('.') ->
+                "Nieprawidłowy adres email"
+            else -> null
         }
         passwordError = when {
             password.isBlank()  -> "Podaj hasło"
@@ -296,17 +305,40 @@ private fun Step1Content(
             fontSize = 18.sp, color = ProCircuit.OnBg
         )
         Spacer(Modifier.height(20.dp))
-        ProTextField(value = displayName, onValueChange = { onDisplayNameChange(it); nameError = null }, label = "Imię i nazwisko")
-        if (nameError != null) Text(nameError!!, fontFamily = AppBodyFontFamily, fontSize = 12.sp,
-            color = ProCircuit.Error, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+
+        // IME chain: name → email → password → submit (DALEJ).
+        // ProTextField renders its own per-field error now, so the manual
+        // Text block that used to live under every field is gone.
+        ProTextField(
+            value = displayName,
+            onValueChange = { onDisplayNameChange(it); nameError = null },
+            label = "Imię i nazwisko",
+            error = nameError,
+            imeAction = ImeAction.Next,
+            onImeAction = { emailFocus.requestFocus() },
+        )
         Spacer(Modifier.height(12.dp))
-        ProTextField(value = email, onValueChange = { onEmailChange(it); emailError = null }, label = "Email", keyboardType = KeyboardType.Email)
-        if (emailError != null) Text(emailError!!, fontFamily = AppBodyFontFamily, fontSize = 12.sp,
-            color = ProCircuit.Error, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+        ProTextField(
+            value = email,
+            onValueChange = { onEmailChange(it); emailError = null },
+            label = "Email",
+            keyboardType = KeyboardType.Email,
+            error = emailError,
+            imeAction = ImeAction.Next,
+            onImeAction = { passwordFocus.requestFocus() },
+            focusRequester = emailFocus,
+        )
         Spacer(Modifier.height(12.dp))
-        ProTextField(value = password, onValueChange = { onPasswordChange(it); passwordError = null }, label = "Hasło", isPassword = true)
-        if (passwordError != null) Text(passwordError!!, fontFamily = AppBodyFontFamily, fontSize = 12.sp,
-            color = ProCircuit.Error, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+        ProTextField(
+            value = password,
+            onValueChange = { onPasswordChange(it); passwordError = null },
+            label = "Hasło",
+            isPassword = true,
+            error = passwordError,
+            imeAction = ImeAction.Done,
+            onImeAction = { if (validate()) onNext() },
+            focusRequester = passwordFocus,
+        )
         Spacer(Modifier.height(24.dp))
 
         // Theme picker
@@ -359,6 +391,8 @@ private fun Step2Content(
     city: String,
     selectedSports: Set<Sport>,
     isLoading: Boolean,
+    cityError: String?,
+    sportsError: String?,
     onCityChange: (String) -> Unit,
     onSportToggle: (Sport) -> Unit,
     onBack: () -> Unit,
@@ -376,7 +410,16 @@ private fun Step2Content(
             fontSize = 18.sp, color = ProCircuit.OnBg
         )
         Spacer(Modifier.height(20.dp))
-        ProTextField(value = city, onValueChange = onCityChange, label = "Miasto")
+        ProTextField(
+            value = city,
+            onValueChange = onCityChange,
+            label = "Miasto",
+            error = cityError,
+            // Done on the soft keyboard triggers submit — validation still
+            // runs in the parent so a missing sport gets flagged inline.
+            imeAction = ImeAction.Done,
+            onImeAction = onSubmit,
+        )
         if (citySuggestions.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Column(
@@ -417,6 +460,15 @@ private fun Step2Content(
                     onToggle = { onSportToggle(option.sport) }
                 )
             }
+        }
+        if (sportsError != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = sportsError,
+                fontFamily = AppBodyFontFamily,
+                fontSize = 12.sp,
+                color = ProCircuit.Error,
+            )
         }
         Spacer(Modifier.height(28.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
