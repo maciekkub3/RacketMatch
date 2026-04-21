@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.ui.text.style.TextAlign
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -30,6 +30,9 @@ import com.racketmatch.presentation.viewmodel.FriendsEvent
 import com.racketmatch.presentation.viewmodel.FriendsState
 import com.racketmatch.presentation.viewmodel.FriendsViewModel
 import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.IconCircleButton
 import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.players.PlayerProfileScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
@@ -67,19 +70,29 @@ object FriendsScreen : Screen {
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ProCircuit.Bg)
+                .windowInsetsPadding(WindowInsets.statusBars)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                IconButton(onClick = { navigator.pop() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz", tint = ProCircuit.OnBg)
-                }
-                Text(
-                    "Znajomi",
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 24.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg
+                IconCircleButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Wstecz",
+                    onClick = { navigator.pop() },
                 )
+                Column {
+                    Eyebrow("SIEĆ")
+                    Spacer(Modifier.height(2.dp))
+                    H1("Znajomi")
+                }
             }
 
             // Tab row
@@ -163,12 +176,10 @@ object FriendsScreen : Screen {
 @Composable
 private fun FriendsList(friends: List<User>, onTap: (User) -> Unit, onDm: (User) -> Unit) {
     if (friends.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                "Brak znajomych. Dodaj kogoś z listy graczy!",
-                fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnSurface
-            )
-        }
+        EmptyFriendsState(
+            title = "Zbuduj swoją listę",
+            body = "Dodaj innych graczy — z ich profilu albo po meczu. Będzie Ci łatwiej umawiać się na kolejne spotkania.",
+        )
         return
     }
     LazyColumn(
@@ -328,16 +339,49 @@ private fun InvitationsList(
 
         if (received.isEmpty() && sent.isEmpty()) {
             item {
-                Box(
-                    Modifier.fillMaxWidth().padding(top = 64.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Brak zaproszeń",
-                        fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnSurface
-                    )
-                }
+                EmptyFriendsState(
+                    title = "Żadnych zaproszeń",
+                    body = "Tutaj pojawią się zaproszenia od innych graczy, a także te które sam wysłałeś.",
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyFriendsState(title: String, body: String) {
+    // Used both at screen level (FriendsList empty) and inside a
+    // LazyColumn item (InvitationsList empty). fillMaxWidth + generous
+    // top padding works in both contexts without fighting the parent.
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier.size(72.dp).clip(CircleShape).background(ProCircuit.SurfaceLow),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.PersonAdd,
+                contentDescription = null,
+                tint = ProCircuit.Lime,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            title,
+            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+            fontSize = 18.sp, color = ProCircuit.OnBg,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            body,
+            fontFamily = AppBodyFontFamily,
+            fontSize = 13.sp,
+            color = ProCircuit.OnSurface,
+            textAlign = TextAlign.Center,
+            lineHeight = 19.sp,
+        )
     }
 }
