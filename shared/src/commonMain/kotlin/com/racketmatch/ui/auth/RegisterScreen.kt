@@ -89,7 +89,9 @@ fun RegisterScreenContent(viewModel: RegisterViewModel) {
     LaunchedEffect(Unit) {
         viewModel.effectFlow.collect { effect ->
             when (effect) {
-                is RegisterEffect.NavigateToProfileSetup -> navigator.replace(ProfileSetupScreen())
+                is RegisterEffect.NavigateToProfileSetup -> navigator.replace(
+                    com.racketmatch.ui.onboarding.WelcomeScreen()
+                )
                 is RegisterEffect.ShowError              -> errorMessage = effect.msg
             }
         }
