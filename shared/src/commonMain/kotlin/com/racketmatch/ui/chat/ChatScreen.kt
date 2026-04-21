@@ -8,7 +8,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +27,7 @@ import com.racketmatch.presentation.viewmodel.ChatEffect
 import com.racketmatch.presentation.viewmodel.ChatEvent
 import com.racketmatch.presentation.viewmodel.ChatState
 import com.racketmatch.presentation.viewmodel.ChatViewModel
+import com.racketmatch.ui.common.IconCircleButton
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -94,31 +97,31 @@ data class ChatScreen(
 
 @Composable
 private fun MatchChatHeader(name: String, onBack: () -> Unit) {
+    // Editorial shape: circular back button on the left, avatar + name
+    // stack centered. Matches what DmChatScreen shows so flipping
+    // between a match chat and a DM feels like one app.
     Box(
         modifier = Modifier.fillMaxWidth().background(ProCircuit.Bg)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        TextButton(
+        IconCircleButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = "Wstecz",
             onClick = onBack,
+            size = 36.dp,
             modifier = Modifier.align(Alignment.CenterStart),
-            contentPadding = PaddingValues(0.dp)
-        ) {
-            Text(
-                "← BACK", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.Lime
-            )
-        }
+        )
         Column(
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
-                modifier = Modifier.size(48.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     name.take(1).uppercase(), fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black, fontSize = 20.sp, color = ProCircuit.Lime
+                    fontWeight = FontWeight.Black, fontSize = 18.sp, color = ProCircuit.Lime
                 )
             }
             Spacer(Modifier.height(4.dp))
@@ -146,9 +149,43 @@ private fun MatchChatContent(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        if (messages.isEmpty()) {
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    modifier = Modifier.size(64.dp).clip(CircleShape).background(ProCircuit.SurfaceLow),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = null,
+                        tint = ProCircuit.Lime,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Zacznij rozmowę",
+                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                    fontSize = 16.sp, color = ProCircuit.OnBg,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Napisz do $otherUserName — ustalcie szczegóły meczu lub pogadajcie po grze.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp,
+                    color = ProCircuit.OnSurface,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 18.sp,
+                )
+            }
+        }
         LazyColumn(
             state = listState,
-            modifier = Modifier.weight(1f),
+            modifier = if (messages.isEmpty()) Modifier else Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
