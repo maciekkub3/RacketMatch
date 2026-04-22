@@ -67,7 +67,6 @@ data class ServiceBookingScreen(
         var selectedSlot   by remember { mutableStateOf<BookingSlot?>(null) }
         var selectedDuration by remember { mutableStateOf(60) }
         var playerNote by remember { mutableStateOf("") }
-        var showSuccess by remember { mutableStateOf(false) }
         var selectedCourt by remember { mutableStateOf<String?>(null) }
 
         val trainingLocations = remember(state) {
@@ -80,7 +79,24 @@ data class ServiceBookingScreen(
 
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { eff ->
-                if (eff is CoachDetailEffect.BookingConfirmed) showSuccess = true
+                if (eff is CoachDetailEffect.BookingConfirmed) {
+                    val coachName = (state as? CoachDetailState.Content)?.coach?.displayName
+                        ?: "Trener"
+                    // Replace (not push) so Back from BookingSent doesn't
+                    // return the user to a stale ServiceBookingScreen they've
+                    // already submitted.
+                    navigator.replace(
+                        BookingSentScreen(
+                            coachName = coachName,
+                            serviceName = service.name,
+                            whenLabel = formatBookingWhen(
+                                day = selectedDay,
+                                slot = selectedSlot,
+                                durationMinutes = selectedDuration,
+                            ),
+                        )
+                    )
+                }
             }
         }
 
@@ -480,97 +496,76 @@ data class ServiceBookingScreen(
             }
         }
 
-        if (showSuccess) {
-            val coachName = (state as? CoachDetailState.Content)?.coach?.displayName ?: "Trener"
-            BookingSuccessSheet(
-                coachName = coachName,
-                onOpenBookings = {
-                    // Jump the user straight to their Rezerwacje tab inside
-                    // CoachesScreen. The signal is consumed on recomposition
-                    // of CoachesScreen so selectedTab switches to index 1.
-                    CoachesInnerTabSignal.request(1)
-                    showSuccess = false
-                    navigator.pop()
-                },
-                onClose = {
-                    showSuccess = false
-                    navigator.pop()
-                },
-            )
-        }
     }
+}
+
+/**
+ * Formats the "when" label shown on the BookingSentScreen celebration card.
+ * Example output: "CZW, 24 KWI · 18:00–19:00". Falls back gracefully when
+ * the slot isn't set (shouldn't happen post-submit, but defensive).
+ */
+private fun formatBookingWhen(
+    day: LocalDate,
+    slot: BookingSlot?,
+    durationMinutes: Int,
+): String {
+    val dayLabel = "${day.dayOfWeek.shortPl()}, ${day.dayOfMonth} ${day.month.shortPl()}"
+    val start = slot?.startsAt?.toLocalDateTime(TimeZone.currentSystemDefault())
+        ?: return dayLabel
+    val end = (slot.startsAt + durationMinutes.minutes).toLocalDateTime(TimeZone.currentSystemDefault())
+    val hhmm: (LocalDateTime) -> String = { ldt ->
+        "${ldt.hour.toString().padStart(2, '0')}:${ldt.minute.toString().padStart(2, '0')}"
+    }
+    return "$dayLabel · ${hhmm(start)}–${hhmm(end)}"
+}
+
+private fun DayOfWeek.shortPl(): String = when (this) {
+    DayOfWeek.MONDAY -> "PN"
+    DayOfWeek.TUESDAY -> "WT"
+    DayOfWeek.WEDNESDAY -> "ŚR"
+    DayOfWeek.THURSDAY -> "CZW"
+    DayOfWeek.FRIDAY -> "PT"
+    DayOfWeek.SATURDAY -> "SOB"
+    DayOfWeek.SUNDAY -> "NDZ"
+    else -> name
+}
+
+private fun Month.shortPl(): String = when (this) {
+    Month.JANUARY -> "sty"
+    Month.FEBRUARY -> "lut"
+    Month.MARCH -> "mar"
+    Month.APRIL -> "kwi"
+    Month.MAY -> "maj"
+    Month.JUNE -> "cze"
+    Month.JULY -> "lip"
+    Month.AUGUST -> "sie"
+    Month.SEPTEMBER -> "wrz"
+    Month.OCTOBER -> "paź"
+    Month.NOVEMBER -> "lis"
+    Month.DECEMBER -> "gru"
+    else -> name
 }
 
 /**
  * Cross-screen signal so success on ServiceBookingScreen can request that
  * CoachesScreen opens its "Rezerwacje" inner tab after the user pops back.
- * Written once, consumed once — mirrors TabSwitchSignal's shape.
+ *
+ * Backed by mutableStateOf so CoachesScreen can observe it reactively —
+ * the previous plain-var version relied on `LaunchedEffect(Unit)` in
+ * CoachesScreen, which only fires once per composition lifetime. When
+ * BookingSuccess popped back to CoachesScreen, Voyager's saveableState
+ * restored the existing composition rather than re-running that effect,
+ * so the signal sat unconsumed and the user never landed on Rezerwacje.
  */
 object CoachesInnerTabSignal {
-    private var pending: Int? = null
-    fun request(tab: Int) { pending = tab }
-    fun consume(): Int? = pending.also { pending = null }
-}
+    private val _pending = androidx.compose.runtime.mutableStateOf<Int?>(null)
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BookingSuccessSheet(
-    coachName: String,
-    onOpenBookings: () -> Unit,
-    onClose: () -> Unit,
-) {
-    ModalBottomSheet(onDismissRequest = onClose, containerColor = ProCircuit.SurfaceLow) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 48.sp, color = ProCircuit.Lime)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Prośba wysłana",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 22.sp, color = ProCircuit.OnBg,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "$coachName dostał powiadomienie. Odpowiedź zobaczysz w Rezerwacjach.",
-                fontFamily = AppBodyFontFamily,
-                fontSize = 14.sp,
-                color = ProCircuit.OnSurface,
-                lineHeight = 20.sp,
-            )
-            Spacer(Modifier.height(20.dp))
-            Button(
-                onClick = onOpenBookings,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ProCircuit.Lime,
-                    contentColor = ProCircuit.Bg,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 14.dp),
-            ) {
-                Text(
-                    "Zobacz rezerwacje",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp,
-                    letterSpacing = 0.5.sp,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Zamknij",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = ProCircuit.OnSurface,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-    }
+    fun request(tab: Int) { _pending.value = tab }
+
+    @androidx.compose.runtime.Composable
+    fun pending(): Int? = _pending.value
+
+    fun consume() { _pending.value = null }
 }
 
 private fun polishMonthName(month: Int): String = when (month) {

@@ -69,12 +69,17 @@ data class CoachesScreen(val isCoachMode: Boolean = false) : Screen {
         LaunchedEffect(selectedTab) {
             if (selectedTab == 1) bookingsVm.onIntent(PlayerBookingsIntent.Refresh)
         }
-        // If ServiceBookingScreen signalled that we should land on the
-        // "Rezerwacje" inner tab (success of a booking request), consume
-        // the signal once and switch. Runs after every recomposition so
-        // returning here after a pop catches the latest request.
-        LaunchedEffect(Unit) {
-            CoachesInnerTabSignal.consume()?.let { selectedTab = it }
+        // Observe the inner-tab signal reactively — popping back to
+        // CoachesScreen from BookingSentScreen doesn't re-run
+        // LaunchedEffect(Unit) (the composition is preserved by Voyager),
+        // so we read the State-backed signal each recomposition and flip
+        // the tab when it arrives.
+        val pendingInnerTab = CoachesInnerTabSignal.pending()
+        LaunchedEffect(pendingInnerTab) {
+            if (pendingInnerTab != null) {
+                selectedTab = pendingInnerTab
+                CoachesInnerTabSignal.consume()
+            }
         }
 
         Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
