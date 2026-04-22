@@ -674,7 +674,6 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
 
     val theyCountered = match.detailsProposedBy != null && match.detailsProposedBy != myId
     val iProposed = match.detailsProposedBy == myId
-    val hasDetails = !match.locationName.isNullOrBlank() || !match.scheduledAt.isNullOrBlank()
     val hasDiff = match.previousLocationName != null || match.previousScheduledAt != null
 
     Column(
@@ -731,8 +730,13 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
             MatchTypeBadge(match.type)
         }
 
-        // Details row — see IncomingChallengeCard for the hasDiff / hasDetails
-        // rationale. Same layout, different labels depending on who proposed.
+        // Only show the before→after diff when the opponent countered. The
+        // `hasDetails` branch that used to live here duplicated the current
+        // proposal: it rendered a "TWOJA PROPOZYCJA: [court] · KIEDY: [time]"
+        // row directly above the EditableDetailsSection, which already shows
+        // exactly those values in its tiles (and the raw scheduledAt leaked
+        // through the old branch without timezone conversion, so the hour
+        // didn't even match).
         if (hasDiff) {
             Spacer(Modifier.height(12.dp))
             DetailsDiffBox(
@@ -742,38 +746,6 @@ private fun OutgoingChallengeCard(match: Match, myId: String, viewModel: MatchVi
                 toScheduledAt = match.scheduledAt,
                 byOpponent = theyCountered,
             )
-        } else if (hasDetails) {
-            Spacer(Modifier.height(12.dp))
-            val detailLabelColor = if (theyCountered) ProCircuit.Tertiary else ProCircuit.Lime.copy(alpha = 0.7f)
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(ProCircuit.SurfaceHigh)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (!match.locationName.isNullOrBlank()) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            if (theyCountered) "ICH PROPOZYCJA" else "TWOJA PROPOZYCJA",
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 9.sp, letterSpacing = 1.5.sp, color = detailLabelColor
-                        )
-                        Text(match.locationName!!, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp, color = ProCircuit.OnBg)
-                    }
-                }
-                if (!match.scheduledAt.isNullOrBlank()) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("KIEDY", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 9.sp, letterSpacing = 1.5.sp, color = detailLabelColor)
-                        Text(match.scheduledAt!!.take(16).replace("T", " "),
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp, color = ProCircuit.Lime)
-                    }
-                }
-            }
         }
 
         Spacer(Modifier.height(14.dp))
@@ -1740,9 +1712,12 @@ private fun parseScheduledAt(s: String): Long? = runCatching {
 private fun formatDateTileLabel(ms: Long): String {
     val tz = TimeZone.currentSystemDefault()
     val dt = Instant.fromEpochMilliseconds(ms).toLocalDateTime(tz)
+    // Uniform 2-char Polish day abbreviations so the tile label never
+    // ellipsises on 3-letter days (Pon/Czw/Sob/Ndz previously pushed the
+    // minutes off-screen on narrower devices).
     val dayStr = when (dt.dayOfWeek.isoDayNumber) {
-        1 -> "Pon"; 2 -> "Wt"; 3 -> "Śr"; 4 -> "Czw"
-        5 -> "Pt"; 6 -> "Sob"; 7 -> "Ndz"; else -> ""
+        1 -> "Po"; 2 -> "Wt"; 3 -> "Śr"; 4 -> "Cz"
+        5 -> "Pt"; 6 -> "So"; 7 -> "Nd"; else -> ""
     }
     val dm = "${dt.dayOfMonth}.${dt.monthNumber.toString().padStart(2, '0')}"
     val tm = "${dt.hour.toString().padStart(2, '0')}:${dt.minute.toString().padStart(2, '0')}"
