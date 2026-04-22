@@ -290,7 +290,7 @@ object TodayScreen : Screen {
                         initials = m.challengerName.initials2(),
                         name = m.challengerName.ifBlank { "Rywal" },
                         subtitle = listOfNotNull(
-                            m.scheduledAt,
+                            formatInviteWhen(m.scheduledAt),
                             m.locationName,
                         ).joinToString(" · ").ifBlank {
                             "Zaproszenie · ELO ${m.challengerElo}"
@@ -1511,6 +1511,38 @@ private fun computeCityRank(
     // their id sorts before mine, so rank is stable across refreshes.
     val tied = inCity.count { it.eloRating == myElo && it.id < myId }
     return ahead + tied + 1
+}
+
+/**
+ * Friendly display for a match's scheduledAt on the Dziś invite rows.
+ * Turns the raw ISO string (`2026-04-24T17:00:00Z`) into something like
+ * `24 kwi · 18:00`. Returns null if the value is missing or unparseable so
+ * the subtitle builder skips it gracefully — previously the raw ISO leaked
+ * through into the UI.
+ */
+private fun formatInviteWhen(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    val ms = parseScheduledAt(raw) ?: return null
+    val ldt = Instant.fromEpochMilliseconds(ms).toLocalDateTime(TimeZone.currentSystemDefault())
+    val hh = ldt.hour.toString().padStart(2, '0')
+    val mm = ldt.minute.toString().padStart(2, '0')
+    return "${ldt.dayOfMonth} ${ldt.month.polishShort()} · $hh:$mm"
+}
+
+private fun Month.polishShort(): String = when (this) {
+    Month.JANUARY -> "sty"
+    Month.FEBRUARY -> "lut"
+    Month.MARCH -> "mar"
+    Month.APRIL -> "kwi"
+    Month.MAY -> "maj"
+    Month.JUNE -> "cze"
+    Month.JULY -> "lip"
+    Month.AUGUST -> "sie"
+    Month.SEPTEMBER -> "wrz"
+    Month.OCTOBER -> "paź"
+    Month.NOVEMBER -> "lis"
+    Month.DECEMBER -> "gru"
+    else -> name.take(3).lowercase()
 }
 
 /** Parses scheduledAt string (ISO-8601 with Z or naive "yyyy-MM-dd HH:mm") to epoch ms. */
