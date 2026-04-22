@@ -11,6 +11,8 @@ import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
@@ -52,20 +54,32 @@ class ProfileViewModel(
 
     private fun loadProfile() {
         viewModelScope.launch(dispatcher) {
-            _state.value = ProfileState.Loading
+            // Preserve the previous Content instead of flashing Loading — a
+            // tab re-entry or background refresh shouldn't blank the screen
+            // out for half a second before the same data reappears. Only
+            // show Loading on the true cold path (no content yet).
+            if (_state.value !is ProfileState.Content) {
+                _state.value = ProfileState.Loading
+            }
             try {
-                val user = profileRepository.getMyProfile()
-                val matches = profileRepository.getRecentMatches()
-                val eloHistory = profileRepository.getEloHistory()
-                // Sport levels are best-effort — a missing endpoint (older
-                // backend) shouldn't break the whole profile tab.
-                val sportLevels = runCatching { sportLevelApi.getAll() }.getOrDefault(emptyList())
-                _state.value = ProfileState.Content(
-                    user = user,
-                    recentMatches = matches,
-                    eloHistory = eloHistory,
-                    sportLevels = sportLevels,
-                )
+                // Four independent GETs — fire them in parallel. Each async
+                // starts immediately; we await them at the end so they
+                // overlap. Repo layer caches short-term so passive refresh
+                // pays for at most one real round-trip across all four.
+                coroutineScope {
+                    val userDef = async { profileRepository.getMyProfile() }
+                    val matchesDef = async { profileRepository.getRecentMatches() }
+                    val eloHistoryDef = async { profileRepository.getEloHistory() }
+                    val sportLevelsDef = async {
+                        runCatching { sportLevelApi.getAll() }.getOrDefault(emptyList())
+                    }
+                    _state.value = ProfileState.Content(
+                        user = userDef.await(),
+                        recentMatches = matchesDef.await(),
+                        eloHistory = eloHistoryDef.await(),
+                        sportLevels = sportLevelsDef.await(),
+                    )
+                }
             } catch (e: Exception) {
                 _state.value = ProfileState.Error
             }

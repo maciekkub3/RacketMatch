@@ -1,10 +1,17 @@
 package com.racketmatch.data.repository
 
+import com.racketmatch.data.cache.SessionCache
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.data.remote.api.CoachApi
 import com.racketmatch.data.remote.dto.*
 import com.racketmatch.domain.model.*
 import com.racketmatch.domain.repository.CoachRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlin.time.Instant
 
 class CoachRepositoryImpl(
@@ -12,14 +19,33 @@ class CoachRepositoryImpl(
     private val tokenStorage: TokenStorage
 ) : CoachRepository {
 
+    // Coach catalog changes slowly (new trenerzy opt in, coaches update bio
+    // occasionally) — 2 min window stays accurate for browsing.
+    private val coachListCache = SessionCache<String, List<CoachProfile>>(ttlMillis = 120_000)
+    // Bookings change the moment either side acts; bumps below also flush.
+    private val bookingListCache = SessionCache<String, List<CoachBooking>>(ttlMillis = 20_000)
+
+    init {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        tokenStorage.loginVersionFlow.drop(1).onEach {
+            coachListCache.invalidate()
+            bookingListCache.invalidate()
+        }.launchIn(scope)
+        tokenStorage.bookingsVersionFlow.drop(1).onEach {
+            bookingListCache.invalidate()
+        }.launchIn(scope)
+    }
+
     private fun bumpBookings() {
         tokenStorage.incrementBookingsVersion()
         tokenStorage.incrementDmVersion()
     }
 
     // Player-facing
-    override suspend fun getCoaches(city: String, sport: String?): List<CoachProfile> =
-        coachApi.getCoaches(city, sport).map { it.toDomain() }
+    override suspend fun getCoaches(city: String, sport: String?): List<CoachProfile> {
+        val key = "$city::${sport ?: "all"}"
+        return coachListCache.get(key) { coachApi.getCoaches(city, sport).map { it.toDomain() } }
+    }
 
     override suspend fun getCoach(coachId: String): CoachProfile =
         coachApi.getCoach(coachId).toDomain()
@@ -92,8 +118,10 @@ class CoachRepositoryImpl(
     override suspend fun getMyBookings(): List<CoachBooking> =
         coachApi.getMyBookings().map { it.toDomain() }
 
-    override suspend fun listBookings(segment: String?): List<CoachBooking> =
-        coachApi.listBookings(segment).map { it.toDomain() }
+    override suspend fun listBookings(segment: String?): List<CoachBooking> {
+        val key = segment ?: "all"
+        return bookingListCache.get(key) { coachApi.listBookings(segment).map { it.toDomain() } }
+    }
 
     override suspend fun confirmBooking(bookingId: String): CoachBooking {
         val result = coachApi.confirmBooking(bookingId).toDomain()

@@ -6,6 +6,8 @@ import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.FriendRequest
 import com.racketmatch.domain.model.User
 import com.racketmatch.domain.repository.FriendRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -78,9 +80,15 @@ class FriendsViewModel(private val repo: FriendRepository, private val tokenStor
                 _state.value = FriendsState.Loading
             }
             try {
-                val friends = repo.getFriends()
-                val received = repo.getReceivedRequests()
-                val sent = repo.getSentRequests()
+                // Three independent GETs in parallel — repo caches each so
+                // a fresh load pays at most 3 round-trips once, then tab
+                // switches / re-entries hit the cache.
+                val (friends, received, sent) = coroutineScope {
+                    val friendsDef = async { repo.getFriends() }
+                    val receivedDef = async { repo.getReceivedRequests() }
+                    val sentDef = async { repo.getSentRequests() }
+                    Triple(friendsDef.await(), receivedDef.await(), sentDef.await())
+                }
                 _state.value = FriendsState.Content(FriendsContent(friends, received, sent))
             } catch (e: Exception) {
                 if (_state.value !is FriendsState.Content) {

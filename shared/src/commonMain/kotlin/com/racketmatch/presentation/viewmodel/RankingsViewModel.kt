@@ -10,6 +10,8 @@ import com.racketmatch.domain.repository.PlayerRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
@@ -64,10 +66,17 @@ class RankingsViewModel(
 
     private fun load() {
         viewModelScope.launch(dispatcher) {
-            _state.value = RankingsState.Loading
+            // Preserve previous Content across refreshes so the rankings
+            // table doesn't blank-flash when a matchesVersion bump fires.
+            if (_state.value !is RankingsState.Content) {
+                _state.value = RankingsState.Loading
+            }
             try {
-                val me = profileRepository.getMyProfile()
-                val others = playerRepository.getNearbyPlayers(PlayerFilter(), 0.0, 0.0)
+                val (me, others) = coroutineScope {
+                    val meDef = async { profileRepository.getMyProfile() }
+                    val othersDef = async { playerRepository.getNearbyPlayers(PlayerFilter(), 0.0, 0.0) }
+                    meDef.await() to othersDef.await()
+                }
                 val sorted = (others + me).sortedByDescending { it.eloRating }
                 _state.value = RankingsState.Content(
                     allPlayers = sorted,

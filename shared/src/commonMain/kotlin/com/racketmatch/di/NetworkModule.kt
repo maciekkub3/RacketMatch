@@ -94,14 +94,14 @@ val apiModule = module {
 
 val repositoryModule = module {
     single<AuthRepository> { AuthRepositoryImpl(get(), get()) }
-    single<PlayerRepository> { PlayerRepositoryImpl(get()) }
+    single<PlayerRepository> { PlayerRepositoryImpl(get(), get()) }
     single<MatchRepository> { MatchRepositoryImpl(get(), get()) }
     single<CoachRepository> { CoachRepositoryImpl(get(), get()) }
     single<PaymentRepository> { PaymentRepositoryImpl(get()) }
-    single<ProfileRepository> { ProfileRepositoryImpl(get()) }
-    single<CourtRepository> { CourtRepositoryImpl(get()) }
+    single<ProfileRepository> { ProfileRepositoryImpl(get(), get()) }
+    single<CourtRepository> { CourtRepositoryImpl(get(), get()) }
     single<OpenSessionRepository> { OpenSessionRepositoryImpl(get(), get()) }
-    single<FriendRepository> { FriendRepositoryImpl(get()) }
+    single<FriendRepository> { FriendRepositoryImpl(get(), get()) }
     single<FeedRepository> { FeedRepositoryImpl(get()) }
     single<DmRepository> { DmRepositoryImpl(get(), get()) }
     single<NotificationRepository> { FirestoreNotificationRepositoryImpl() }

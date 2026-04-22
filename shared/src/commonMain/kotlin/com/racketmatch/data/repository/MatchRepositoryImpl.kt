@@ -1,5 +1,6 @@
 package com.racketmatch.data.repository
 
+import com.racketmatch.data.cache.SingleValueCache
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.data.remote.api.MatchApi
 import com.racketmatch.data.remote.dto.toDomain
@@ -7,6 +8,12 @@ import com.racketmatch.domain.model.Match
 import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.repository.MatchRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlin.time.Instant
 
 private fun millisToIso(millis: Long): String =
@@ -17,8 +24,23 @@ class MatchRepositoryImpl(
     private val tokenStorage: TokenStorage
 ) : MatchRepository {
 
+    // Short TTL — matches state changes fast when both sides are active, and
+    // every write below bumps matchesVersionFlow which clears the cache
+    // anyway, so 20s is the worst-case staleness for passive reads.
+    private val myMatchesCache = SingleValueCache<List<Match>>(ttlMillis = 20_000)
+
+    init {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        tokenStorage.loginVersionFlow.drop(1).onEach {
+            myMatchesCache.invalidate()
+        }.launchIn(scope)
+        tokenStorage.matchesVersionFlow.drop(1).onEach {
+            myMatchesCache.invalidate()
+        }.launchIn(scope)
+    }
+
     override suspend fun getMyMatches(): List<Match> =
-        matchApi.getMyMatches().map { it.toDomain() }
+        myMatchesCache.get { matchApi.getMyMatches().map { it.toDomain() } }
 
     override suspend fun getMatch(matchId: String): Match =
         matchApi.getMatch(matchId).toDomain()
