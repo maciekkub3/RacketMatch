@@ -138,11 +138,18 @@ data class BookingSentScreen(
                                 .background(ProCircuit.Lime)
                                 .clickable {
                                     // Flip CoachesScreen to the Rezerwacje
-                                    // inner tab, then pop the whole booking
-                                    // sub-stack (ServiceBooking → this screen)
-                                    // so the user lands back on CoachesScreen.
+                                    // inner tab, then pop the booking sub-
+                                    // stack until we land on CoachesScreen.
+                                    //
+                                    // popUntilRoot() was wrong here: the
+                                    // player reaches CoachesScreen from the
+                                    // Więcej tab (`tabNavigator.push(
+                                    // CoachesScreen(...))`), so the inner
+                                    // Navigator's actual root is WięcejScreen
+                                    // — popping to root dropped the user on
+                                    // Więcej instead of on the bookings view.
                                     CoachesInnerTabSignal.request(1)
-                                    navigator.popUntilRoot()
+                                    navigator.popUntil { it is CoachesScreen }
                                 }
                                 .padding(horizontal = 28.dp, vertical = 14.dp),
                         ) {
