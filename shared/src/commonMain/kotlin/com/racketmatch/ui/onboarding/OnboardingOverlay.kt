@@ -90,7 +90,7 @@ private val STEPS = listOf(
     OnboardingStep(
         anchorKey = OnboardingAnchor.EXPLORE_PLAYERS,
         title = "Znajdź rywala",
-        body = "Lista graczy z Twojego miasta, posortowana po zbliżonym poziomie. Tapnij kartę żeby zobaczyć profil, „Wyzwij" żeby zaproponować mecz."
+        body = "Lista graczy z Twojego miasta, posortowana po zbliżonym poziomie. Tapnij kartę żeby zobaczyć profil, przycisk „Wyzwij\" żeby zaproponować mecz."
     ),
     OnboardingStep(
         anchorKey = OnboardingAnchor.MATCHES_TAB,
