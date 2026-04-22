@@ -52,9 +52,16 @@ class SessionCache<K : Any, V>(private val ttlMillis: Long) {
         return fresh
     }
 
-    suspend fun invalidate() = mutex.withLock { entries.clear() }
+    suspend fun invalidate() {
+        mutex.withLock { entries.clear() }
+    }
 
-    suspend fun invalidate(key: K) = mutex.withLock { entries.remove(key) }
+    // Explicit block body — `entries.remove(key)` returns the old `Entry<V>?`
+    // which the compiler would otherwise propagate as this function's return
+    // type, leaking the private nested `Entry` class in the public API.
+    suspend fun invalidate(key: K) {
+        mutex.withLock { entries.remove(key) }
+    }
 }
 
 /**
@@ -64,5 +71,7 @@ class SessionCache<K : Any, V>(private val ttlMillis: Long) {
 class SingleValueCache<V>(ttlMillis: Long) {
     private val inner = SessionCache<Unit, V>(ttlMillis)
     suspend fun get(fetch: suspend () -> V): V = inner.get(Unit, fetch)
-    suspend fun invalidate() = inner.invalidate()
+    suspend fun invalidate() {
+        inner.invalidate()
+    }
 }
