@@ -724,7 +724,11 @@ private fun SparingHeader(
     onSelect: (SparingTab) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .onboardingAnchor(OnboardingAnchor.EXPLORE_PLAYERS)
+            .padding(horizontal = 20.dp)
+            .padding(top = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         com.racketmatch.ui.common.Eyebrow("Sparing · w pobliżu")

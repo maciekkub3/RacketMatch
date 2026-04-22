@@ -64,7 +64,10 @@ object MainScreen : Screen {
         val exploreViewModel: ExploreViewModel = kmpViewModel()
         val badgeVm: ActionBadgeViewModel = kmpViewModel()
         val badgeState by badgeVm.state.collectAsState()
-        var onboardingComplete by remember { mutableStateOf(true) }
+        // First-time players see the coach-marks tour. For existing users the
+        // flag persists in TokenStorage, so the tour fires exactly once per
+        // install (or until they reinstall/clear storage).
+        var onboardingComplete by remember { mutableStateOf(tokenStorage.isOnboardingComplete) }
         val isCoach = tokenStorage.isCoach
         val coachModeActive = tokenStorage.coachModeActive
 
@@ -135,13 +138,19 @@ object MainScreen : Screen {
                     onComplete = {
                         tokenStorage.isOnboardingComplete = true
                         onboardingComplete = true
+                        // Drop the user into Explore after the celebration —
+                        // the final CTA says "rzuć pierwsze wyzwanie" and
+                        // PlayersScreen defaults to the player list tab.
                         tabNavigator.current = PlayersTab
                     },
                     onRequestTabChange = { anchorKey ->
                         when (anchorKey) {
+                            OnboardingAnchor.TODAY_HERO -> tabNavigator.current = TodayTab
+                            OnboardingAnchor.EXPLORE_PLAYERS -> tabNavigator.current = PlayersTab
+                            OnboardingAnchor.MATCHES_TAB -> tabNavigator.current = MatchesTab
                             OnboardingAnchor.RANKINGS_TAB,
                             OnboardingAnchor.RANKINGS_TABLE -> tabNavigator.current = RankingsTab
-                            else -> tabNavigator.current = PlayersTab
+                            else -> tabNavigator.current = TodayTab
                         }
                     }
                 ) {
@@ -205,9 +214,11 @@ private fun ProCircuitNavBar(
         ) {
             mainTabs.forEach { tab ->
                 val isSelected = current == tab
-                val anchorModifier = if (tab == RankingsTab)
-                    Modifier.onboardingAnchor(OnboardingAnchor.RANKINGS_TAB)
-                else Modifier
+                val anchorModifier = when (tab) {
+                    RankingsTab -> Modifier.onboardingAnchor(OnboardingAnchor.RANKINGS_TAB)
+                    MatchesTab -> Modifier.onboardingAnchor(OnboardingAnchor.MATCHES_TAB)
+                    else -> Modifier
+                }
                 Column(
                     modifier = Modifier
                         .then(anchorModifier)

@@ -1,12 +1,6 @@
 package com.racketmatch.ui.onboarding
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -40,11 +34,16 @@ import com.racketmatch.ui.theme.ProCircuit
 // ── Anchor keys ───────────────────────────────────────────────────────────────
 
 object OnboardingAnchor {
-    const val MAP            = "map"
-    const val LISTA_BUTTON   = "lista_button"
-    const val SESSIONS_LIST  = "sessions_list"
-    const val RANKINGS_TAB   = "rankings_tab"
-    const val RANKINGS_TABLE = "rankings_table"
+    /** Contextual hero card on TodayScreen (nadchodzący mecz / zaproszenia / sugestie). */
+    const val TODAY_HERO      = "today_hero"
+    /** SparingHeader on PlayersScreen — the "Gracze / Otwarte mecze" toggle. */
+    const val EXPLORE_PLAYERS = "explore_players"
+    /** Matches tab icon in the bottom nav bar. */
+    const val MATCHES_TAB     = "matches_tab"
+    /** Rankings tab icon in the bottom nav bar. */
+    const val RANKINGS_TAB    = "rankings_tab"
+    /** The LazyColumn that hosts the ranking podium + ladder. */
+    const val RANKINGS_TABLE  = "rankings_table"
 }
 
 // ── CompositionLocal for anchor registration ──────────────────────────────────
@@ -72,34 +71,41 @@ private data class OnboardingStep(
     val anchorKey: String?,
     val title: String,
     val body: String,
+    /**
+     * Final step of the tour. Rendered with celebratory styling (lime card,
+     * dark text) and uses a single full-width "let's play" CTA instead of
+     * the standard "Dalej / Pomiń wszystko" pair. `onNext` here still calls
+     * `onComplete` — the parent is responsible for navigating to the player
+     * list and persisting the completion flag.
+     */
     val isLast: Boolean = false
 )
 
 private val STEPS = listOf(
     OnboardingStep(
-        anchorKey = OnboardingAnchor.MAP,
-        title = "Mapa kortów",
-        body = "Tu widzisz korty i oczekujące wydarzenia — osoby chętne na grę w Twojej okolicy."
+        anchorKey = OnboardingAnchor.TODAY_HERO,
+        title = "Twój dzień",
+        body = "Tu widzisz co się dzieje: nadchodzące mecze, zaproszenia i polecani rywale z Twojej okolicy. Wszystko żebyś mógł zagrać już dziś."
     ),
     OnboardingStep(
-        anchorKey = OnboardingAnchor.LISTA_BUTTON,
-        title = "Gracze i sesje",
-        body = "Naciśnij LISTA aby zobaczyć graczy i otwarte sesje w Twojej okolicy. Tap na gracza żeby go wyzwać do meczu."
+        anchorKey = OnboardingAnchor.EXPLORE_PLAYERS,
+        title = "Znajdź rywala",
+        body = "Lista graczy z Twojego miasta, posortowana po zbliżonym poziomie. Tapnij kartę żeby zobaczyć profil, „Wyzwij" żeby zaproponować mecz."
     ),
     OnboardingStep(
-        anchorKey = OnboardingAnchor.RANKINGS_TAB,
-        title = "Rankingi",
-        body = "ELO to Twoje punkty rankingowe — miara jak dobry jesteś. Startujesz z 1000."
+        anchorKey = OnboardingAnchor.MATCHES_TAB,
+        title = "Twoje mecze",
+        body = "Akceptujesz tu zaproszenia, wpisujesz wyniki i widzisz historię. Nowe zaproszenia zobaczysz też na Dziś."
     ),
     OnboardingStep(
         anchorKey = OnboardingAnchor.RANKINGS_TABLE,
-        title = "Jak działa ELO?",
-        body = "Wygrywasz z mocniejszym = duży zysk punktów. Przegrywasz ze słabszym = duży spadek. Casual nie wpływa na ELO — tylko Ranked i Master."
+        title = "Ranking i ELO",
+        body = "Top 5% w Twoim mieście to Masters — najmocniejsi rywale. Pierwsze 10 meczów liczą się podwójnie, więc system sam Cię ustawi."
     ),
     OnboardingStep(
         anchorKey = null,
-        title = "Gotowy?",
-        body = "Znajdź kogoś do gry i zacznij zdobywać punkty rankingowe!",
+        title = "🎾 Możemy zaczynać!",
+        body = "Twoje ELO startowe to 1200. Rzuć pierwsze wyzwanie — reszta się poukłada sama.",
         isLast = true
     )
 )
@@ -211,80 +217,139 @@ private fun OnboardingScrim(
                 TooltipPosition.Center    -> Alignment.Center
             }
         ) {
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(ProCircuit.SurfaceLow)
-                    .padding(horizontal = 20.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Progress dots
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    repeat(totalSteps) { i ->
-                        Box(
-                            modifier = Modifier
-                                .size(if (i == stepIndex) 8.dp else 6.dp)
-                                .clip(CircleShape)
-                                .background(if (i == stepIndex) ProCircuit.Lime else ProCircuit.SurfaceHigh)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    text = step.title,
-                    fontFamily = AppFontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
-                    fontSize = 18.sp, color = ProCircuit.OnBg
+            if (step.isLast) {
+                CelebrationCard(onStart = onNext)
+            } else {
+                TeachingCard(
+                    step = step,
+                    stepIndex = stepIndex,
+                    totalSteps = totalSteps,
+                    onNext = onNext,
+                    onSkip = onSkip,
                 )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = step.body,
-                    fontFamily = AppBodyFontFamily, fontSize = 14.sp,
-                    color = ProCircuit.OnSurface, lineHeight = 20.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(20.dp))
-                Button(
-                    onClick = onNext,
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
-                ) {
-                    Text(
-                        text = if (step.isLast) "ZACZYNAJMY!" else "DALEJ",
-                        fontFamily = AppFontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
-                        fontSize = 13.sp, letterSpacing = 1.sp
-                    )
-                }
-                if (!step.isLast) {
-                    TextButton(onClick = onSkip) {
-                        Text(
-                            "Pomiń wszystko",
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp, color = ProCircuit.OnSurface
-                        )
-                    }
-                }
             }
+        }
+    }
+}
 
-            // Bouncing arrow for LISTA_BUTTON step — points down toward the button
-            if (step.anchorKey == OnboardingAnchor.LISTA_BUTTON) {
-                val infiniteTransition = rememberInfiniteTransition()
-                val bounce by infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 10f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(600, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    )
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "↓",
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 28.sp, color = ProCircuit.Lime,
-                    modifier = Modifier.offset(y = bounce.dp)
+@Composable
+private fun TeachingCard(
+    step: OnboardingStep,
+    stepIndex: Int,
+    totalSteps: Int,
+    onNext: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(ProCircuit.SurfaceLow)
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Progress dots
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            repeat(totalSteps) { i ->
+                Box(
+                    modifier = Modifier
+                        .size(if (i == stepIndex) 8.dp else 6.dp)
+                        .clip(CircleShape)
+                        .background(if (i == stepIndex) ProCircuit.Lime else ProCircuit.SurfaceHigh)
                 )
             }
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = step.title,
+            fontFamily = AppFontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+            fontSize = 18.sp, color = ProCircuit.OnBg
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = step.body,
+            fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+            color = ProCircuit.OnSurface, lineHeight = 20.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(20.dp))
+        Button(
+            onClick = onNext,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg)
+        ) {
+            Text(
+                text = "DALEJ",
+                fontFamily = AppFontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+                fontSize = 13.sp, letterSpacing = 1.sp
+            )
+        }
+        TextButton(onClick = onSkip) {
+            Text(
+                "Pomiń wszystko",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                fontSize = 12.sp, color = ProCircuit.OnSurface
+            )
+        }
+    }
+}
+
+/**
+ * Final celebratory step. Inverts the palette (lime card, dark ink) so the
+ * arrival moment reads differently from the teaching steps, and offers a
+ * single confident CTA — "Rzuć pierwsze wyzwanie". The parent's `onComplete`
+ * switches to the Explore tab, so the button effectively drops the user
+ * exactly where they need to be.
+ */
+@Composable
+private fun CelebrationCard(onStart: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(ProCircuit.Lime)
+            .padding(horizontal = 24.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "🎾",
+            fontSize = 56.sp,
+        )
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = "Możemy zaczynać!",
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = 24.sp,
+            letterSpacing = (-0.5).sp,
+            color = ProCircuit.Bg,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "Twoje ELO startowe to 1200. Rzuć pierwsze wyzwanie — reszta poukłada się sama.",
+            fontFamily = AppBodyFontFamily,
+            fontSize = 14.sp,
+            color = ProCircuit.Bg.copy(alpha = 0.85f),
+            lineHeight = 20.sp,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onStart,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ProCircuit.Bg,
+                contentColor = ProCircuit.Lime,
+            ),
+        ) {
+            Text(
+                text = "RZUĆ PIERWSZE WYZWANIE",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 13.sp,
+                letterSpacing = 1.sp,
+            )
         }
     }
 }

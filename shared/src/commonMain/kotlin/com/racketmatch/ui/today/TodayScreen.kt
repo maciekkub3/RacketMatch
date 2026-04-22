@@ -64,6 +64,8 @@ import com.racketmatch.presentation.viewmodel.MatchViewModel
 import com.racketmatch.presentation.viewmodel.ProfileState
 import com.racketmatch.presentation.viewmodel.ProfileViewModel
 import com.racketmatch.ui.navigation.PlayersTab
+import com.racketmatch.ui.onboarding.OnboardingAnchor
+import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.players.ChallengeDialog
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import com.racketmatch.ui.common.Ava
@@ -398,32 +400,45 @@ object TodayScreen : Screen {
                     )
                 )
             }
-            when (hero) {
-                is TodayHero.ResultToConfirm -> ResultToConfirmHero(
-                    data = hero.data,
-                    onTap = goMatches,
-                )
-                is TodayHero.RecentResult -> RecentResultHero(
-                    data = hero.data,
-                    onTap = { markResultSeenAndReveal(hero.data) },
-                )
-                is TodayHero.NextMatch -> NextMatchHero(hero.match)
-                is TodayHero.Invites -> InvitesHero(
-                    invites = hero.invites,
-                    onAccept = onAcceptInvite,
-                    onDecline = onDeclineInvite,
-                )
-                is TodayHero.Suggestions -> SuggestionsHero(
-                    players = hero.players,
-                    onChallenge = onChallengePlayer,
-                    onSeeMore = goExplore,
-                )
-                TodayHero.FirstMatch -> FirstMatchHero(onStart = goExplore)
-                TodayHero.None -> Unit
+            // Wrap the contextual hero in an onboarding anchor so the
+            // TODAY_HERO step of the first-time tour can highlight it.
+            Box(modifier = Modifier.onboardingAnchor(OnboardingAnchor.TODAY_HERO)) {
+                when (hero) {
+                    is TodayHero.ResultToConfirm -> ResultToConfirmHero(
+                        data = hero.data,
+                        onTap = goMatches,
+                    )
+                    is TodayHero.RecentResult -> RecentResultHero(
+                        data = hero.data,
+                        onTap = { markResultSeenAndReveal(hero.data) },
+                    )
+                    is TodayHero.NextMatch -> NextMatchHero(hero.match)
+                    is TodayHero.Invites -> InvitesHero(
+                        invites = hero.invites,
+                        onAccept = onAcceptInvite,
+                        onDecline = onDeclineInvite,
+                    )
+                    is TodayHero.Suggestions -> SuggestionsHero(
+                        players = hero.players,
+                        onChallenge = onChallengePlayer,
+                        onSeeMore = goExplore,
+                    )
+                    TodayHero.FirstMatch -> FirstMatchHero(onStart = goExplore)
+                    TodayHero.None -> Unit
+                }
             }
 
             // ── Stat tiles ────────────────────────────────────────────────
-            StatTiles(streak = streak, elo = eloDisplay, cityRank = cityRank)
+            // Fresh player (profile loaded, zero matches) gets friendlier
+            // tile copy — raw "0 / 1200 / —" reads like an empty scoreboard
+            // instead of a starting line.
+            val isFreshPlayer = user != null && (user.wins + user.losses) == 0
+            StatTiles(
+                streak = streak,
+                elo = eloDisplay,
+                cityRank = cityRank,
+                isFreshPlayer = isFreshPlayer,
+            )
 
             // ── Invites (only shown when hero is NOT Invites, to avoid dup) ──
             if (hero !is TodayHero.Invites && invites.isNotEmpty()) {
@@ -602,7 +617,7 @@ private fun HeroDetail(label: String, value: String) {
 }
 
 @Composable
-private fun StatTiles(streak: Int, elo: Int, cityRank: Int) {
+private fun StatTiles(streak: Int, elo: Int, cityRank: Int, isFreshPlayer: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -611,20 +626,22 @@ private fun StatTiles(streak: Int, elo: Int, cityRank: Int) {
     ) {
         StatTile(
             modifier = Modifier.weight(1f).fillMaxHeight(),
-            bigNumber = streak.toString(),
+            bigNumber = if (isFreshPlayer) "—" else streak.toString(),
             label = "Seria",
-            footer = { StreakPips(litCount = streak) },
+            // Skip the pips footer on the blank tile — an empty row of dots
+            // next to an em dash reads as broken rather than empty-by-design.
+            footer = if (isFreshPlayer) null else ({ StreakPips(litCount = streak) }),
         )
         StatTile(
             modifier = Modifier.weight(1f).fillMaxHeight(),
             bigNumber = elo.toString(),
             bigNumberMono = true,
-            label = "ELO",
+            label = if (isFreshPlayer) "ELO · start" else "ELO",
         )
         StatTile(
             modifier = Modifier.weight(1f).fillMaxHeight(),
             bigNumber = if (cityRank > 0) "#$cityRank" else "—",
-            label = "Miasto",
+            label = if (isFreshPlayer) "Po 1. meczu" else "Miasto",
         )
     }
 }
