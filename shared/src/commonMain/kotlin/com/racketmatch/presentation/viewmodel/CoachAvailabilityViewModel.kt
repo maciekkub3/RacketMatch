@@ -4,11 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.BookingSettings
+import com.racketmatch.domain.model.CalendarEvent
+import com.racketmatch.domain.model.CalendarEventType
 import com.racketmatch.domain.model.CoachBooking
 import com.racketmatch.domain.model.CoachException
 import com.racketmatch.domain.model.CoachWeeklyAvailability
 import com.racketmatch.domain.repository.CoachRepository
+import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlin.time.Duration.Companion.days
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -72,6 +76,14 @@ sealed class CoachAvailabilityState {
          * the list here is unfiltered so UI can reason about what's there.
          */
         val bookings: List<CoachBooking> = emptyList(),
+        /**
+         * External-client calendar events (EXTERNAL_CLIENT). Unlike
+         * platform bookings these can't be cancelled through the system —
+         * the coach manages them manually — but we still want to flag
+         * them as conflicts when a new exception overlaps, so the coach
+         * remembers to reach out to those clients directly.
+         */
+        val externalEvents: List<CalendarEvent> = emptyList(),
     ) : CoachAvailabilityState()
     object Error : CoachAvailabilityState()
 }
@@ -303,11 +315,21 @@ class CoachAvailabilityViewModel(
                 // works, just without conflict detection.
                 val bookings = runCatching { coachRepository.getMyBookings() }
                     .getOrDefault(emptyList())
+                // External-client calendar events (next ~year). Pulled
+                // once at screen load and reused for conflict detection.
+                // Range is wide to cover typical exceptions; the list is
+                // small so payload stays cheap.
+                val now = Clock.System.now()
+                val externalEvents = runCatching {
+                    coachRepository.getCalendarEvents(now, now + 365.days)
+                }.getOrDefault(emptyList())
+                    .filter { it.eventType == CalendarEventType.EXTERNAL_CLIENT }
                 _state.value = CoachAvailabilityState.Content(
                     days = days,
                     bookingSettings = bookingSettings,
                     exceptions = exceptions,
                     bookings = bookings,
+                    externalEvents = externalEvents,
                 )
             } catch (e: Exception) {
                 println("CoachAvailabilityViewModel: load() failed — ${e.message}")

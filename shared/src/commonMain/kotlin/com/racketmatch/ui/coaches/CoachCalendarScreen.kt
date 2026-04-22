@@ -578,10 +578,17 @@ private fun DayEventColumn(
                     .rotate(-90f),
             )
         }
-        // Event blocks — skip rendering individual blocks when the column
-        // is already fully greyed; otherwise they'd just re-assert the
-        // same information and add visual noise.
-        if (!isFullyBlocked) events.forEach { event ->
+        // Event blocks. On fully-blocked days we skip rendering *BLOCKED*
+        // events themselves — the column is already greyed with a vertical
+        // "NIEDOSTĘPNE" watermark and drawing each block on top would be
+        // pure visual noise. BUT non-BLOCKED events (rezerwacje / klienci
+        // zewnętrzni) ALWAYS render, even when the column is fully blocked,
+        // so the coach never loses sight of existing commitments that
+        // collide with a new vacation / sickness exception. They get the
+        // red border + "!" badge from the conflict check below to signal
+        // the overlap.
+        events.forEach { event ->
+            if (isFullyBlocked && event.eventType == CalendarEventType.BLOCKED) return@forEach
             // Clamp event to THIS day so multi-day events render in the
             // right vertical slice of each column they cover.
             val effStart = if (event.startsAt < dayStart) dayStart else event.startsAt
@@ -596,14 +603,31 @@ private fun DayEventColumn(
             val topDp = with(density) { topPx.toDp() }
             val heightDp = with(density) { heightPx.toDp() }
             val isBlockedEvt = event.eventType == CalendarEventType.BLOCKED
+            // "Konflikt z blokadą" — BOOKING/EXTERNAL_CLIENT którego czas
+            // wpada w zakres jakiegoś BLOCKED event'u widocznego na tym
+            // dniu. Taka rezerwacja powstaje gdy coach dodaje wyjątek i
+            // wybiera "Zachowaj rezerwacje, zapisz blokadę" — żyje dalej,
+            // ale trener powinien widzieć że jest w środku czegoś co
+            // zgłosił jako "niedostępny".
+            val inBlockedZone = !isBlockedEvt && events.any { other ->
+                other.eventType == CalendarEventType.BLOCKED &&
+                    event.startsAt < other.endsAt &&
+                    event.endsAt > other.startsAt
+            }
             val textColor = if (isBlockedEvt) ProCircuit.OnSurface else ProCircuit.LimeInk
-            val extraMod = if (isBlockedEvt) {
-                Modifier.border(
+            val extraMod = when {
+                inBlockedZone -> Modifier.border(
+                    width = 2.dp,
+                    color = ProCircuit.Error,
+                    shape = RoundedCornerShape(6.dp),
+                )
+                isBlockedEvt -> Modifier.border(
                     width = 1.dp,
                     color = ProCircuit.OnSurface.copy(alpha = 0.45f),
                     shape = RoundedCornerShape(6.dp),
                 )
-            } else Modifier
+                else -> Modifier
+            }
             // Box zamiast samej Column — pozwala wstawić wyśrodkowaną
             // pionową etykietę "NIEDOSTĘPNE" na bloku wystarczająco wysokim
             // (≥ ~3h). Dla niższych bloków robimy to co zawsze: horizontalny
@@ -682,6 +706,30 @@ private fun DayEventColumn(
                             .wrapContentSize(unbounded = true)
                             .rotate(-90f),
                     )
+                }
+
+                // Warning badge w prawym górnym rogu dla rezerwacji w
+                // konflikcie z blokadą — tylko gdy blok jest dostatecznie
+                // duży żeby się zmieścił (min. ~30min), w przeciwnym razie
+                // sama czerwona obwódka wystarczy.
+                if (inBlockedZone && heightDp >= 28.dp) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(3.dp)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(ProCircuit.Error),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "!",
+                            fontFamily = AppFontFamily,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 10.sp,
+                            color = Color.White,
+                        )
+                    }
                 }
             }
         }

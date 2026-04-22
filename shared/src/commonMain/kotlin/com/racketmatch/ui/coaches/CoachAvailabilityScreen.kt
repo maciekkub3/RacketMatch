@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.domain.model.CalendarEvent
 import com.racketmatch.domain.model.CoachBooking
 import com.racketmatch.presentation.viewmodel.CoachAvailabilityEffect
 import com.racketmatch.presentation.viewmodel.CoachAvailabilityEvent
@@ -414,6 +415,7 @@ private fun AvailabilityContent(
     if (addingException) {
         AddExceptionSheet(
             bookings = state.bookings,
+            externalEvents = state.externalEvents,
             onDismiss = { addingException = false },
             onAdd = { startsAt, endsAt, label ->
                 onEvent(CoachAvailabilityEvent.AddException(startsAt, endsAt, label))
@@ -1338,6 +1340,7 @@ private fun Float.roundToStep(): Int {
 @Composable
 private fun AddExceptionSheet(
     bookings: List<CoachBooking>,
+    externalEvents: List<CalendarEvent>,
     onDismiss: () -> Unit,
     onAdd: (startsAt: kotlin.time.Instant, endsAt: kotlin.time.Instant, label: String?) -> Unit,
     onAddWithCancellations: (
@@ -1386,7 +1389,7 @@ private fun AddExceptionSheet(
             // widzi kto jest w konflikcie i wybiera co zrobić.
             ConflictsPanel(
                 pending = pendingConflicts!!,
-                onKeepBookings = {
+                onKeepAll = {
                     onAdd(
                         pendingConflicts!!.startsAt,
                         pendingConflicts!!.endsAt,
@@ -1399,7 +1402,7 @@ private fun AddExceptionSheet(
                         pendingConflicts!!.startsAt,
                         pendingConflicts!!.endsAt,
                         pendingConflicts!!.label,
-                        pendingConflicts!!.conflicts.map { it.id },
+                        pendingConflicts!!.bookingConflicts.map { it.id },
                         reason,
                     )
                     pendingConflicts = null
@@ -1562,19 +1565,21 @@ private fun AddExceptionSheet(
                             endInstant = kotlin.time.Instant.fromEpochMilliseconds(e + endOfDay)
                         }
 
-                        // Conflict detection — only CONFIRMED/PENDING
-                        // bookings that overlap the proposed range. If any
-                        // exist, defer the save decision to a follow-up
-                        // dialog. No conflicts = straight save.
-                        val conflicts = bookings.overlappingActive(startInstant, endInstant)
-                        if (conflicts.isEmpty()) {
+                        // Conflict detection — rezerwacje graczy +
+                        // eventy z klientami zewnętrznymi. Każde źródło
+                        // ma osobny flow w dialogu: bookings można anulować
+                        // z wiadomością, externa tylko informacyjne.
+                        val bookingConflicts = bookings.overlappingActive(startInstant, endInstant)
+                        val externalConflicts = externalEvents.overlapping(startInstant, endInstant)
+                        if (bookingConflicts.isEmpty() && externalConflicts.isEmpty()) {
                             onAdd(startInstant, endInstant, label.takeIf { it.isNotBlank() })
                         } else {
                             pendingConflicts = PendingExceptionWithConflicts(
                                 startsAt = startInstant,
                                 endsAt = endInstant,
                                 label = label.takeIf { it.isNotBlank() },
-                                conflicts = conflicts,
+                                bookingConflicts = bookingConflicts,
+                                externalConflicts = externalConflicts,
                             )
                         }
                     },
@@ -1653,7 +1658,8 @@ private data class PendingExceptionWithConflicts(
     val startsAt: kotlin.time.Instant,
     val endsAt: kotlin.time.Instant,
     val label: String?,
-    val conflicts: List<CoachBooking>,
+    val bookingConflicts: List<CoachBooking>,
+    val externalConflicts: List<CalendarEvent>,
 )
 
 /** Filter bookings that overlap [exceptionStart, exceptionEnd) and are still active. */
@@ -1666,19 +1672,31 @@ private fun List<CoachBooking>.overlappingActive(
         b.endsAt > exceptionStart
 }
 
+/** Filter calendar events (typically EXTERNAL_CLIENT) overlapping the range. */
+private fun List<CalendarEvent>.overlapping(
+    exceptionStart: kotlin.time.Instant,
+    exceptionEnd: kotlin.time.Instant,
+): List<CalendarEvent> = filter { e ->
+    e.startsAt < exceptionEnd && e.endsAt > exceptionStart
+}
+
 /**
  * Stage 2 of AddExceptionSheet — shown when the coach tries to save an
- * exception that overlaps existing CONFIRMED/PENDING bookings. Lives
- * inside the same ModalBottomSheet as the form, so no nested modals.
- * Three exits:
- *   - "Anuluj rezerwacje i zapisz" — message sent to every affected client
- *   - "Zachowaj rezerwacje, zapisz" — block saved, bookings remain as conflicts
- *   - "Wróć" — returns to form with state preserved
+ * exception that overlaps existing bookings OR external-client events.
+ * Two sources, two treatments:
+ *   - BOOKING: can be auto-cancelled with a shared message
+ *   - EXTERNAL_CLIENT: informational only — coach has to contact them
+ *     outside the system
+ *
+ * Exits adapt to what's present:
+ *   - "Anuluj rezerwacje i zapisz" — only when bookings exist
+ *   - "Zachowaj wszystko, zapisz blokadę" — always present
+ *   - "Wróć do edycji" — always present
  */
 @Composable
 private fun ConflictsPanel(
     pending: PendingExceptionWithConflicts,
-    onKeepBookings: () -> Unit,
+    onKeepAll: () -> Unit,
     onCancelBookings: (reason: String) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -1686,6 +1704,10 @@ private fun ConflictsPanel(
     var message by remember {
         mutableStateOf("Przepraszam, musiałem odwołać ten termin. Dajmy znać sobie, umówmy inny.")
     }
+    val hasBookings = pending.bookingConflicts.isNotEmpty()
+    val hasExternal = pending.externalConflicts.isNotEmpty()
+    val bookingCount = pending.bookingConflicts.size
+    val externalCount = pending.externalConflicts.size
 
     Column(
         modifier = Modifier
@@ -1693,24 +1715,26 @@ private fun ConflictsPanel(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-            Text(
-                "KONFLIKT Z REZERWACJAMI",
-                fontFamily = AppFontFamily,
-                fontWeight = FontWeight.Black,
-                fontSize = 11.sp,
-                letterSpacing = 1.6.sp,
-                color = ProCircuit.Error,
-            )
-            val count = pending.conflicts.size
-            Text(
-                text = "W tym okresie masz $count ${bookingsWord(count)}. Co zrobić?",
-                fontFamily = AppFontFamily,
-                fontWeight = FontWeight.Black,
-                fontSize = 18.sp,
-                color = ProCircuit.OnBg,
-            )
+        Text(
+            "KONFLIKT Z KALENDARZEM",
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = 11.sp,
+            letterSpacing = 1.6.sp,
+            color = ProCircuit.Error,
+        )
+        Text(
+            text = buildSummary(bookingCount, externalCount),
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = 18.sp,
+            color = ProCircuit.OnBg,
+            lineHeight = 24.sp,
+        )
 
-            // Lista konfliktów — klient + czas
+        // Sekcja rezerwacji graczy — z możliwością auto-cancel + message
+        if (hasBookings) {
+            ConflictSectionHeader("REZERWACJE GRACZY ($bookingCount)")
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1719,7 +1743,7 @@ private fun ConflictsPanel(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                pending.conflicts.forEach { booking ->
+                pending.bookingConflicts.forEach { booking ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
@@ -1757,7 +1781,6 @@ private fun ConflictsPanel(
                     }
                 }
             }
-
             Text(
                 "Wiadomość do klientów (gdy wybierzesz Anuluj rezerwacje)",
                 fontFamily = AppFontFamily,
@@ -1781,9 +1804,58 @@ private fun ConflictsPanel(
                 minLines = 2,
                 maxLines = 4,
             )
+        }
 
-            // 3 akcje — każda to jasny, samodzielny wybór.
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Sekcja klientów zewnętrznych — tylko info, coach sam ich powiadomi
+        if (hasExternal) {
+            ConflictSectionHeader("KLIENCI ZEWNĘTRZNI ($externalCount)")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(ProCircuit.SurfaceHigh)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                pending.externalConflicts.forEach { event ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(ProCircuit.Lime.copy(alpha = 0.55f)),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = event.title ?: "Klient zewnętrzny",
+                                fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = ProCircuit.OnBg,
+                            )
+                            Text(
+                                text = formatCalendarEventTime(event),
+                                fontFamily = AppBodyFontFamily,
+                                fontSize = 11.sp,
+                                color = ProCircuit.OnSurface,
+                            )
+                        }
+                    }
+                }
+            }
+            Text(
+                text = "System nie może ich powiadomić automatycznie — skontaktuj się z nimi poza aplikacją.",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                color = ProCircuit.OnSurface,
+            )
+        }
+
+        // Akcje — warunkowe. Jeśli nie ma bookings, znika przycisk cancel.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (hasBookings) {
                 Button(
                     onClick = { onCancelBookings(message) },
                     enabled = message.isNotBlank(),
@@ -1803,34 +1875,95 @@ private fun ConflictsPanel(
                         fontSize = 13.sp,
                     )
                 }
+            }
+            // "Zachowaj" jest primary gdy nie ma bookings (bo brak cancel),
+            // outlined gdy bookings są (żeby cancel był primary).
+            if (hasBookings) {
                 OutlinedButton(
-                    onClick = onKeepBookings,
+                    onClick = onKeepAll,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp),
                 ) {
                     Text(
-                        "Zachowaj rezerwacje, zapisz blokadę",
+                        "Zachowaj wszystko, zapisz blokadę",
                         fontFamily = AppFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = ProCircuit.OnBg,
                     )
                 }
-                TextButton(
-                    onClick = onBack,
-                    modifier = Modifier.fillMaxWidth(),
+            } else {
+                Button(
+                    onClick = onKeepAll,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ProCircuit.Lime,
+                        contentColor = ProCircuit.LimeInk,
+                    ),
                 ) {
                     Text(
-                        "Wróć do edycji",
+                        "Rozumiem, zapisz blokadę",
                         fontFamily = AppFontFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Black,
                         fontSize = 13.sp,
-                        color = ProCircuit.OnSurface,
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Wróć do edycji",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            }
         }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun ConflictSectionHeader(text: String) {
+    Text(
+        text = text,
+        fontFamily = AppFontFamily,
+        fontWeight = FontWeight.Black,
+        fontSize = 10.sp,
+        letterSpacing = 1.4.sp,
+        color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+    )
+}
+
+/** Nagłówek z liczbą konfliktów — zrozumiały zdanie dla trenera. */
+private fun buildSummary(bookingCount: Int, externalCount: Int): String = when {
+    bookingCount > 0 && externalCount > 0 ->
+        "W tym okresie masz $bookingCount ${bookingsWord(bookingCount)} " +
+            "i $externalCount ${externalWord(externalCount)}. Co zrobić?"
+    bookingCount > 0 ->
+        "W tym okresie masz $bookingCount ${bookingsWord(bookingCount)}. Co zrobić?"
+    else ->
+        "W tym okresie masz $externalCount ${externalWord(externalCount)}."
+}
+
+private fun externalWord(count: Int): String = when {
+    count == 1 -> "wydarzenie zewnętrzne"
+    count in 2..4 -> "wydarzenia zewnętrzne"
+    else -> "wydarzeń zewnętrznych"
+}
+
+private fun formatCalendarEventTime(event: CalendarEvent): String {
+    val tz = TimeZone.currentSystemDefault()
+    val start = event.startsAt.toLocalDateTime(tz)
+    val end = event.endsAt.toLocalDateTime(tz)
+    val date = "${start.dayOfMonth.toString().padStart(2, '0')}.${start.monthNumber.toString().padStart(2, '0')}"
+    val hhStart = "${start.hour.toString().padStart(2, '0')}:${start.minute.toString().padStart(2, '0')}"
+    val hhEnd = "${end.hour.toString().padStart(2, '0')}:${end.minute.toString().padStart(2, '0')}"
+    return "$date · $hhStart–$hhEnd"
 }
 
 private fun bookingsWord(count: Int): String = when {
