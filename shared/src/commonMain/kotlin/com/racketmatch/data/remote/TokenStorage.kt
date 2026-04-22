@@ -125,11 +125,12 @@ open class InMemoryTokenStorage : TokenStorage {
         hasPlayerProfile = true
         coachModeActive = false
         isNewUser = false
-        isOnboardingComplete = false
-        // Note: seenResultMatchIds intentionally survives logout.
-        // Match UUIDs are user-scoped (you only see your own matches), so
-        // there's no data-leak risk, and clearing them meant the "Nowy
-        // wynik" hero re-triggered on every re-login — treating every
-        // already-seen result as brand-new.
+        // Note: isOnboardingComplete and seenResultMatchIds intentionally
+        // survive logout. The onboarding tour is a first-time experience
+        // per install, not per session — resetting it meant every re-login
+        // replayed the "Twój dzień / Znajdź rywala / …" coach-marks even
+        // for established users. seenResultMatchIds is preserved for the
+        // same reason (so the "Nowy wynik" hero doesn't re-trigger for
+        // matches the user has already acknowledged).
     }
 }

@@ -43,6 +43,7 @@ import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import kotlinx.datetime.*
 
@@ -521,12 +522,22 @@ private fun DayEventColumn(
     val dayStart = LocalDateTime(date, LocalTime(0, 0)).toInstant(tz)
     val dayEnd = LocalDateTime(date.plus(1, DateTimeUnit.DAY), LocalTime(0, 0)).toInstant(tz)
     // A day reads as "niedostępny" when a BLOCKED event covers the full
-    // visible grid on this day (or more). We grey the whole column so the
-    // day is unmistakably off-limits at a glance.
+    // VISIBLE grid on this day (GRID_HOURS_START..GRID_HOURS_END). Measuring
+    // against midnight-to-midnight was too strict: a multi-day vacation that
+    // begins at e.g. 02:00 on day 1 and ends at 10:00 on day 3 produced a
+    // jarring inconsistency where day 2 was clean-grey + watermarked, while
+    // day 1 (start) and day 3 (end) each re-rendered the block as a tile with
+    // its own lighter bg, outline and "02:00" timestamp — visually breaking
+    // the continuity of the vacation. Using the visible-grid bounds treats
+    // those edge days as fully blocked too, as long as the block covers the
+    // whole visible range.
+    val gridStart = LocalDateTime(date, LocalTime(GRID_HOURS_START, 0)).toInstant(tz)
+    val gridEnd = LocalDateTime(date, LocalTime(GRID_HOURS_END, 0))
+        .toInstant(tz) + 1.hours
     val isFullyBlocked = events.any { evt ->
         evt.eventType == CalendarEventType.BLOCKED &&
-            evt.startsAt <= dayStart &&
-            evt.endsAt >= dayEnd
+            evt.startsAt <= gridStart &&
+            evt.endsAt >= gridEnd
     }
     Box(
         modifier = modifier

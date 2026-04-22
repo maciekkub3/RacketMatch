@@ -147,6 +147,16 @@ object MainScreen : Screen {
                         // PlayersScreen defaults to the player list tab.
                         tabNavigator.current = PlayersTab
                     },
+                    onSkip = {
+                        // Skip (mid-tour "Pomiń wszystko") ≠ finish. We only
+                        // persist the flag + hide the scrim; the user stays
+                        // on whatever tab the current step parked them on.
+                        // Force-switching to PlayersTab here caused crashes
+                        // when skipping on step 0 (Today): the scrim was
+                        // still mid-fade-out while PlayersScreen mounted.
+                        tokenStorage.isOnboardingComplete = true
+                        onboardingComplete = true
+                    },
                     onRequestTabChange = { anchorKey ->
                         when (anchorKey) {
                             OnboardingAnchor.TODAY_HERO -> tabNavigator.current = TodayTab

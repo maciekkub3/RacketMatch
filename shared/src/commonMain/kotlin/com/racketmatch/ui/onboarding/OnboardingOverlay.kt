@@ -116,6 +116,7 @@ private val STEPS = listOf(
 fun OnboardingOverlay(
     isComplete: Boolean,
     onComplete: () -> Unit,
+    onSkip: () -> Unit,
     onRequestTabChange: (anchorKey: String) -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -151,7 +152,7 @@ fun OnboardingOverlay(
                     stepIndex = step,
                     totalSteps = STEPS.size,
                     onNext = { if (step < STEPS.size - 1) step++ else onComplete() },
-                    onSkip = onComplete
+                    onSkip = onSkip,
                 )
             }
         }
