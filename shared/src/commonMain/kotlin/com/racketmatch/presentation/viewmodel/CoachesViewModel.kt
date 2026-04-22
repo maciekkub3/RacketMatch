@@ -2,6 +2,7 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.CoachProfile
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.repository.CoachRepository
@@ -34,6 +35,7 @@ sealed class CoachesEvent {
 
 class CoachesViewModel(
     private val coachRepository: CoachRepository,
+    private val tokenStorage: TokenStorage,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val defaultCity: String = ""
 ) : ViewModel() {
@@ -64,7 +66,14 @@ class CoachesViewModel(
         viewModelScope.launch(dispatcher) {
             _state.value = CoachesState.Loading
             try {
+                // Exclude self — coaches browsing competition shouldn't see
+                // their own profile on the list (they have Moje konto for
+                // that), and dual-role users browsing as player shouldn't
+                // see themselves either. Mirrors backend self-exclusion on
+                // /users/nearby for players.
+                val myId = tokenStorage.currentUserId
                 val coaches = coachRepository.getCoaches(currentCity, currentSport?.name)
+                    .filterNot { it.userId == myId }
                 _state.value = CoachesState.Content(
                     coaches = coaches,
                     city = currentCity,

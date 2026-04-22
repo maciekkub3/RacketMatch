@@ -122,7 +122,7 @@ val viewModelModule = module {
     // repository, not from ViewModel caching.
     factory { ExploreViewModel(get(), get(), get(), get(), get(), get()) }
     factory { MatchViewModel(get(), get()) }
-    factory { CoachesViewModel(get()) }
+    factory { CoachesViewModel(get(), get()) }
     factory { (coachId: String) -> CoachDetailViewModel(get(), coachId) }
     factory { PaymentViewModel(get()) }
     factory { SplashViewModel(get()) }
