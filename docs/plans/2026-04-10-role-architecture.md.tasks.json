@@ -1,0 +1,21 @@
+{
+  "planPath": "docs/plans/2026-04-10-role-architecture.md",
+  "tasks": [
+    {"id": 12, "subject": "Task 1: Backend — V18 migration + UserEntity + DTOs", "status": "pending"},
+    {"id": 13, "subject": "Task 2: Backend — Fix explore filter", "status": "pending", "blockedBy": [12]},
+    {"id": 14, "subject": "Task 3: Backend — Role management endpoint", "status": "pending", "blockedBy": [12]},
+    {"id": 15, "subject": "Task 4: KMP — hasPlayerProfile in data layer", "status": "pending", "blockedBy": [12]},
+    {"id": 16, "subject": "Task 5: KMP — Registration role selection", "status": "pending", "blockedBy": [15]},
+    {"id": 17, "subject": "Task 6: KMP — MainScreen navigation overhaul", "status": "pending", "blockedBy": [15]},
+    {"id": 18, "subject": "Task 7: KMP — WięcejScreen as full tab", "status": "pending"},
+    {"id": 19, "subject": "Task 8: KMP — Settings button in profile screens", "status": "pending"},
+    {"id": 20, "subject": "Task 9: KMP — SettingsScreen role management", "status": "pending", "blockedBy": [14, 15]},
+    {"id": 21, "subject": "Task 10: Backend — V19 migration (booking settings on coach_profiles)", "status": "pending"},
+    {"id": 22, "subject": "Task 11: Backend — Exceptions CRUD + booking settings endpoint + slot gen", "status": "pending", "blockedBy": [21]},
+    {"id": 23, "subject": "Task 12: KMP — CoachAvailabilityScreen redesign (3 sections)", "status": "pending", "blockedBy": [22]},
+    {"id": 24, "subject": "Task 13: KMP — ServiceBookingScreen month picker + filtered day scroll", "status": "pending"},
+    {"id": 25, "subject": "Task 14: KMP — CoachProfileEditScreen court picker from DB", "status": "pending"},
+    {"id": 26, "subject": "Task 15: KMP — CoachCalendarScreen exceptions as grey blocks", "status": "pending", "blockedBy": [22]}
+  ],
+  "lastUpdated": "2026-04-10T00:00:00Z"
+}

@@ -70,7 +70,9 @@ class PaymentViewModelTest {
         viewModel.effectFlow.test {
             viewModel.onEvent(PaymentEvent.SubscribeNow)
             dispatcher.scheduler.advanceUntilIdle()
-            awaitItem() shouldBe PaymentEffect.ShowError("Network error")
+            // Prefix match — ErrorMapper wraps the raw throwable message.
+            val effect = awaitItem() as PaymentEffect.ShowError
+            effect.msg.startsWith("Coś poszło nie tak. Spróbuj ponownie.") shouldBe true
         }
     }
 }

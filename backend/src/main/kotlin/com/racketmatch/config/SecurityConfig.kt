@@ -19,6 +19,8 @@ class SecurityConfig(private val jwtAuthFilter: JwtAuthFilter) {
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
         http
             .csrf { it.disable() }
+            .formLogin { it.disable() }
+            .httpBasic { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling { ex ->
                 ex.authenticationEntryPoint { _, response, _ ->
@@ -35,7 +37,8 @@ class SecurityConfig(private val jwtAuthFilter: JwtAuthFilter) {
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/webjars/**",
-                        "/v3/api-docs/**"
+                        "/v3/api-docs/**",
+                        "/avatars/**"
                     ).permitAll()
                     .anyRequest().authenticated()
             }

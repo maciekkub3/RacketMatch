@@ -4,10 +4,13 @@ import com.racketmatch.api.dto.UpdateProfileRequest
 import com.racketmatch.api.dto.UserDto
 import com.racketmatch.api.dto.UserStatsDto
 import com.racketmatch.service.UserService
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 data class FcmTokenRequest(val fcmToken: String)
@@ -59,6 +62,20 @@ class UserController(private val userService: UserService) {
         @RequestBody request: FcmTokenRequest
     ) {
         userService.updateFcmToken(UUID.fromString(authentication.name), request.fcmToken)
+    }
+
+    @PostMapping("/me/avatar", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun uploadAvatar(
+        authentication: Authentication,
+        @RequestParam("file") file: MultipartFile,
+        request: HttpServletRequest
+    ): Map<String, String> {
+        val userId = UUID.fromString(authentication.name)
+        val proto = request.getHeader("X-Forwarded-Proto") ?: request.scheme
+        val host = request.getHeader("X-Forwarded-Host") ?: "${request.serverName}:${request.serverPort}"
+        val baseUrl = "$proto://$host"
+        val avatarUrl = userService.uploadAvatar(userId, file, baseUrl)
+        return mapOf("avatarUrl" to avatarUrl)
     }
 
     @DeleteMapping("/me")

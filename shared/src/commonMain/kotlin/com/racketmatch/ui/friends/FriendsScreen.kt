@@ -15,6 +15,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.ui.text.style.TextAlign
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -26,17 +30,21 @@ import com.racketmatch.presentation.viewmodel.FriendsEvent
 import com.racketmatch.presentation.viewmodel.FriendsState
 import com.racketmatch.presentation.viewmodel.FriendsViewModel
 import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.IconCircleButton
+import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.players.PlayerProfileScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
-import org.koin.compose.viewmodel.koinViewModel
+import com.racketmatch.util.kmpViewModel
 
 object FriendsScreen : Screen {
 
     @Composable
     override fun Content() {
-        val viewModel: FriendsViewModel = koinViewModel()
+        val viewModel: FriendsViewModel = kmpViewModel()
         val state by viewModel.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         var selectedTab by remember { mutableIntStateOf(0) }
@@ -47,10 +55,11 @@ object FriendsScreen : Screen {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is FriendsEffect.NavigateToDm -> {
+                        val myId = effect.currentUserId
                         (navigator.parent?.parent ?: navigator).push(
                             DmChatScreen(
-                                conversationId = minOf("me", effect.friend.id) + "_" + maxOf("me", effect.friend.id),
-                                currentUserId = "me",
+                                conversationId = minOf(myId, effect.friend.id) + "_" + maxOf(myId, effect.friend.id),
+                                currentUserId = myId,
                                 otherUserName = effect.friend.displayName,
                                 otherUserAvatarUrl = effect.friend.avatarUrl
                             )
@@ -61,13 +70,29 @@ object FriendsScreen : Screen {
             }
         }
 
-        Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            Text(
-                "Znajomi",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 30.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ProCircuit.Bg)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                IconCircleButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Wstecz",
+                    onClick = { navigator.pop() },
+                )
+                Column {
+                    Eyebrow("SIEĆ")
+                    Spacer(Modifier.height(2.dp))
+                    H1("Znajomi")
+                }
+            }
 
             // Tab row
             Row(
@@ -128,7 +153,7 @@ object FriendsScreen : Screen {
                     if (selectedTab == 0) {
                         FriendsList(
                             friends = s.data.friends,
-                            onTap = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(it, initialIsFriend = true)) },
+                            onTap = { navigator.push(PlayerProfileScreen(it, initialIsFriend = true)) },
                             onDm = { viewModel.onEvent(FriendsEvent.OpenDm(it)) }
                         )
                     } else {
@@ -138,7 +163,7 @@ object FriendsScreen : Screen {
                             onAccept = { viewModel.onEvent(FriendsEvent.AcceptRequest(it)) },
                             onDecline = { viewModel.onEvent(FriendsEvent.DeclineRequest(it)) },
                             onCancel = { viewModel.onEvent(FriendsEvent.CancelRequest(it)) },
-                            onPlayerClick = { (navigator.parent?.parent ?: navigator).push(PlayerProfileScreen(it)) }
+                            onPlayerClick = { navigator.push(PlayerProfileScreen(it)) }
                         )
                     }
                 }
@@ -150,12 +175,10 @@ object FriendsScreen : Screen {
 @Composable
 private fun FriendsList(friends: List<User>, onTap: (User) -> Unit, onDm: (User) -> Unit) {
     if (friends.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                "Brak znajomych. Dodaj kogoś z listy graczy!",
-                fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnSurface
-            )
-        }
+        EmptyFriendsState(
+            title = "Zbuduj swoją listę",
+            body = "Dodaj innych graczy — z ich profilu albo po meczu. Będzie Ci łatwiej umawiać się na kolejne spotkania.",
+        )
         return
     }
     LazyColumn(
@@ -172,16 +195,13 @@ private fun FriendsList(friends: List<User>, onTap: (User) -> Unit, onDm: (User)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier.size(44.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        friend.displayName.take(1).uppercase(),
-                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                        fontSize = 18.sp, color = ProCircuit.Lime
-                    )
-                }
+                UserAvatar(
+                    displayName = friend.displayName,
+                    avatarUrl = friend.avatarUrl,
+                    size = 44.dp,
+                    bgColor = ProCircuit.SurfaceHigh,
+                    fontSize = 18.sp
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -246,16 +266,13 @@ private fun InvitationsList(
                         .padding(16.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(ProCircuit.SurfaceHigh),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                req.fromName.take(1).uppercase(),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 16.sp, color = ProCircuit.Lime
-                            )
-                        }
+                        UserAvatar(
+                            displayName = req.fromName,
+                            avatarUrl = null,
+                            size = 40.dp,
+                            bgColor = ProCircuit.SurfaceHigh,
+                            fontSize = 16.sp
+                        )
                         Spacer(Modifier.width(12.dp))
                         Text(
                             req.fromName,
@@ -321,16 +338,49 @@ private fun InvitationsList(
 
         if (received.isEmpty() && sent.isEmpty()) {
             item {
-                Box(
-                    Modifier.fillMaxWidth().padding(top = 64.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Brak zaproszeń",
-                        fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnSurface
-                    )
-                }
+                EmptyFriendsState(
+                    title = "Żadnych zaproszeń",
+                    body = "Tutaj pojawią się zaproszenia od innych graczy, a także te które sam wysłałeś.",
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyFriendsState(title: String, body: String) {
+    // Used both at screen level (FriendsList empty) and inside a
+    // LazyColumn item (InvitationsList empty). fillMaxWidth + generous
+    // top padding works in both contexts without fighting the parent.
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier.size(72.dp).clip(CircleShape).background(ProCircuit.SurfaceLow),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.PersonAdd,
+                contentDescription = null,
+                tint = ProCircuit.Lime,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            title,
+            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+            fontSize = 18.sp, color = ProCircuit.OnBg,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            body,
+            fontFamily = AppBodyFontFamily,
+            fontSize = 13.sp,
+            color = ProCircuit.OnSurface,
+            textAlign = TextAlign.Center,
+            lineHeight = 19.sp,
+        )
     }
 }

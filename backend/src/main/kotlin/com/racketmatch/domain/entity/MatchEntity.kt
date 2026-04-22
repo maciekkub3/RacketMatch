@@ -34,8 +34,17 @@ class MatchEntity(
     @Column(name = "location_name")
     var locationName: String? = null,
 
+    @Column(name = "previous_location_name")
+    var previousLocationName: String? = null,
+
+    @Column(name = "previous_scheduled_at")
+    var previousScheduledAt: Instant? = null,
+
     @Column(name = "details_proposed_by")
     var detailsProposedBy: UUID? = null,
+
+    @Column(name = "previous_details_proposed_by")
+    var previousDetailsProposedBy: UUID? = null,
 
     @Column(name = "reserved_by")
     var reservedBy: UUID? = null,

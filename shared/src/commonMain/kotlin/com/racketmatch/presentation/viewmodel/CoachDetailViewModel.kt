@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.racketmatch.domain.model.BookingSlot
 import com.racketmatch.domain.model.CoachProfile
+import com.racketmatch.domain.model.CoachService
 import com.racketmatch.domain.repository.CoachRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -12,20 +13,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 
 sealed class CoachDetailState {
     object Loading : CoachDetailState()
-    data class Content(val coach: CoachProfile, val slots: List<BookingSlot>) : CoachDetailState()
+    data class Content(
+        val coach: CoachProfile,
+        val slots: List<BookingSlot>,
+        val services: List<CoachService> = emptyList()
+    ) : CoachDetailState()
     object Error : CoachDetailState()
 }
 
 sealed class CoachDetailEvent {
-    data class BookSlot(val startsAt: Instant, val endsAt: Instant) : CoachDetailEvent()
+    data class BookSlot(val serviceId: String, val startsAt: Instant, val endsAt: Instant, val durationMinutes: Int, val playerNote: String? = null, val courtName: String? = null) : CoachDetailEvent()
+    data class LoadSlots(val from: Instant, val to: Instant) : CoachDetailEvent()
 }
 
 sealed class CoachDetailEffect {
@@ -49,7 +55,8 @@ class CoachDetailViewModel(
 
     fun onEvent(event: CoachDetailEvent) {
         when (event) {
-            is CoachDetailEvent.BookSlot -> bookSlot(event.startsAt, event.endsAt)
+            is CoachDetailEvent.BookSlot -> bookSlot(event.serviceId, event.startsAt, event.endsAt, event.durationMinutes, event.playerNote, event.courtName)
+            is CoachDetailEvent.LoadSlots -> loadSlots(event.from, event.to)
         }
     }
 
@@ -58,20 +65,35 @@ class CoachDetailViewModel(
             _state.value = CoachDetailState.Loading
             try {
                 val coach = coachRepository.getCoach(coachId)
+                val services = coachRepository.getCoachServices(coachId)
                 val now = Clock.System.now()
                 val oneMonthLater = now.plus(30, DateTimeUnit.DAY, TimeZone.UTC)
                 val slots = coachRepository.getAvailability(coachId, now, oneMonthLater)
-                _state.value = CoachDetailState.Content(coach, slots)
+                _state.value = CoachDetailState.Content(coach, slots, services)
             } catch (e: Exception) {
                 _state.value = CoachDetailState.Error
             }
         }
     }
 
-    private fun bookSlot(startsAt: Instant, endsAt: Instant) {
+    private fun loadSlots(from: Instant, to: Instant) {
         viewModelScope.launch(dispatcher) {
             try {
-                coachRepository.bookSlot(coachId, startsAt, endsAt)
+                val slots = coachRepository.getAvailability(coachId, from, to)
+                val current = _state.value
+                if (current is CoachDetailState.Content) {
+                    _state.value = current.copy(slots = slots)
+                }
+            } catch (e: Exception) {
+                _effects.emit(CoachDetailEffect.ShowError(e.toUserMessage()))
+            }
+        }
+    }
+
+    private fun bookSlot(serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?, courtName: String?) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                coachRepository.createBooking(coachId, serviceId, startsAt, endsAt, durationMinutes, playerNote, courtName)
                 _effects.emit(CoachDetailEffect.BookingConfirmed)
             } catch (e: Exception) {
                 _effects.emit(CoachDetailEffect.ShowError(e.toUserMessage()))

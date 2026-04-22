@@ -4,9 +4,15 @@ import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.AuthResult
 import com.racketmatch.domain.model.FriendRequest
 import com.racketmatch.domain.model.FriendRequestStatus
+import com.racketmatch.domain.model.BookingSettings
 import com.racketmatch.domain.model.BookingSlot
-import com.racketmatch.domain.model.ChatMessage
+import com.racketmatch.domain.model.CalendarEvent
+import com.racketmatch.domain.model.CalendarEventType
+import com.racketmatch.domain.model.CoachBooking
+import com.racketmatch.domain.model.CoachException
 import com.racketmatch.domain.model.CoachProfile
+import com.racketmatch.domain.model.CoachService
+import com.racketmatch.domain.model.PricingType
 import com.racketmatch.domain.model.Court
 import com.racketmatch.domain.model.EloPoint
 import com.racketmatch.domain.model.Match
@@ -19,7 +25,6 @@ import com.racketmatch.domain.model.PlayerFilter
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.domain.repository.AuthRepository
-import com.racketmatch.domain.repository.ChatRepository
 import com.racketmatch.domain.repository.CoachRepository
 import com.racketmatch.domain.repository.CourtRepository
 import com.racketmatch.domain.repository.MatchRepository
@@ -36,8 +41,8 @@ import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 import org.koin.dsl.module
 
 private const val MY_ID = "mock-user-1"
@@ -145,20 +150,14 @@ private val MOCK_MATCHES = mutableListOf(
 )
 
 private val MOCK_COACHES = listOf(
-    CoachProfile("c1", "Tomasz Malinowski", null, "Certyfikowany trener tenisa z 10-letnim doświadczeniem.", 15000, listOf(Sport.TENNIS), listOf("PTT Level 3"), "Warszawa", 1800),
-    CoachProfile("c2", "Karolina Szymańska", null, "Specjalistka od padla, finalistka mistrzostw Polski.", 12000, listOf(Sport.PADEL, Sport.TENNIS), listOf("FIP Certified"), "Warszawa", 1750),
+    CoachProfile("c1", "Tomasz Malinowski", null, "Certyfikowany trener tenisa z 10-letnim doświadczeniem.", listOf(Sport.TENNIS), listOf("PTT Level 3"), "Warszawa", 1800, 15000),
+    CoachProfile("c2", "Karolina Szymańska", null, "Specjalistka od padla, finalistka mistrzostw Polski.", listOf(Sport.PADEL, Sport.TENNIS), listOf("FIP Certified"), "Warszawa", 1750, 12000),
 )
 
 private val MOCK_SLOTS = listOf(
     BookingSlot(Instant.parse("2026-03-27T09:00:00Z"), Instant.parse("2026-03-27T10:00:00Z"), true),
     BookingSlot(Instant.parse("2026-03-27T11:00:00Z"), Instant.parse("2026-03-27T12:00:00Z"), true),
     BookingSlot(Instant.parse("2026-03-28T09:00:00Z"), Instant.parse("2026-03-28T10:00:00Z"), false),
-)
-
-private val MOCK_MESSAGES = listOf(
-    ChatMessage("msg1", "m1", "p1",  "Hej, potwierdzamy mecz w piątek?", System.currentTimeMillis() - 3600_000),
-    ChatMessage("msg2", "m1", MY_ID, "Tak, będę o 14:00 na korcie 3.",   System.currentTimeMillis() - 3000_000),
-    ChatMessage("msg3", "m1", "p1",  "Super, do zobaczenia!",             System.currentTimeMillis() - 1800_000),
 )
 
 private val MOCK_ELO_HISTORY = listOf(
@@ -201,7 +200,7 @@ val mockRepositoryModule = module {
                 tokenStorage.currentUserId = MY_ID
                 return AuthResult("mock-access-token", "mock-refresh-token", MOCK_USER)
             }
-            override suspend fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, sports: List<Sport>): AuthResult {
+            override suspend fun register(email: String, password: String, displayName: String, city: String, isCoach: Boolean, hasPlayerProfile: Boolean, sports: List<Sport>, ageConfirmed: Boolean): AuthResult {
                 tokenStorage.saveTokens("mock-access-token", "mock-refresh-token")
                 tokenStorage.currentUserId = MY_ID
                 val eloMap = sports.associate { it.name to 1200 }
@@ -377,23 +376,68 @@ val mockRepositoryModule = module {
                 tokenStorage.incrementMatchesVersion()
                 return updated
             }
-        }
-    }
 
-    single<ChatRepository> {
-        object : ChatRepository {
-            override suspend fun loadHistory(matchId: String) = MOCK_MESSAGES.filter { it.matchId == matchId }
-            override suspend fun sendMessage(matchId: String, text: String) {}
-            override fun observeMessages(matchId: String): Flow<ChatMessage> = emptyFlow()
+            override suspend fun withdrawDetails(matchId: String): Match {
+                // In the mock, withdraw behaves the same as discard —
+                // it clears the pending proposal. The backend distinguishes
+                // who cancelled (proposer vs opponent) via the
+                // previous_details_proposed_by column, but the mock has no
+                // notion of that history.
+                val idx = MOCK_MATCHES.indexOfFirst { it.id == matchId }
+                val updated = MOCK_MATCHES[idx].copy(
+                    detailsProposedBy = null,
+                    locationName = null,
+                    scheduledAt = null
+                )
+                MOCK_MATCHES[idx] = updated
+                tokenStorage.incrementMatchesVersion()
+                return updated
+            }
         }
     }
 
     single<CoachRepository> {
         object : CoachRepository {
-            override suspend fun getCoaches(city: String) = MOCK_COACHES
+            override suspend fun getCoaches(city: String, sport: String?): List<CoachProfile> =
+                if (sport.isNullOrBlank()) MOCK_COACHES
+                else MOCK_COACHES.filter { it.sports.any { s -> s.name.equals(sport, ignoreCase = true) } }
             override suspend fun getCoach(coachId: String) = MOCK_COACHES.first { it.userId == coachId }
+            override suspend fun getMyServices(): List<CoachService> = emptyList()
+            override suspend fun getCoachServices(coachId: String): List<CoachService> = emptyList()
             override suspend fun getAvailability(coachId: String, from: Instant, to: Instant) = MOCK_SLOTS
-            override suspend fun bookSlot(coachId: String, startsAt: Instant, endsAt: Instant) {}
+            override suspend fun createBooking(coachId: String, serviceId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int, playerNote: String?, courtName: String?): CoachBooking =
+                CoachBooking("mock", coachId, "me", serviceId, null, startsAt, endsAt, durationMinutes, "PENDING", playerNote = playerNote, courtName = courtName)
+            override suspend fun createService(name: String, description: String?, pricingType: String, priceCents: Int): CoachService =
+                CoachService("mock", "me", name, description, PricingType.valueOf(pricingType), priceCents, true)
+            override suspend fun updateService(serviceId: String, name: String, description: String?, pricingType: String, priceCents: Int, isActive: Boolean): CoachService =
+                CoachService(serviceId, "me", name, description, PricingType.valueOf(pricingType), priceCents, isActive)
+            override suspend fun deleteService(serviceId: String) {}
+            override suspend fun getCalendarEvents(from: Instant, to: Instant): List<CalendarEvent> = emptyList()
+            override suspend fun createCalendarEvent(title: String?, notes: String?, eventType: String, startsAt: Instant, endsAt: Instant): CalendarEvent =
+                CalendarEvent("mock", title, notes, CalendarEventType.valueOf(eventType), startsAt, endsAt, null)
+            override suspend fun deleteCalendarEvent(eventId: String) {}
+            override suspend fun getMyAvailability(): List<com.racketmatch.domain.model.CoachWeeklyAvailability> = emptyList()
+            override suspend fun saveMyAvailability(items: List<com.racketmatch.domain.model.CoachWeeklyAvailability>) = items
+            override suspend fun getMyCoachProfile(): CoachProfile = MOCK_COACHES.first()
+            override suspend fun getMyBookingSettings(): BookingSettings = BookingSettings()
+            override suspend fun updateBookingSettings(leadTimeHours: Int, horizonDays: Int, bufferMinutes: Int) {}
+            override suspend fun getMyExceptions(): List<CoachException> = emptyList()
+            override suspend fun createException(startsAt: Instant, endsAt: Instant, label: String?): CoachException =
+                CoachException("mock", startsAt, endsAt, label)
+            override suspend fun deleteException(id: String) {}
+            override suspend fun getPendingBookings(): List<CoachBooking> = emptyList()
+            override suspend fun getMyBookings(): List<CoachBooking> = emptyList()
+            override suspend fun confirmBooking(bookingId: String): CoachBooking =
+                CoachBooking(bookingId, "me", "player", null, null, Instant.DISTANT_PAST, Instant.DISTANT_PAST, null, "CONFIRMED")
+            override suspend fun declineBooking(bookingId: String, reason: String?): CoachBooking =
+                CoachBooking(bookingId, "me", "player", null, null, Instant.DISTANT_PAST, Instant.DISTANT_PAST, null, "DECLINED", declineReason = reason)
+            override suspend fun cancelBooking(bookingId: String, reason: String?): CoachBooking =
+                CoachBooking(bookingId, "me", "player", null, null, Instant.DISTANT_PAST, Instant.DISTANT_PAST, null, "CANCELLED", cancelReason = reason)
+            override suspend fun counterBooking(bookingId: String, startsAt: Instant, endsAt: Instant, durationMinutes: Int?, courtName: String?): CoachBooking =
+                CoachBooking(bookingId, "me", "player", null, null, startsAt, endsAt, durationMinutes, "PENDING", courtName = courtName)
+            override suspend fun listBookings(segment: String?): List<CoachBooking> = emptyList()
+            override suspend fun updateMyCoachProfile(bio: String?, sports: List<Sport>?, trainingLocations: List<String>): CoachProfile =
+                MOCK_COACHES.first().copy(trainingLocations = trainingLocations)
         }
     }
 
@@ -441,7 +485,7 @@ val mockRepositoryModule = module {
                 if (idx >= 0) MOCK_SESSIONS[idx] = MOCK_SESSIONS[idx].copy(status = OpenSessionStatus.FILLED)
                 val matchId = "m${matchIdCounter++}"
                 if (session != null) {
-                    val scheduledAtIso = kotlinx.datetime.Instant.fromEpochMilliseconds(session.startsAt).toString()
+                    val scheduledAtIso = kotlin.time.Instant.fromEpochMilliseconds(session.startsAt).toString()
                     MOCK_MATCHES.add(
                         Match(
                             id = matchId,
@@ -485,6 +529,14 @@ val mockRepositoryModule = module {
                     avatarUrl = avatarUrl ?: currentProfile.avatarUrl,
                     sports = sports,
                     eloPerSport = sports.associate { it.name to (currentProfile.eloPerSport[it.name] ?: 1200) }
+                )
+                return currentProfile
+            }
+            override suspend fun uploadAvatar(imageBytes: ByteArray): String = ""
+            override suspend fun activateRole(activateCoach: Boolean?, activatePlayerProfile: Boolean?): User {
+                currentProfile = currentProfile.copy(
+                    isCoach = activateCoach ?: currentProfile.isCoach,
+                    hasPlayerProfile = activatePlayerProfile ?: currentProfile.hasPlayerProfile
                 )
                 return currentProfile
             }

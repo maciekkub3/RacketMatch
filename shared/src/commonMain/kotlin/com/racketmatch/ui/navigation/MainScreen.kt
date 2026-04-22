@@ -3,10 +3,11 @@ package com.racketmatch.ui.navigation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -30,81 +31,74 @@ import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.ExploreEvent
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
-import com.racketmatch.presentation.viewmodel.MoreViewModel
-import com.racketmatch.presentation.viewmodel.NotificationViewModel
+import com.racketmatch.ui.more.WięcejScreen
+import com.racketmatch.ui.coaches.CoachAvailabilityScreen
+import com.racketmatch.ui.coaches.CoachBookingsScreen
+import com.racketmatch.ui.coaches.CoachCalendarScreen
+import com.racketmatch.ui.coaches.CoachProfileEditScreen
+import com.racketmatch.ui.coaches.CoachProfileScreen
+import com.racketmatch.ui.coaches.CoachServicesScreen
+import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.messages.MessagesScreen
 import com.racketmatch.ui.notifications.NotificationsScreen
-import com.racketmatch.ui.coaches.CoachesScreen
 import com.racketmatch.ui.matches.MatchListScreen
 import com.racketmatch.ui.onboarding.OnboardingAnchor
 import com.racketmatch.ui.onboarding.OnboardingOverlay
 import com.racketmatch.ui.onboarding.onboardingAnchor
 import com.racketmatch.ui.players.PlayersScreen
-import com.racketmatch.ui.profile.ProfileScreen
 import com.racketmatch.ui.rankings.RankingsScreen
+import com.racketmatch.ui.today.TodayScreen
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import com.racketmatch.util.kmpViewModel
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 
 object MainScreen : Screen {
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val tokenStorage: TokenStorage = koinInject()
-        val moreViewModel: MoreViewModel = koinViewModel()
-        val exploreViewModel: ExploreViewModel = koinViewModel()
-        val badges by moreViewModel.badges.collectAsState()
-        val exploreState by exploreViewModel.stateFlow.collectAsState()
-        val avatarLetter = exploreState.myName.firstOrNull()?.uppercase() ?: "?"
-        val userId = tokenStorage.currentUserId ?: ""
-        val notifVm: NotificationViewModel = koinViewModel { parametersOf(userId) }
-        val notifState by notifVm.state.collectAsState()
-        var onboardingComplete by remember { mutableStateOf(tokenStorage.isOnboardingComplete) }
-        var showMoreSheet by remember { mutableStateOf(false) }
-        val outerNavigator = LocalNavigator.currentOrThrow
+        val exploreViewModel: ExploreViewModel = kmpViewModel()
+        val badgeVm: ActionBadgeViewModel = kmpViewModel()
+        val badgeState by badgeVm.state.collectAsState()
+        var onboardingComplete by remember { mutableStateOf(true) }
+        val isCoach = tokenStorage.isCoach
+        val coachModeActive = tokenStorage.coachModeActive
 
-        TabNavigator(tab = PlayersTab) { tabNavigator ->
-            OnboardingOverlay(
-                isComplete = onboardingComplete,
-                onComplete = {
-                    tokenStorage.isOnboardingComplete = true
-                    onboardingComplete = true
-                    tabNavigator.current = PlayersTab
-                },
-                onRequestTabChange = { anchorKey ->
-                    when (anchorKey) {
-                        OnboardingAnchor.RANKINGS_TAB,
-                        OnboardingAnchor.RANKINGS_TABLE -> tabNavigator.current = RankingsTab
-                        else -> tabNavigator.current = PlayersTab
+        if (isCoach && coachModeActive) {
+            // ── Coach mode ───────────────────────────────────────────────────
+            TabNavigator(tab = CoachDzienTab) { coachTabNavigator ->
+                // Tab-switch signals (e.g. CoachDzienScreen's "Zobacz rezerwacje"
+                // jump to the bookings tab).
+                val pendingSwitch = TabSwitchSignal.pending()
+                LaunchedEffect(pendingSwitch) {
+                    val target = when (pendingSwitch) {
+                        "coachDzien" -> CoachDzienTab
+                        "coachBookings" -> CoachBookingsTab
+                        "coachCalendar" -> CoachCalendarTab
+                        "wiecej" -> WięcejTab
+                        else -> null
+                    }
+                    if (target != null) {
+                        coachTabNavigator.current = target
+                        TabSwitchSignal.consume()
                     }
                 }
-            ) {
                 Scaffold(
                     containerColor = ProCircuit.Bg,
-                    topBar = {
-                        MainTopBar(
-                            avatarLetter = avatarLetter,
-                            unreadCount = notifState.unreadCount,
-                            onAvatarClick = { outerNavigator.push(ProfileScreen) },
-                            onBellClick = { outerNavigator.push(NotificationsScreen) }
-                        )
-                    },
+                    topBar = { },
                     bottomBar = {
-                        ProCircuitNavBar(
-                            current = tabNavigator.current,
-                            onTabSelect = {
-                                if (it == PlayersTab) exploreViewModel.onEvent(ExploreEvent.ResetToMap)
-                                tabNavigator.current = it
-                            },
-                            onMoreTap = { moreViewModel.refresh(); showMoreSheet = true },
-                            matchBadge = notifState.unreadMatchCount,
-                            moreBadge = notifState.unreadFriendCount + notifState.unreadDmCount
-                        )
+                        CoachNavBar(current = coachTabNavigator.current) { selected ->
+                            val wasActive = coachTabNavigator.current == selected
+                            val alwaysReset = selected == WięcejTab
+                            if (wasActive || alwaysReset) {
+                                TabReset.request(selected.tabKey())
+                            }
+                            coachTabNavigator.current = selected
+                        }
                     }
                 ) { paddingValues ->
                     Box(modifier = Modifier.padding(
@@ -114,125 +108,77 @@ object MainScreen : Screen {
                         CurrentTab()
                     }
                 }
-
-                if (showMoreSheet) {
-                    MoreBottomSheet(
-                        onDismiss = { showMoreSheet = false },
-                        onProfile = { showMoreSheet = false; outerNavigator.push(ProfileScreen) },
-                        onFriends = { showMoreSheet = false; tabNavigator.current = FriendsTab },
-                        onMessages = { showMoreSheet = false; tabNavigator.current = MessagesTab },
-                        onFeed = { showMoreSheet = false; tabNavigator.current = FeedTab },
-                        onCoaches = { showMoreSheet = false; tabNavigator.current = CoachesTab },
-                        pendingFriends = badges.pendingFriends,
-                        unreadMessages = badges.unreadMessages
-                    )
-                }
             }
-        }
-    }
-}
-
-@Composable
-private fun MainTopBar(
-    avatarLetter: String,
-    unreadCount: Int,
-    onAvatarClick: () -> Unit,
-    onBellClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(ProCircuit.SurfaceLow)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(ProCircuit.Lime.copy(alpha = 0.18f))
-                .clickable(onClick = onAvatarClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(avatarLetter, fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                fontSize = 15.sp, color = ProCircuit.Lime)
-        }
-        Spacer(Modifier.weight(1f))
-        Text("RACKETMATCH", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-            fontSize = 13.sp, letterSpacing = 2.sp, color = ProCircuit.OnBg)
-        Spacer(Modifier.weight(1f))
-        BadgedBox(
-            badge = {
-                if (unreadCount > 0) {
-                    Badge {
-                        Text(if (unreadCount > 9) "9+" else unreadCount.toString())
+        } else {
+            // ── Player mode ──────────────────────────────────────────────────
+            TabNavigator(tab = TodayTab) { tabNavigator ->
+                // Observe external tab-switch requests (e.g. celebration
+                // scenes pushed on the outer Navigator that can't touch
+                // LocalTabNavigator themselves).
+                val pendingSwitch = TabSwitchSignal.pending()
+                LaunchedEffect(pendingSwitch) {
+                    val target = when (pendingSwitch) {
+                        "today" -> TodayTab
+                        "players" -> PlayersTab
+                        "matches" -> MatchesTab
+                        "rankings" -> RankingsTab
+                        "wiecej" -> WięcejTab
+                        else -> null
+                    }
+                    if (target != null) {
+                        tabNavigator.current = target
+                        TabSwitchSignal.consume()
                     }
                 }
-            }
-        ) {
-            IconButton(onClick = onBellClick) {
-                Icon(Icons.Default.Notifications, contentDescription = "Powiadomienia",
-                    tint = ProCircuit.OnBg)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MoreBottomSheet(
-    onDismiss: () -> Unit,
-    onProfile: () -> Unit,
-    onFriends: () -> Unit,
-    onMessages: () -> Unit,
-    onFeed: () -> Unit,
-    onCoaches: () -> Unit,
-    pendingFriends: Int,
-    unreadMessages: Int
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = ProCircuit.SurfaceLow,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    ) {
-        Column(modifier = Modifier.padding(bottom = 32.dp)) {
-            MoreRow(emoji = "👤", label = "Profil", badge = 0, onClick = onProfile)
-            MoreRow(emoji = "👋", label = "Znajomi", badge = pendingFriends, onClick = onFriends)
-            MoreRow(emoji = "💬", label = "Wiadomości", badge = unreadMessages, onClick = onMessages)
-            MoreRow(emoji = "📰", label = "Aktywność", badge = 0, onClick = onFeed)
-            MoreRow(emoji = "🎾", label = "Trenerzy", badge = 0, onClick = onCoaches)
-        }
-    }
-}
-
-@Composable
-private fun MoreRow(emoji: String, label: String, badge: Int, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(emoji, fontSize = 22.sp)
-            Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                fontSize = 16.sp, color = ProCircuit.OnBg)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (badge > 0) {
-                Box(
-                    modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                        .background(ProCircuit.Lime).padding(horizontal = 8.dp, vertical = 2.dp),
-                    contentAlignment = Alignment.Center
+                OnboardingOverlay(
+                    isComplete = onboardingComplete,
+                    onComplete = {
+                        tokenStorage.isOnboardingComplete = true
+                        onboardingComplete = true
+                        tabNavigator.current = PlayersTab
+                    },
+                    onRequestTabChange = { anchorKey ->
+                        when (anchorKey) {
+                            OnboardingAnchor.RANKINGS_TAB,
+                            OnboardingAnchor.RANKINGS_TABLE -> tabNavigator.current = RankingsTab
+                            else -> tabNavigator.current = PlayersTab
+                        }
+                    }
                 ) {
-                    Text("$badge", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 11.sp, color = ProCircuit.Bg)
+                    Scaffold(
+                        containerColor = ProCircuit.Bg,
+                        // Player mode — all tabs are now on the new design
+                        // with their own headers, so the global top bar is
+                        // gone. Bell → Today's in-screen icon; avatar →
+                        // Więcej "Moje konto" card.
+                        topBar = { },
+                        bottomBar = {
+                            ProCircuitNavBar(
+                                current = tabNavigator.current,
+                                onTabSelect = { selected ->
+                                    val wasActive = tabNavigator.current == selected
+                                    val alwaysReset = selected == WięcejTab
+                                    if (wasActive || alwaysReset) {
+                                        TabReset.request(selected.tabKey())
+                                    }
+                                    if (selected == PlayersTab) exploreViewModel.onEvent(ExploreEvent.ResetToMap)
+                                    tabNavigator.current = selected
+                                },
+                                matchBadge = badgeState.matchActionCount,
+                                moreBadge = badgeState.moreBadge
+                            )
+                        }
+                    ) { paddingValues ->
+                        Box(modifier = Modifier.padding(
+                            top = paddingValues.calculateTopPadding(),
+                            bottom = paddingValues.calculateBottomPadding()
+                        )) {
+                            CurrentTab()
+                        }
+                    }
+
                 }
             }
-            Text("›", fontSize = 20.sp, color = ProCircuit.OnSurface)
         }
     }
 }
@@ -241,11 +187,10 @@ private fun MoreRow(emoji: String, label: String, badge: Int, onClick: () -> Uni
 private fun ProCircuitNavBar(
     current: Tab,
     onTabSelect: (Tab) -> Unit,
-    onMoreTap: () -> Unit,
     matchBadge: Int = 0,
     moreBadge: Int = 0
 ) {
-    val mainTabs = listOf(PlayersTab, MatchesTab, RankingsTab)
+    val mainTabs = listOf(TodayTab, PlayersTab, MatchesTab, RankingsTab, WięcejTab)
 
     Box(
         modifier = Modifier.fillMaxWidth()
@@ -273,13 +218,17 @@ private fun ProCircuitNavBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    val tabMatchBadge = if (tab == MatchesTab) matchBadge else 0
+                    val tabBadge = when (tab) {
+                        MatchesTab -> matchBadge
+                        WięcejTab -> moreBadge
+                        else -> 0
+                    }
                     BadgedBox(badge = {
-                        if (tabMatchBadge > 0) {
+                        if (tabBadge > 0) {
                             Badge(
                                 containerColor = ProCircuit.Lime,
                                 contentColor = ProCircuit.Bg
-                            ) { Text(tabMatchBadge.toString()) }
+                            ) { Text(tabBadge.toString()) }
                         }
                     }) {
                         Icon(
@@ -299,73 +248,88 @@ private fun ProCircuitNavBar(
                     )
                 }
             }
-            // WIĘCEJ non-tab item
-            val moreIsActive = current !in mainTabs
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (moreIsActive) ProCircuit.Tertiary else Color.Transparent)
-                    .clickable { onMoreTap() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                BadgedBox(badge = {
-                    if (moreBadge > 0) {
-                        Badge(
-                            containerColor = ProCircuit.Lime,
-                            contentColor = ProCircuit.Bg
-                        ) { Text(moreBadge.toString()) }
-                    }
-                }) {
-                    Icon(
-                        painter = rememberVectorPainter(Icons.Default.Person),
-                        contentDescription = "Więcej",
-                        tint = if (moreIsActive) ProCircuit.SurfaceLow else ProCircuit.OnBg,
-                        modifier = Modifier.height(22.dp)
-                    )
-                }
-                Text(
-                    text = "WIĘCEJ",
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 8.sp,
-                    letterSpacing = 1.sp,
-                    color = if (moreIsActive) ProCircuit.SurfaceLow else ProCircuit.OnBg
-                )
-            }
         }
     }
 }
 
 // ─── Existing Tabs ────────────────────────────────────────────────────────────
 
+/** Stable key per Tab for the TabReset registry. Switch-on-type avoids a
+ *  dependency on the user-facing title (which may be localized later). */
+internal fun Tab.tabKey(): String = when (this) {
+    TodayTab -> "today"
+    PlayersTab -> "players"
+    RankingsTab -> "rankings"
+    MatchesTab -> "matches"
+    WięcejTab -> "wiecej"
+    CoachDzienTab -> "coachDzien"
+    CoachCalendarTab -> "coachCalendar"
+    CoachBookingsTab -> "coachBookings"
+    CoachServicesTab -> "coachServices"
+    CoachAvailabilityTab -> "coachAvailability"
+    else -> this::class.simpleName ?: "unknown"
+}
+
+object TodayTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 0u, title = "Dziś", icon = rememberVectorPainter(Icons.Default.Bolt))
+    @Composable
+    override fun Content() = Navigator(TodayScreen) {
+        popToRootOn("today", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
 object PlayersTab : Tab {
     override val options: TabOptions
-        @Composable get() = TabOptions(index = 0u, title = "Explore", icon = rememberVectorPainter(Icons.Default.Search))
+        @Composable get() = TabOptions(index = 1u, title = "Explore", icon = rememberVectorPainter(Icons.Default.Search))
     @Composable
-    override fun Content() { Navigator(PlayersScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(PlayersScreen) {
+        popToRootOn("players", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object RankingsTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 1u, title = "Rankings", icon = rememberVectorPainter(Icons.Default.Star))
     @Composable
-    override fun Content() { Navigator(RankingsScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(RankingsScreen) {
+        popToRootOn("rankings", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object MatchesTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 2u, title = "Matches", icon = rememberVectorPainter(Icons.Default.Star))
     @Composable
-    override fun Content() { Navigator(MatchListScreen) { CurrentScreen() } }
+    override fun Content() = Navigator(MatchListScreen) {
+        popToRootOn("matches", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 object CoachesTab : Tab {
     override val options: TabOptions
         @Composable get() = TabOptions(index = 3u, title = "Coaches", icon = rememberVectorPainter(Icons.Default.Search))
     @Composable
-    override fun Content() { Navigator(CoachesScreen) { CurrentScreen() } }
+    override fun Content() { Navigator(CoachesScreen()) { CurrentScreen() } }
+}
+
+object CoachesCoachModeTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 3u, title = "Trenerzy", icon = rememberVectorPainter(Icons.Default.Person))
+    @Composable
+    override fun Content() { Navigator(CoachesScreen(isCoachMode = true)) { CurrentScreen() } }
+}
+
+object WięcejTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(
+            index = 4u, title = "Więcej",
+            icon = rememberVectorPainter(Icons.Default.Person)
+        )
+    @Composable
+    override fun Content() = Navigator(WięcejScreen) {
+        popToRootOn("wiecej", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
 }
 
 // ─── New Social Tabs (stubs — filled in later tasks) ─────────────────────────
@@ -395,3 +359,98 @@ object FeedTab : Tab {
     override fun Content() = com.racketmatch.ui.feed.FeedScreen.Content()
 }
 
+// ─── Coach Tabs ───────────────────────────────────────────────────────────────
+
+object CoachDzienTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 0u, title = "Dzień", icon = rememberVectorPainter(Icons.Default.Bolt))
+    @Composable
+    override fun Content() = Navigator(com.racketmatch.ui.coaches.CoachDzienScreen) {
+        popToRootOn("coachDzien", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
+object CoachCalendarTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 2u, title = "Kalendarz", icon = rememberVectorPainter(Icons.Default.DateRange))
+    @Composable
+    override fun Content() = Navigator(CoachCalendarScreen) {
+        popToRootOn("coachCalendar", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
+object CoachBookingsTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 1u, title = "Rezerwacje", icon = rememberVectorPainter(Icons.AutoMirrored.Filled.List))
+    @Composable
+    override fun Content() = Navigator(CoachBookingsScreen) {
+        popToRootOn("coachBookings", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
+object CoachServicesTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(index = 2u, title = "Usługi", icon = rememberVectorPainter(Icons.Default.Star))
+    @Composable
+    override fun Content() = Navigator(CoachServicesScreen) {
+        popToRootOn("coachServices", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
+object CoachAvailabilityTab : Tab {
+    override val options: TabOptions
+        @Composable get() = TabOptions(
+            index = 2u, title = "Dostępność",
+            icon = rememberVectorPainter(Icons.Default.DateRange)
+        )
+    @Composable
+    override fun Content() = Navigator(CoachAvailabilityScreen) {
+        popToRootOn("coachAvailability", LocalNavigator.currentOrThrow); CurrentScreen()
+    }
+}
+
+@Composable
+private fun CoachNavBar(current: Tab, onTabSelect: (Tab) -> Unit) {
+    val coachTabs = listOf(CoachDzienTab, CoachBookingsTab, CoachCalendarTab, WięcejTab)
+
+    Box(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            .background(ProCircuit.SurfaceLow)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            coachTabs.forEach { tab ->
+                val isSelected = current == tab
+                Column(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isSelected) ProCircuit.Tertiary else Color.Transparent)
+                        .clickable { onTabSelect(tab) }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(
+                        painter = tab.options.icon!!,
+                        contentDescription = tab.options.title,
+                        tint = if (isSelected) ProCircuit.SurfaceLow else ProCircuit.OnBg,
+                        modifier = Modifier.height(22.dp)
+                    )
+                    Text(
+                        text = tab.options.title.uppercase(),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 8.sp,
+                        letterSpacing = 1.sp,
+                        color = if (isSelected) ProCircuit.SurfaceLow else ProCircuit.OnBg
+                    )
+                }
+            }
+        }
+    }
+}

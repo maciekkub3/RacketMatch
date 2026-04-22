@@ -1,6 +1,7 @@
 package com.racketmatch.ui.players
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,12 +29,19 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.domain.repository.FriendRepository
+import com.racketmatch.presentation.viewmodel.ExploreEffect
+import com.racketmatch.presentation.viewmodel.ExploreEvent
+import com.racketmatch.presentation.viewmodel.ExploreViewModel
+import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.UserAvatar
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
+import com.racketmatch.util.kmpViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -43,17 +52,49 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val friendRepo: FriendRepository = koinInject()
+        val tokenStorage: TokenStorage = koinInject()
+        // Shared challenge sheet lives in ExploreViewModel so Today,
+        // Explore and this profile screen all use the same UX.
+        val exploreVm: ExploreViewModel = kmpViewModel()
+        val exploreState by exploreVm.stateFlow.collectAsState()
         var isFriend by remember { mutableStateOf(initialIsFriend) }
         var requestSent by remember { mutableStateOf(false) }
+        var challengeSent by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
         LaunchedEffect(player.id) {
-            if (!initialIsFriend) {
-                try {
-                    val friends = friendRepo.getFriends()
-                    isFriend = friends.any { it.id == player.id }
-                } catch (_: Exception) {}
+            try {
+                val friends = friendRepo.getFriends()
+                isFriend = friends.any { it.id == player.id }
+                if (!isFriend) {
+                    val sent = friendRepo.getSentRequests()
+                    requestSent = sent.any { it.toUserId == player.id }
+                }
+            } catch (_: Exception) {}
+        }
+
+        LaunchedEffect(Unit) {
+            exploreVm.effectFlow.collect { effect ->
+                if (effect is ExploreEffect.ChallengeSent) {
+                    challengeSent = true
+                    navigator.push(
+                        InviteSentScreen(
+                            opponentName = effect.name,
+                            opponentElo = effect.opponentElo,
+                            opponentCity = effect.opponentCity,
+                            myElo = effect.myElo,
+                        )
+                    )
+                }
             }
+        }
+
+        if (exploreState.challengeDialog != null) {
+            ChallengeDialog(
+                dialogState = exploreState.challengeDialog!!,
+                courts = exploreState.courts,
+                onEvent = { exploreVm.onEvent(it) },
+            )
         }
 
         val total = player.wins + player.losses
@@ -94,15 +135,15 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
 
                     // Avatar
                     Box {
-                        Box(
-                            modifier = Modifier.size(88.dp).clip(RoundedCornerShape(24.dp))
-                                .background(ProCircuit.SurfaceHigh),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(player.displayName.take(1).uppercase(),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 36.sp, color = ProCircuit.Lime)
-                        }
+                        UserAvatar(
+                            displayName = player.displayName,
+                            avatarUrl = player.avatarUrl,
+                            size = 88.dp,
+                            shape = RoundedCornerShape(24.dp),
+                            bgColor = ProCircuit.SurfaceHigh,
+                            textColor = ProCircuit.Lime,
+                            fontSize = 36.sp
+                        )
                         if (player.isMaster) {
                             Box(modifier = Modifier.align(Alignment.BottomEnd)
                                 .clip(CircleShape).background(ProCircuit.Tertiary).padding(5.dp)) {
@@ -122,9 +163,11 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                     Text(player.city.uppercase(), fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
                     Spacer(Modifier.height(16.dp))
-                    when {
-                        isFriend -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(
+
+                    // Friend status row
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        when {
+                            isFriend -> Box(
                                 modifier = Modifier.clip(RoundedCornerShape(12.dp))
                                     .background(ProCircuit.SurfaceLow)
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -132,26 +175,82 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                                 Text("Znajomy ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp, color = ProCircuit.Lime)
                             }
+                            requestSent -> Box(
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(ProCircuit.SurfaceLow)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text("Zaproszenie wysłane ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp, color = ProCircuit.OnSurface)
+                            }
+                            else -> Button(
+                                onClick = {
+                                    scope.launch {
+                                        try { friendRepo.sendRequest(player.id); requestSent = true }
+                                        catch (_: Exception) {}
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime)
+                            ) {
+                                Text("+ Dodaj", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = ProCircuit.Bg)
+                            }
                         }
-                        requestSent -> Box(
-                            modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                                .background(ProCircuit.SurfaceLow)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text("Zaproszenie wysłane ✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp, color = ProCircuit.OnSurface)
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Action buttons row
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (challengeSent) {
+                            Box(
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                                    .background(ProCircuit.SurfaceLow)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                Text("Wyzwanie wysłane ✓", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.Bold, fontSize = 12.sp, color = ProCircuit.Lime)
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    // ExploreViewModel may not have this user
+                                    // in its cached players list (we're on a
+                                    // profile navigated to from friends/DM
+                                    // etc., potentially out-of-city) — pass
+                                    // the full User as fallback.
+                                    exploreVm.onEvent(
+                                        ExploreEvent.ShowChallengeDialog(
+                                            userId = player.id,
+                                            fallbackPlayer = player,
+                                        )
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.OnBg)
+                            ) {
+                                Text("⚔ Wyzwij", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            }
                         }
-                        else -> Button(
-                            onClick = {
-                                scope.launch {
-                                    try { friendRepo.sendRequest(player.id); requestSent = true }
-                                    catch (_: Exception) {}
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime)
-                        ) {
-                            Text("+ Dodaj do znajomych", fontFamily = AppFontFamily,
-                                fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, color = ProCircuit.Bg)
+                        if (isFriend) {
+                            Button(
+                                onClick = {
+                                    val myId = tokenStorage.currentUserId ?: return@Button
+                                    val convId = minOf(myId, player.id) + "_" + maxOf(myId, player.id)
+                                    (navigator.parent?.parent ?: navigator).push(
+                                        DmChatScreen(
+                                            conversationId = convId,
+                                            currentUserId = myId,
+                                            otherUserName = player.displayName,
+                                            otherUserAvatarUrl = player.avatarUrl
+                                        )
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.SurfaceHigh, contentColor = ProCircuit.OnBg)
+                            ) {
+                                Text("💬 Chat", fontFamily = AppFontFamily,
+                                    fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -181,7 +280,7 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
                     .clip(RoundedCornerShape(16.dp)).background(ProCircuit.SurfaceLow)
                     .padding(16.dp)) {
-                    Text("BIO", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                    Text("O MNIE", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                         fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface)
                     Spacer(Modifier.height(8.dp))
                     Text(player.bio!!, fontFamily = AppBodyFontFamily, fontSize = 13.sp,
@@ -192,7 +291,7 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
             // ELO per sport
             if (player.eloPerSport.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
-                Text("ELO PER SPORT", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                Text("ELO NA SPORT", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
                     fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
                     modifier = Modifier.padding(horizontal = 24.dp))
                 Spacer(Modifier.height(10.dp))
@@ -228,7 +327,7 @@ data class PlayerProfileScreen(val player: User, val initialIsFriend: Boolean = 
                                 .background(ProCircuit.SurfaceHigh)
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text("$emoji ${sport.name}", fontFamily = AppFontFamily,
+                            Text("$emoji ${if (sport == Sport.TENNIS) "Tenis" else "Padel"}", fontFamily = AppFontFamily,
                                 fontWeight = FontWeight.Bold, fontSize = 11.sp, color = ProCircuit.OnBg)
                         }
                     }

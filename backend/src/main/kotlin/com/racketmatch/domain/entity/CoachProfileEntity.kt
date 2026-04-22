@@ -17,9 +17,6 @@ class CoachProfileEntity(
 
     var bio: String? = null,
 
-    @Column(name = "hourly_rate", nullable = false)
-    var hourlyRate: Int,
-
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "coach_certifications", joinColumns = [JoinColumn(name = "coach_id")])
     @Column(name = "certification")
@@ -28,5 +25,19 @@ class CoachProfileEntity(
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "coach_sports", joinColumns = [JoinColumn(name = "coach_id")])
     @Column(name = "sport")
-    var sports: MutableList<String> = mutableListOf("TENNIS")
+    var sports: MutableList<String> = mutableListOf("TENNIS"),
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "coach_training_locations", joinColumns = [JoinColumn(name = "coach_id")])
+    @Column(name = "location")
+    var trainingLocations: MutableList<String> = mutableListOf(),
+
+    @Column(name = "booking_lead_time_hours")
+    var bookingLeadTimeHours: Int = 24,
+
+    @Column(name = "booking_horizon_days")
+    var bookingHorizonDays: Int = 30,
+
+    @Column(name = "buffer_minutes")
+    var bufferMinutes: Int = 0,
 )

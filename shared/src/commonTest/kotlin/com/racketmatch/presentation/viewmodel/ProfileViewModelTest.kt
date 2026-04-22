@@ -8,12 +8,14 @@ import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.data.remote.TokenStorage
-import com.racketmatch.domain.repository.AuthRepository
+import com.racketmatch.data.remote.api.SportLevelApi
 import com.racketmatch.domain.repository.ProfileRepository
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.impl.annotations.MockK
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -22,7 +24,7 @@ import kotlin.test.Test
 class ProfileViewModelTest {
 
     @MockK private lateinit var profileRepository: ProfileRepository
-    @MockK private lateinit var authRepository: AuthRepository
+    @MockK private lateinit var sportLevelApi: SportLevelApi
     @MockK private lateinit var tokenStorage: TokenStorage
     private val dispatcher = StandardTestDispatcher()
     private lateinit var viewModel: ProfileViewModel
@@ -44,11 +46,17 @@ class ProfileViewModelTest {
         coEvery { profileRepository.getMyProfile() } returns testUser
         coEvery { profileRepository.getRecentMatches() } returns listOf(testMatch)
         coEvery { profileRepository.getEloHistory() } returns listOf(testEloPoint)
+        coEvery { sportLevelApi.getAll() } returns emptyList()
+        // VM subscribes to three version flows on init — stub them so the
+        // mock doesn't throw MockKException at first access.
+        every { tokenStorage.loginVersionFlow } returns MutableStateFlow(0)
+        every { tokenStorage.matchesVersionFlow } returns MutableStateFlow(0)
+        every { tokenStorage.profileVersionFlow } returns MutableStateFlow(0)
     }
 
     @Test
     fun `loads profile on init`() = runTest {
-        viewModel = ProfileViewModel(profileRepository, authRepository, tokenStorage, dispatcher)
+        viewModel = ProfileViewModel(profileRepository, sportLevelApi, tokenStorage, dispatcher)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe ProfileState.Loading
@@ -63,7 +71,7 @@ class ProfileViewModelTest {
     @Test
     fun `error loading profile shows Error state`() = runTest {
         coEvery { profileRepository.getMyProfile() } throws Exception("Network error")
-        viewModel = ProfileViewModel(profileRepository, authRepository, tokenStorage, dispatcher)
+        viewModel = ProfileViewModel(profileRepository, sportLevelApi, tokenStorage, dispatcher)
 
         viewModel.stateFlow.test {
             awaitItem() shouldBe ProfileState.Loading

@@ -24,11 +24,11 @@ class CoachesViewModelTest {
         displayName = "Marek Nowak",
         avatarUrl = null,
         bio = "Trener z 10-letnim doświadczeniem",
-        hourlyRate = 8000,
         sports = listOf(Sport.TENNIS),
         certifications = emptyList(),
         city = "Kraków",
-        eloRating = 1600
+        eloRating = 1600,
+        lowestServicePriceCents = 8000
     )
 
     @BeforeTest

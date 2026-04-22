@@ -1,33 +1,101 @@
 package com.racketmatch.api.controller
 
 import com.racketmatch.api.dto.BookingSlotDto
+import com.racketmatch.api.dto.CoachExceptionDto
 import com.racketmatch.api.dto.CoachProfileDto
+import com.racketmatch.api.dto.CreateExceptionRequest
+import com.racketmatch.api.dto.UpdateBookingSettingsRequest
+import com.racketmatch.api.dto.UpdateCoachProfileRequest
 import com.racketmatch.api.dto.toDto
+import com.racketmatch.domain.entity.CoachCalendarEventEntity
 import com.racketmatch.domain.repository.BookingRepository
+import com.racketmatch.domain.repository.CoachAvailabilityRepository
+import com.racketmatch.domain.repository.CoachCalendarEventRepository
 import com.racketmatch.domain.repository.CoachProfileRepository
+import com.racketmatch.domain.repository.CoachServiceRepository
+import com.racketmatch.domain.repository.UserRepository
 import org.springframework.http.HttpStatus
+import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+
+data class CoachSetupStatusDto(
+    val hasBio: Boolean,
+    val hasService: Boolean,
+    val hasAvailability: Boolean,
+    val isComplete: Boolean,
+)
 
 @RestController
 @RequestMapping("/api/coaches")
 class CoachController(
     private val coachProfileRepository: CoachProfileRepository,
-    private val bookingRepository: BookingRepository
+    private val bookingRepository: BookingRepository,
+    private val coachServiceRepository: CoachServiceRepository,
+    private val calendarRepository: CoachCalendarEventRepository,
+    private val availabilityRepository: CoachAvailabilityRepository,
+    private val userRepository: UserRepository
 ) {
 
     @GetMapping
-    fun getCoaches(@RequestParam city: String): List<CoachProfileDto> =
-        coachProfileRepository.findByCity(city).map { it.toDto() }
+    fun getCoaches(
+        @RequestParam city: String,
+        @RequestParam(required = false) sport: String?,
+    ): List<CoachProfileDto> =
+        coachProfileRepository.findByCity(city)
+            .filter { isSetupComplete(it.userId!!, it.bio) }
+            // Optional sport filter — scaffolding for the player-side
+            // SportFilterRow we'll add once more racket sports land. A
+            // coach whose `sports` collection contains the requested sport
+            // passes through; others drop out.
+            .filter { sport.isNullOrBlank() || it.sports.any { s -> s.equals(sport, ignoreCase = true) } }
+            .map { profile ->
+                val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(profile.userId!!)
+                val weekly = availabilityRepository.findByCoachId(profile.userId!!)
+                profile.toDto(services, weekly)
+            }
+
+    /**
+     * Setup checklist status for the signed-in coach. Used by the empty-
+     * state widget on the coach dashboard (coach dzień) to show progress
+     * N/3 and route to the right management screen.
+     */
+    @GetMapping("/me/setup-status")
+    fun getMySetupStatus(authentication: Authentication): CoachSetupStatusDto {
+        val coachId = UUID.fromString(authentication.name)
+        val profile = coachProfileRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach profile not found") }
+        val hasBio = !profile.bio.isNullOrBlank()
+        val hasService = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId).isNotEmpty()
+        val hasAvailability = availabilityRepository.findByCoachId(coachId).isNotEmpty()
+        return CoachSetupStatusDto(
+            hasBio = hasBio,
+            hasService = hasService,
+            hasAvailability = hasAvailability,
+            isComplete = hasBio && hasService && hasAvailability,
+        )
+    }
+
+    private fun isSetupComplete(coachId: UUID, bio: String?): Boolean {
+        if (bio.isNullOrBlank()) return false
+        if (coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId).isEmpty()) return false
+        if (availabilityRepository.findByCoachId(coachId).isEmpty()) return false
+        return true
+    }
 
     @GetMapping("/{id}")
-    fun getCoach(@PathVariable id: UUID): CoachProfileDto =
-        coachProfileRepository.findById(id)
+    fun getCoach(@PathVariable id: UUID): CoachProfileDto {
+        val profile = coachProfileRepository.findById(id)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach not found") }
-            .toDto()
+        val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(id)
+        val weekly = availabilityRepository.findByCoachId(id)
+        return profile.toDto(services, weekly)
+    }
 
     @GetMapping("/{id}/availability")
     fun getAvailability(
@@ -35,21 +103,126 @@ class CoachController(
         @RequestParam from: Instant,
         @RequestParam to: Instant
     ): List<BookingSlotDto> {
-        coachProfileRepository.findById(id)
+        val profile = coachProfileRepository.findById(id)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach not found") }
-        val bookedSlots = bookingRepository.findBookedSlots(id, from, to)
-            .map { it.startsAt to it.endsAt }
-            .toSet()
 
-        // Generate hourly slots in the range and mark which are taken
+        val weeklyAvailability = availabilityRepository.findByCoachId(id)
+        if (weeklyAvailability.isEmpty()) return emptyList()
+
+        // TODO: ZoneOffset.UTC assumes all coaches are in UTC. For multi-timezone support,
+        //       store coach timezone in coach_profiles and use it here.
+        val zone = ZoneOffset.UTC
+        val now = Instant.now()
+        val leadTimeEnd = now.plus(profile.bookingLeadTimeHours.toLong(), ChronoUnit.HOURS)
+        val horizonEnd = if (profile.bookingHorizonDays == 0) {
+            // "Ten tyg." mode — cap at end of current ISO week (Sunday 23:59:59)
+            val sunday = now.atZone(zone).toLocalDate()
+                .with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY))
+            sunday.atTime(java.time.LocalTime.MAX).toInstant(zone)
+        } else {
+            now.plus(profile.bookingHorizonDays.toLong(), ChronoUnit.DAYS)
+        }
+        val effectiveTo = minOf(to, horizonEnd)
+
+        val rawBusyRanges = (calendarRepository.findInRange(id, from, effectiveTo).map { it.startsAt to it.endsAt } +
+                bookingRepository.findBookedSlots(id, from, effectiveTo)
+                    .filter { it.status != "CANCELLED" && it.status != "DECLINED" }
+                    .map { it.startsAt to it.endsAt })
+
+        val bufferDuration = Duration.ofMinutes(profile.bufferMinutes.toLong())
+        val busyRanges = rawBusyRanges.map { (s, e) -> s to e.plus(bufferDuration) }
+
         val slots = mutableListOf<BookingSlotDto>()
-        var cursor = from.truncatedTo(ChronoUnit.HOURS)
-        while (cursor.isBefore(to)) {
-            val end = cursor.plus(1, ChronoUnit.HOURS)
-            val isBooked = bookedSlots.any { (s, e) -> s == cursor && e == end }
-            slots.add(BookingSlotDto(startsAt = cursor, endsAt = end, isAvailable = !isBooked))
-            cursor = end
+        var day = from.atZone(zone).toLocalDate()
+        val endDay = effectiveTo.atZone(zone).toLocalDate()
+
+        while (!day.isAfter(endDay)) {
+            val avail = weeklyAvailability.find { it.dayOfWeek == day.dayOfWeek.value }
+            if (avail != null) {
+                var cursor = day.atTime(avail.startTime).toInstant(zone)
+                val dayEnd = day.atTime(avail.endTime).toInstant(zone)
+                while (cursor.isBefore(dayEnd)) {
+                    val slotEnd = cursor.plus(1, ChronoUnit.HOURS)
+                    if (cursor.isAfter(leadTimeEnd) && !cursor.isAfter(effectiveTo) && !cursor.isBefore(from)) {
+                        val isBusy = busyRanges.any { (s, e) -> s < slotEnd && e > cursor }
+                        slots.add(BookingSlotDto(startsAt = cursor, endsAt = slotEnd, isAvailable = !isBusy))
+                    }
+                    cursor = slotEnd
+                }
+            }
+            day = day.plusDays(1)
         }
         return slots
+    }
+
+    @GetMapping("/me")
+    fun getMyProfile(authentication: Authentication): CoachProfileDto {
+        val coachId = UUID.fromString(authentication.name)
+        val profile = coachProfileRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach profile not found") }
+        val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId)
+        return profile.toDto(services)
+    }
+
+    @GetMapping("/me/exceptions")
+    fun getMyExceptions(authentication: Authentication): List<CoachExceptionDto> {
+        val coachId = UUID.fromString(authentication.name)
+        return calendarRepository.findBlockedByCoachId(coachId).map { event ->
+            CoachExceptionDto(id = event.id!!, startsAt = event.startsAt, endsAt = event.endsAt, label = event.title)
+        }
+    }
+
+    @PostMapping("/me/exceptions")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun createException(authentication: Authentication, @RequestBody req: CreateExceptionRequest): CoachExceptionDto {
+        val coachId = UUID.fromString(authentication.name)
+        val coach = userRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+        val saved = calendarRepository.save(
+            CoachCalendarEventEntity(
+                coach = coach,
+                title = req.label,
+                eventType = "BLOCKED",
+                startsAt = req.startsAt,
+                endsAt = req.endsAt
+            )
+        )
+        return CoachExceptionDto(id = saved.id!!, startsAt = saved.startsAt, endsAt = saved.endsAt, label = saved.title)
+    }
+
+    @DeleteMapping("/me/exceptions/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun deleteException(authentication: Authentication, @PathVariable id: UUID) {
+        val coachId = UUID.fromString(authentication.name)
+        val event = calendarRepository.findById(id)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+        if (event.coach.id != coachId) throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        calendarRepository.deleteById(id)
+    }
+
+    @PatchMapping("/me")
+    fun updateMyProfile(authentication: Authentication, @RequestBody req: UpdateCoachProfileRequest): CoachProfileDto {
+        val coachId = UUID.fromString(authentication.name)
+        val profile = coachProfileRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+        req.bio?.let { profile.bio = it.ifBlank { null } }
+        req.sports?.let { profile.sports = it.toMutableList() }
+        req.trainingLocations?.let { profile.trainingLocations = it.toMutableList() }
+        val saved = coachProfileRepository.save(profile)
+        val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId)
+        return saved.toDto(services)
+    }
+
+    @PatchMapping("/me/booking-settings")
+    fun updateBookingSettings(authentication: Authentication, @RequestBody req: UpdateBookingSettingsRequest): CoachProfileDto {
+        val coachId = UUID.fromString(authentication.name)
+        val profile = coachProfileRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND) }
+        req.bookingLeadTimeHours?.let { profile.bookingLeadTimeHours = it }
+        req.bookingHorizonDays?.let { profile.bookingHorizonDays = it }
+        req.bufferMinutes?.let { profile.bufferMinutes = it }
+        val saved = coachProfileRepository.save(profile)
+        val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId)
+        return saved.toDto(services)
     }
 }

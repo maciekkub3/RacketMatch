@@ -38,6 +38,7 @@ sealed class MatchEvent {
     data class ClaimReservation(val matchId: String) : MatchEvent()
     data class AcceptDetails(val matchId: String) : MatchEvent()
     data class DiscardDetails(val matchId: String) : MatchEvent()
+    data class WithdrawDetails(val matchId: String) : MatchEvent()
     data class OpenChat(val matchId: String) : MatchEvent()
     object LoadMatches : MatchEvent()
 }
@@ -49,9 +50,15 @@ sealed class MatchEffect {
     object ChallengeCancelled : MatchEffect()
     object ResultSubmitted : MatchEffect()
     object ResultProposed : MatchEffect()
-    object ResultConfirmed : MatchEffect()
+    /** Carries the updated match so the UI can push the reveal celebration. */
+    data class ResultConfirmed(val match: Match) : MatchEffect()
     object ResultDisputed : MatchEffect()
-    data class OpenMatchChat(val matchId: String, val currentUserId: String, val otherUserName: String) : MatchEffect()
+    data class OpenMatchChat(
+        val matchId: String,
+        val currentUserId: String,
+        val otherUserId: String,
+        val otherUserName: String,
+    ) : MatchEffect()
     data class ShowError(val msg: String) : MatchEffect()
 }
 
@@ -92,6 +99,7 @@ class MatchViewModel(
             is MatchEvent.ClaimReservation -> claimReservation(event.matchId)
             is MatchEvent.AcceptDetails    -> acceptDetails(event.matchId)
             is MatchEvent.DiscardDetails   -> discardDetails(event.matchId)
+            is MatchEvent.WithdrawDetails  -> withdrawDetails(event.matchId)
             is MatchEvent.OpenChat         -> openChat(event.matchId)
         }
     }
@@ -187,8 +195,8 @@ class MatchViewModel(
     private fun confirmResult(matchId: String) {
         viewModelScope.launch(dispatcher) {
             try {
-                matchRepository.confirmResult(matchId)
-                _effects.emit(MatchEffect.ResultConfirmed)
+                val updated = matchRepository.confirmResult(matchId)
+                _effects.emit(MatchEffect.ResultConfirmed(updated))
                 loadMatches()
             } catch (e: Exception) {
                 _effects.emit(MatchEffect.ShowError(e.toUserMessage()))
@@ -241,12 +249,26 @@ class MatchViewModel(
         }
     }
 
+    private fun withdrawDetails(matchId: String) {
+        viewModelScope.launch(dispatcher) {
+            try {
+                matchRepository.withdrawDetails(matchId)
+                loadMatches()
+            } catch (e: Exception) {
+                _effects.emit(MatchEffect.ShowError(e.toUserMessage()))
+            }
+        }
+    }
+
     private fun openChat(matchId: String) {
         val content = (stateFlow.value as? MatchListState.Content) ?: return
         val myId = content.currentUserId
         val match = content.matches.find { it.id == matchId } ?: return
+        val otherId = if (match.challengerId == myId) match.challengedId else match.challengerId
         val otherName = if (match.challengerId == myId) match.challengedName else match.challengerName
-        viewModelScope.launch { _effects.emit(MatchEffect.OpenMatchChat(matchId, myId, otherName)) }
+        viewModelScope.launch {
+            _effects.emit(MatchEffect.OpenMatchChat(matchId, myId, otherId, otherName))
+        }
     }
 
     private fun cancelChallenge(matchId: String) {

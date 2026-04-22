@@ -7,7 +7,7 @@ import com.racketmatch.domain.model.Match
 import com.racketmatch.domain.model.MatchType
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.repository.MatchRepository
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 private fun millisToIso(millis: Long): String =
     Instant.fromEpochMilliseconds(millis).toString() // e.g. "2025-04-01T14:00:00Z"
@@ -69,5 +69,9 @@ class MatchRepositoryImpl(
 
     override suspend fun discardDetails(matchId: String): Match =
         matchApi.discardDetails(matchId).toDomain()
+            .also { tokenStorage.incrementMatchesVersion() }
+
+    override suspend fun withdrawDetails(matchId: String): Match =
+        matchApi.withdrawDetails(matchId).toDomain()
             .also { tokenStorage.incrementMatchesVersion() }
 }

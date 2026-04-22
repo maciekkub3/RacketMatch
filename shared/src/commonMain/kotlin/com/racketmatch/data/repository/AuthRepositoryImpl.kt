@@ -14,9 +14,18 @@ class AuthRepositoryImpl(
 
     override suspend fun login(email: String, password: String): AuthResult {
         val response = authApi.login(email, password)
-        println("RacketMatch login: saving token=${response.accessToken.take(20)}...")
-        tokenStorage.saveTokens(response.accessToken, response.refreshToken)
+        // Set identity fields *before* saveTokens() — saveTokens bumps
+        // loginVersionFlow, and any VM that reacts to the bump (e.g. to
+        // reload data) must read the new currentUserId/isCoach/…, not the
+        // previous user's leftovers.
         tokenStorage.currentUserId = response.user.id
+        tokenStorage.isCoach = response.user.isCoach
+        tokenStorage.hasPlayerProfile = response.user.hasPlayerProfile
+        if (response.user.isCoach && !response.user.hasPlayerProfile) tokenStorage.coachModeActive = true
+        // Drop any cached bearer in the Auth plugin so the next authed call
+        // re-reads tokens from storage (picks up the new tokens we just saved).
+        authApi.clearBearerCache()
+        tokenStorage.saveTokens(response.accessToken, response.refreshToken)
         return response.toDomain()
     }
 
@@ -26,16 +35,22 @@ class AuthRepositoryImpl(
         displayName: String,
         city: String,
         isCoach: Boolean,
-        sports: List<Sport>
+        hasPlayerProfile: Boolean,
+        sports: List<Sport>,
+        ageConfirmed: Boolean,
     ): AuthResult {
-        val response = authApi.register(email, password, displayName, city, isCoach, sports.map { it.name })
-        println("RacketMatch register: saving token=${response.accessToken.take(20)}...")
-        tokenStorage.saveTokens(response.accessToken, response.refreshToken)
+        val response = authApi.register(email, password, displayName, city, isCoach, hasPlayerProfile, sports.map { it.name }, ageConfirmed)
         tokenStorage.currentUserId = response.user.id
+        tokenStorage.isCoach = response.user.isCoach
+        tokenStorage.hasPlayerProfile = response.user.hasPlayerProfile
+        if (response.user.isCoach && !response.user.hasPlayerProfile) tokenStorage.coachModeActive = true
+        authApi.clearBearerCache()
+        tokenStorage.saveTokens(response.accessToken, response.refreshToken)
         return response.toDomain()
     }
 
     override suspend fun logout() {
         tokenStorage.clear()
+        authApi.clearBearerCache()
     }
 }

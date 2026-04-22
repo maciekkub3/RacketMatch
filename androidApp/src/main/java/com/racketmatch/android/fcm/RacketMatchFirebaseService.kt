@@ -12,13 +12,20 @@ import com.racketmatch.android.MainActivity
 import com.racketmatch.data.remote.api.UserApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 class RacketMatchFirebaseService : FirebaseMessagingService() {
 
     private val userApi: UserApi by inject()
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun onDestroy() {
+        super.onDestroy()
+        scope.cancel()
+    }
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
@@ -33,6 +40,8 @@ class RacketMatchFirebaseService : FirebaseMessagingService() {
         val body = message.notification?.body ?: ""
         val type = message.data["type"]
         val matchId = message.data["matchId"]
+        // Data freshness is driven by Firestore via NotificationEventBus.
+        // FCM here only displays the OS tray notification.
         showNotification(title, body, type, matchId)
     }
 

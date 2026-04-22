@@ -21,7 +21,8 @@ data class UserDto(
     val bio: String? = null,
     val dateOfBirth: String? = null,
     val wins: Int = 0,
-    val losses: Int = 0
+    val losses: Int = 0,
+    val hasPlayerProfile: Boolean = true
 )
 
 @Serializable
@@ -35,13 +36,18 @@ data class AuthResponseDto(
 data class LoginRequestDto(val email: String, val password: String)
 
 @Serializable
+data class RefreshRequestDto(val refreshToken: String)
+
+@Serializable
 data class RegisterRequestDto(
     val email: String,
     val password: String,
     val displayName: String,
     val city: String,
     val isCoach: Boolean = false,
-    val sports: List<String> = emptyList()
+    val hasPlayerProfile: Boolean = true,
+    val sports: List<String> = emptyList(),
+    val ageConfirmed: Boolean = false,
 )
 
 fun UserDto.toDomain() = User(
@@ -59,7 +65,8 @@ fun UserDto.toDomain() = User(
     bio = bio,
     dateOfBirth = dateOfBirth,
     wins = wins,
-    losses = losses
+    losses = losses,
+    hasPlayerProfile = hasPlayerProfile
 )
 
 fun AuthResponseDto.toDomain() = AuthResult(

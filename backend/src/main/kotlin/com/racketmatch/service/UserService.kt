@@ -5,13 +5,18 @@ import com.racketmatch.api.dto.UpdateProfileRequest
 import com.racketmatch.api.dto.UserDto
 import com.racketmatch.api.dto.UserStatsDto
 import com.racketmatch.api.dto.toDto
+import com.racketmatch.domain.entity.CoachProfileEntity
+import com.racketmatch.domain.repository.CoachProfileRepository
 import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.UUID
 
 @Service
@@ -19,7 +24,8 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository,
     private val matchRepository: MatchRepository,
-    private val passwordEncoder: PasswordEncoder
+    private val passwordEncoder: PasswordEncoder,
+    private val coachProfileRepository: CoachProfileRepository
 ) {
 
     fun getProfile(userId: UUID): UserDto =
@@ -76,6 +82,7 @@ class UserService(
         // Fallback: no GPS or PostGIS query failed — return all other users
         return userRepository.findAll()
             .filter { it.id != currentUserId }
+            .filter { !it.isCoach || it.hasPlayerProfile }
             .filter { minElo == null || it.eloRating >= minElo }
             .filter { maxElo == null || it.eloRating <= maxElo }
             .map { it.toDto() }
@@ -93,9 +100,35 @@ class UserService(
         user.displayName = request.displayName
         user.city = request.city
         user.bio = request.bio
+        user.dateOfBirth = request.dateOfBirth
         user.sports = request.sports.joinToString(",")
         request.password?.let { user.passwordHash = passwordEncoder.encode(it) }
+        request.activateCoach?.let { activate ->
+            if (activate && !user.isCoach) {
+                user.isCoach = true
+                coachProfileRepository.save(CoachProfileEntity(user = user))
+            }
+        }
+        request.activatePlayerProfile?.let { activate ->
+            if (activate) user.hasPlayerProfile = true
+        }
         return userRepository.save(user).toDto()
+    }
+
+    @Transactional
+    fun uploadAvatar(userId: UUID, file: MultipartFile, baseUrl: String): String {
+        val ext = (file.originalFilename?.substringAfterLast('.', "jpg") ?: "jpg").lowercase()
+        val filename = "$userId.$ext"
+        val uploadDir = Path.of("uploads/avatars").toAbsolutePath()
+        Files.createDirectories(uploadDir)
+        file.transferTo(uploadDir.resolve(filename).toFile())
+        val avatarUrl = "$baseUrl/avatars/$filename"
+        val user = userRepository.findById(userId).orElseThrow {
+            ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
+        }
+        user.avatarUrl = avatarUrl
+        userRepository.save(user)
+        return avatarUrl
     }
 
     @Transactional

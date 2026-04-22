@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.sqldelight)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
+    kotlin("native.cocoapods")
 }
 
 kotlin {
@@ -18,11 +19,22 @@ kotlin {
         }
     }
 
-    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach {
-        it.binaries.framework {
+    iosX64()
+    iosArm64()
+    iosSimulatorArm64()
+
+    cocoapods {
+        summary = "RacketMatch KMP shared module"
+        homepage = "https://racketmatch.app"
+        version = "1.0"
+        ios.deploymentTarget = "14.0"
+        podfile = project.file("../iosApp/Podfile")
+        framework {
             baseName = "shared"
             isStatic = true
         }
+        pod("FirebaseFirestore") { version = "~> 11.0" }
+        pod("FirebaseCore") { version = "~> 11.0" }
     }
 
     sourceSets {
@@ -43,14 +55,12 @@ kotlin {
             // DI
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
 
             // Image loading
             implementation(libs.coil.compose)
             implementation(libs.coil.ktor)
 
             // Networking & serialization
-            implementation(libs.lifecycle.viewmodel)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
             implementation(libs.ktor.serialization.kotlinx.json)
@@ -66,6 +76,8 @@ kotlin {
         }
 
         androidMain.dependencies {
+            // Koin ViewModel for Android (uses SavedStateHandle — Android-only, cannot be in commonMain)
+            implementation(libs.koin.compose.viewmodel)
             // Google Fonts for Lexend on Android
             implementation("androidx.compose.ui:ui-text-google-fonts:1.6.8")
             // Google Maps Compose
@@ -75,6 +87,8 @@ kotlin {
             implementation("com.google.android.gms:play-services-maps:18.2.0")
             // Stripe payments (Android actual for SubscriptionScreen)
             implementation("com.stripe:stripe-android:20.50.0")
+            // Activity Compose (image picker launchers)
+            implementation(libs.androidx.activity.compose)
             // Platform networking & DB
             implementation(libs.ktor.client.android)
             implementation(libs.sqldelight.android.driver)
@@ -88,11 +102,14 @@ kotlin {
 
         commonTest.dependencies {
             implementation(libs.kotlin.test)
-            implementation(libs.junit5.api)
-            implementation(libs.mockk)
             implementation(libs.kotest.assertions)
             implementation(libs.turbine)
             implementation(libs.coroutines.test)
+        }
+
+        androidUnitTest.dependencies {
+            implementation(libs.junit5.api)
+            implementation(libs.mockk)
         }
     }
 }

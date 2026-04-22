@@ -10,7 +10,9 @@ data class RegisterRequest(
     @field:NotBlank val displayName: String,
     @field:NotBlank val city: String,
     val isCoach: Boolean = false,
-    val sports: List<String> = emptyList()
+    val hasPlayerProfile: Boolean = true,
+    val sports: List<String> = emptyList(),
+    val ageConfirmed: Boolean = false
 )
 
 data class LoginRequest(
@@ -33,5 +35,8 @@ data class UpdateProfileRequest(
     @field:NotBlank val city: String,
     val bio: String? = null,
     val sports: List<String> = emptyList(),
-    val password: String? = null
+    val password: String? = null,
+    val dateOfBirth: String? = null,
+    val activateCoach: Boolean? = null,
+    val activatePlayerProfile: Boolean? = null
 )

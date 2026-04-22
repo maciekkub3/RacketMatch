@@ -62,4 +62,7 @@ class MatchApi(private val client: HttpClient) {
 
     suspend fun discardDetails(matchId: String): MatchDto =
         client.put("api/matches/$matchId/discard-details").body()
+
+    suspend fun withdrawDetails(matchId: String): MatchDto =
+        client.put("api/matches/$matchId/withdraw-details").body()
 }

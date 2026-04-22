@@ -15,14 +15,21 @@ sealed class FeedState {
     object Error : FeedState()
 }
 
-class FeedViewModel(private val repo: FeedRepository) : ViewModel() {
+class FeedViewModel(
+    private val repo: FeedRepository,
+    // Set to false in tests. viewModelScope never completes while the
+    // 60-second polling loop is running, which makes runTest +
+    // advanceUntilIdle block indefinitely. Prod always runs with polling
+    // enabled.
+    private val pollingEnabled: Boolean = true,
+) : ViewModel() {
 
     private val _state = MutableStateFlow<FeedState>(FeedState.Loading)
     val stateFlow = _state.asStateFlow()
 
     init {
         load()
-        startPolling()
+        if (pollingEnabled) startPolling()
     }
 
     fun onRefresh() {

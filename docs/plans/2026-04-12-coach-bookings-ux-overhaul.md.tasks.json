@@ -1,0 +1,25 @@
+{
+  "planPath": "docs/plans/2026-04-12-coach-bookings-ux-overhaul.md",
+  "tasks": [
+    {"id": 0, "subject": "Task 0: Migracja V21 — rozszerzenie bookings", "status": "completed"},
+    {"id": 1, "subject": "Task 1: Rozszerz BookingEntity", "status": "completed", "blockedBy": [0]},
+    {"id": 2, "subject": "Task 2: Endpoint POST /api/bookings create", "status": "completed", "blockedBy": [1, 3]},
+    {"id": 3, "subject": "Task 3: Migracja V22 + DM messageType/refId", "status": "completed", "blockedBy": [1]},
+    {"id": 4, "subject": "Task 4: Endpointy confirm/decline", "status": "completed", "blockedBy": [2]},
+    {"id": 5, "subject": "Task 5: Endpoint counter", "status": "completed", "blockedBy": [2]},
+    {"id": 6, "subject": "Task 6: Endpoint cancel z lateCancel", "status": "completed", "blockedBy": [2]},
+    {"id": 7, "subject": "Task 7: GET /api/bookings z segmentami", "status": "completed", "blockedBy": [2]},
+    {"id": 8, "subject": "Task 8: Scheduled reminder 24h", "status": "completed", "blockedBy": [4]},
+    {"id": 9, "subject": "Task 9: KMP bookingsVersionFlow", "status": "completed"},
+    {"id": 10, "subject": "Task 10: EventBus mapuje BOOKING_*", "status": "completed", "blockedBy": [9]},
+    {"id": 11, "subject": "Task 11: KMP DTO + BookingRepository", "status": "completed", "blockedBy": [7, 9]},
+    {"id": 12, "subject": "Task 12: PlayerBookingsViewModel segmenty", "status": "completed", "blockedBy": [11]},
+    {"id": 13, "subject": "Task 13: CoachBookingsViewModel segmenty", "status": "completed", "blockedBy": [11]},
+    {"id": 14, "subject": "Task 14: UI PlayerBookingsScreen + BookingCard", "status": "pending", "blockedBy": [12]},
+    {"id": 15, "subject": "Task 15: UI CoachBookingsScreen wzbogacona", "status": "pending", "blockedBy": [13, 14]},
+    {"id": 16, "subject": "Task 16: DmChat renderuje BOOKING_CARD", "status": "pending", "blockedBy": [11, 14]},
+    {"id": 17, "subject": "Task 17: Success sheet + playerNote w create", "status": "pending", "blockedBy": [14]},
+    {"id": 18, "subject": "Task 18: Smoke test e2e", "status": "pending", "blockedBy": [15, 16, 17, 8]}
+  ],
+  "lastUpdated": "2026-04-12"
+}

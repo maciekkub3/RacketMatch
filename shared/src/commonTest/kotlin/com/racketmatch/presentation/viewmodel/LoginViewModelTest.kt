@@ -46,12 +46,15 @@ class LoginViewModelTest {
 
     @Test
     fun `login failure emits ShowError effect`() = runTest {
-        coEvery { authRepository.login(any(), any()) } throws Exception("Invalid credentials")
+        // Use "401" in the message so ErrorMapper.toLoginMessage() routes
+        // to the user-friendly bad-credentials string instead of the
+        // generic fallback.
+        coEvery { authRepository.login(any(), any()) } throws Exception("401 Unauthorized")
 
         viewModel.effectFlow.test {
             viewModel.onEvent(LoginEvent.Submit("a@a.com", "wrong"))
             dispatcher.scheduler.advanceUntilIdle()
-            awaitItem() shouldBe LoginEffect.ShowError("Invalid credentials")
+            awaitItem() shouldBe LoginEffect.ShowError("Nieprawidłowy email lub hasło.")
         }
     }
 

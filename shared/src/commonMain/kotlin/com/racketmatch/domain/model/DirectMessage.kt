@@ -6,7 +6,9 @@ data class DirectMessage(
     val senderId: String,
     val text: String,
     val sentAt: Long,
-    val readAt: Long? = null
+    val readAt: Long? = null,
+    val messageType: String = "TEXT",
+    val refId: String? = null
 )
 
 data class Conversation(

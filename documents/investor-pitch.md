@@ -9,7 +9,7 @@
 
 Tworzymy aplikację mobilną (Android + iOS), która rozwiązuje fundamentalny problem każdego gracza tenisa, padla i squasha: **jak szybko znaleźć kogoś na podobnym poziomie do gry w okolicy?**
 
-Połączenie matchmakingu graczy, systemu rankingowego ELO, mechaniki "Mistrzów" i platformy dla trenerów tworzy unikalny ekosystem, który buduje lojalność i tworzy sieciowy efekt skali. Aplikacja startuje lokalnie — w środowisku tenisowym, gdzie mamy już bezpośredni dostęp do społeczności — i skaluje się na kolejne miasta oraz kraje.
+Połączenie matchmakingu graczy, systemu rankingowego ELO i platformy dla trenerów tworzy unikalny ekosystem, który buduje lojalność i tworzy sieciowy efekt skali. Aplikacja startuje lokalnie — w środowisku tenisowym, gdzie mamy już bezpośredni dostęp do społeczności — i skaluje się na kolejne miasta oraz kraje.
 
 
 ---

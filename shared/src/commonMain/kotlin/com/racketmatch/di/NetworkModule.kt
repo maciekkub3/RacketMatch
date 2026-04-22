@@ -4,7 +4,6 @@ import com.racketmatch.data.remote.HttpClientFactory
 import com.racketmatch.data.remote.InMemoryTokenStorage
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.data.remote.api.AuthApi
-import com.racketmatch.data.remote.api.ChatApi
 import com.racketmatch.data.remote.api.CoachApi
 import com.racketmatch.data.remote.api.CourtApi
 import com.racketmatch.data.remote.api.MatchApi
@@ -15,9 +14,9 @@ import com.racketmatch.data.remote.api.DmApi
 import com.racketmatch.data.remote.api.FeedApi
 import com.racketmatch.data.remote.api.FriendApi
 import com.racketmatch.data.remote.api.ProfileApi
+import com.racketmatch.data.remote.api.SportLevelApi
 import com.racketmatch.data.remote.api.UserApi
 import com.racketmatch.data.repository.AuthRepositoryImpl
-import com.racketmatch.data.repository.ChatRepositoryImpl
 import com.racketmatch.data.repository.CoachRepositoryImpl
 import com.racketmatch.data.repository.CourtRepositoryImpl
 import com.racketmatch.data.repository.MatchRepositoryImpl
@@ -27,10 +26,10 @@ import com.racketmatch.data.repository.PlayerRepositoryImpl
 import com.racketmatch.data.repository.DmRepositoryImpl
 import com.racketmatch.data.repository.FeedRepositoryImpl
 import com.racketmatch.data.repository.FirestoreNotificationRepositoryImpl
+import com.racketmatch.data.realtime.NotificationEventBus
 import com.racketmatch.data.repository.FriendRepositoryImpl
 import com.racketmatch.data.repository.ProfileRepositoryImpl
 import com.racketmatch.domain.repository.AuthRepository
-import com.racketmatch.domain.repository.ChatRepository
 import com.racketmatch.domain.repository.CoachRepository
 import com.racketmatch.domain.repository.CourtRepository
 import com.racketmatch.domain.repository.MatchRepository
@@ -42,10 +41,16 @@ import com.racketmatch.domain.repository.FeedRepository
 import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.domain.repository.NotificationRepository
 import com.racketmatch.domain.repository.ProfileRepository
-import com.racketmatch.presentation.viewmodel.ChatViewModel
-import com.racketmatch.presentation.viewmodel.DmChatViewModel
+import com.racketmatch.presentation.viewmodel.CoachAvailabilityViewModel
+import com.racketmatch.presentation.viewmodel.CoachProfileViewModel
+import com.racketmatch.presentation.viewmodel.CoachBookingsViewModel
+import com.racketmatch.presentation.viewmodel.PlayerBookingsViewModel
+import com.racketmatch.presentation.viewmodel.CoachCalendarViewModel
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
+import com.racketmatch.presentation.viewmodel.CoachProfileEditViewModel
+import com.racketmatch.presentation.viewmodel.CoachServicesViewModel
 import com.racketmatch.presentation.viewmodel.CoachesViewModel
+import com.racketmatch.presentation.viewmodel.DmChatViewModel
 import com.racketmatch.presentation.viewmodel.ExploreViewModel
 import com.racketmatch.presentation.viewmodel.LoginViewModel
 import com.racketmatch.presentation.viewmodel.MatchViewModel
@@ -58,7 +63,9 @@ import com.racketmatch.presentation.viewmodel.FeedViewModel
 import com.racketmatch.presentation.viewmodel.FriendsViewModel
 import com.racketmatch.presentation.viewmodel.MessagesViewModel
 import com.racketmatch.presentation.viewmodel.MoreViewModel
+import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.NotificationViewModel
+import com.racketmatch.presentation.viewmodel.PlayerProfileEditViewModel
 import com.racketmatch.presentation.viewmodel.RankingsViewModel
 import com.racketmatch.presentation.viewmodel.SettingsViewModel
 import com.racketmatch.presentation.viewmodel.SplashViewModel
@@ -73,7 +80,6 @@ val apiModule = module {
     single { AuthApi(get()) }
     single { PlayerApi(get()) }
     single { MatchApi(get()) }
-    single { ChatApi(get()) }
     single { CoachApi(get()) }
     single { PaymentApi(get()) }
     single { UserApi(get()) }
@@ -83,31 +89,37 @@ val apiModule = module {
     single { FriendApi(get()) }
     single { FeedApi(get()) }
     single { DmApi(get()) }
+    single { SportLevelApi(get()) }
 }
 
 val repositoryModule = module {
     single<AuthRepository> { AuthRepositoryImpl(get(), get()) }
     single<PlayerRepository> { PlayerRepositoryImpl(get()) }
     single<MatchRepository> { MatchRepositoryImpl(get(), get()) }
-    single<ChatRepository> { ChatRepositoryImpl(get()) }
-    single<CoachRepository> { CoachRepositoryImpl(get()) }
+    single<CoachRepository> { CoachRepositoryImpl(get(), get()) }
     single<PaymentRepository> { PaymentRepositoryImpl(get()) }
     single<ProfileRepository> { ProfileRepositoryImpl(get()) }
     single<CourtRepository> { CourtRepositoryImpl(get()) }
     single<OpenSessionRepository> { OpenSessionRepositoryImpl(get(), get()) }
     single<FriendRepository> { FriendRepositoryImpl(get()) }
     single<FeedRepository> { FeedRepositoryImpl(get()) }
-    single<DmRepository> { DmRepositoryImpl(get()) }
+    single<DmRepository> { DmRepositoryImpl(get(), get()) }
     single<NotificationRepository> { FirestoreNotificationRepositoryImpl() }
+    single { NotificationEventBus(get(), get()) }
 }
 
 val viewModelModule = module {
-    factory { (matchId: String) -> ChatViewModel(get(), matchId) }
-    factory { (conversationId: String) -> DmChatViewModel(get(), conversationId) }
+    factory { (conversationId: String, currentUserId: String) -> DmChatViewModel(get(), get(), get(), conversationId, currentUserId) }
     factory { LoginViewModel(get()) }
     factory { RegisterViewModel(get(), get()) }
-    factory { ProfileSetupViewModel(get(), get()) }
+    factory { ProfileSetupViewModel(get(), get(), get()) }
     factory { PlayersViewModel(get(), get(), get(), get()) }
+    // Factory — each screen gets its own instance. Making this a singleton
+    // (prior M2 perf experiment) caused cross-session state bleed: logging
+    // out and back in as a different user still showed the previous user's
+    // state because the singleton survived the auth transition. Real perf
+    // will come from an SQLDelight stale-while-revalidate layer at the
+    // repository, not from ViewModel caching.
     factory { ExploreViewModel(get(), get(), get(), get(), get(), get()) }
     factory { MatchViewModel(get(), get()) }
     factory { CoachesViewModel(get()) }
@@ -115,11 +127,20 @@ val viewModelModule = module {
     factory { PaymentViewModel(get()) }
     factory { SplashViewModel(get()) }
     factory { ProfileViewModel(get(), get(), get()) }
-    factory { SettingsViewModel(get(), get()) }
+    factory { SettingsViewModel(get(), get(), get()) }
     factory { RankingsViewModel(get(), get(), get()) }
-    factory { FriendsViewModel(get()) }
+    factory { FriendsViewModel(get(), get()) }
     factory { FeedViewModel(get()) }
-    factory { MessagesViewModel(get()) }
+    factory { MessagesViewModel(get(), get()) }
     factory { MoreViewModel(get(), get()) }
     factory { (userId: String) -> NotificationViewModel(get(), userId) }
+    factory { ActionBadgeViewModel(get(), get(), get(), get(), get()) }
+    factory { CoachServicesViewModel(get(), get()) }
+    factory { CoachCalendarViewModel(get()) }
+    factory { CoachBookingsViewModel(get(), get()) }
+    factory { PlayerBookingsViewModel(get(), get()) }
+    factory { CoachProfileEditViewModel(get(), get(), get(), get()) }
+    factory { CoachAvailabilityViewModel(get(), get()) }
+    factory { CoachProfileViewModel(get(), get(), get()) }
+    factory { PlayerProfileEditViewModel(get(), get()) }
 }

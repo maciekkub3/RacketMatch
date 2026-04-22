@@ -2,6 +2,7 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.FriendRequest
 import com.racketmatch.domain.model.User
 import com.racketmatch.domain.repository.FriendRepository
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 data class FriendsContent(
@@ -34,17 +36,23 @@ sealed class FriendsEvent {
 }
 
 sealed class FriendsEffect {
-    data class NavigateToDm(val friend: User) : FriendsEffect()
+    data class NavigateToDm(val friend: User, val currentUserId: String) : FriendsEffect()
     data class ShowError(val msg: String) : FriendsEffect()
 }
 
-class FriendsViewModel(private val repo: FriendRepository) : ViewModel() {
+class FriendsViewModel(private val repo: FriendRepository, private val tokenStorage: TokenStorage) : ViewModel() {
 
     private val _state = MutableStateFlow<FriendsState>(FriendsState.Loading)
     val stateFlow = _state.asStateFlow()
 
     private val _effects = MutableSharedFlow<FriendsEffect>()
     val effectFlow = _effects.asSharedFlow()
+
+    init {
+        viewModelScope.launch {
+            tokenStorage.friendsVersionFlow.drop(1).collect { load() }
+        }
+    }
 
     fun onEvent(event: FriendsEvent) {
         when (event) {
@@ -55,7 +63,8 @@ class FriendsViewModel(private val repo: FriendRepository) : ViewModel() {
             is FriendsEvent.CancelRequest -> cancelRequest(event.id)
             is FriendsEvent.RemoveFriend -> removeFriend(event.userId)
             is FriendsEvent.OpenDm -> viewModelScope.launch {
-                _effects.emit(FriendsEffect.NavigateToDm(event.friend))
+                val myId = tokenStorage.currentUserId ?: return@launch
+                _effects.emit(FriendsEffect.NavigateToDm(event.friend, myId))
             }
         }
     }
@@ -65,14 +74,18 @@ class FriendsViewModel(private val repo: FriendRepository) : ViewModel() {
 
     private fun load() {
         viewModelScope.launch {
-            _state.value = FriendsState.Loading
+            if (_state.value !is FriendsState.Content) {
+                _state.value = FriendsState.Loading
+            }
             try {
                 val friends = repo.getFriends()
                 val received = repo.getReceivedRequests()
                 val sent = repo.getSentRequests()
                 _state.value = FriendsState.Content(FriendsContent(friends, received, sent))
             } catch (e: Exception) {
-                _state.value = FriendsState.Error
+                if (_state.value !is FriendsState.Content) {
+                    _state.value = FriendsState.Error
+                }
             }
         }
     }

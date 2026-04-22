@@ -27,4 +27,46 @@ interface BookingRepository : JpaRepository<BookingEntity, UUID> {
         @Param("from") from: Instant,
         @Param("to") to: Instant
     ): List<BookingEntity>
+
+    fun findByCoachIdAndStatus(coachId: UUID, status: String): List<BookingEntity>
+
+    @Query("""
+        SELECT b FROM BookingEntity b
+        WHERE (b.coach.id = :userId OR b.player.id = :userId)
+        AND b.status = 'PENDING'
+        ORDER BY b.startsAt ASC
+    """)
+    fun findPendingForUser(@Param("userId") userId: UUID): List<BookingEntity>
+
+    @Query("""
+        SELECT b FROM BookingEntity b
+        WHERE (b.coach.id = :userId OR b.player.id = :userId)
+        AND b.status = 'CONFIRMED'
+        AND b.startsAt >= :now
+        ORDER BY b.startsAt ASC
+    """)
+    fun findConfirmedUpcomingForUser(@Param("userId") userId: UUID, @Param("now") now: Instant): List<BookingEntity>
+
+    @Query("""
+        SELECT b FROM BookingEntity b
+        WHERE (b.coach.id = :userId OR b.player.id = :userId)
+        AND b.startsAt >= :cutoff
+        AND (
+            b.status IN ('COMPLETED', 'CANCELLED', 'DECLINED')
+            OR (b.status = 'CONFIRMED' AND b.startsAt < :now)
+        )
+        ORDER BY b.startsAt DESC
+    """)
+    fun findHistoryForUser(
+        @Param("userId") userId: UUID,
+        @Param("now") now: Instant,
+        @Param("cutoff") cutoff: Instant
+    ): List<BookingEntity>
+
+    @Query("""
+        SELECT b FROM BookingEntity b
+        WHERE b.status = 'CONFIRMED' AND b.reminderSent = false
+        AND b.startsAt BETWEEN :start AND :end
+    """)
+    fun findPendingReminders(@Param("start") start: Instant, @Param("end") end: Instant): List<BookingEntity>
 }

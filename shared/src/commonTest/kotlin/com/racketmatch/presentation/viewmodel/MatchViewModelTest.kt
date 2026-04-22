@@ -10,7 +10,9 @@ import com.racketmatch.domain.repository.MatchRepository
 import io.kotest.matchers.shouldBe
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.impl.annotations.MockK
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -32,6 +34,12 @@ class MatchViewModelTest {
     fun setUp() {
         MockKAnnotations.init(this)
         coEvery { matchRepository.getMyMatches() } returns listOf(pendingMatch)
+        // The VM subscribes to login + matches version flows in init so
+        // it can reload on login changes and notification bumps. In tests
+        // we only need these to exist; nothing depends on their bumping.
+        every { tokenStorage.loginVersionFlow } returns MutableStateFlow(0)
+        every { tokenStorage.matchesVersionFlow } returns MutableStateFlow(0)
+        every { tokenStorage.currentUserId } returns "u1"
     }
 
     @Test
@@ -68,7 +76,12 @@ class MatchViewModelTest {
         viewModel.effectFlow.test {
             viewModel.onEvent(MatchEvent.SendChallenge("u2", MatchType.RANKED, Sport.TENNIS))
             dispatcher.scheduler.advanceUntilIdle()
-            awaitItem() shouldBe MatchEffect.ShowError("Network error")
+            // ErrorMapper wraps the raw throwable message in a user-
+            // friendly generic fallback; assert on the prefix so the
+            // test tracks the contract ("something went wrong") rather
+            // than the [ClassName] debug suffix.
+            val effect = awaitItem() as MatchEffect.ShowError
+            effect.msg.startsWith("Coś poszło nie tak. Spróbuj ponownie.") shouldBe true
         }
     }
 }

@@ -40,7 +40,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-    kotlinOptions { jvmTarget = "1.8" }
+    kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8) } }
 }
 
 dependencies {
@@ -55,6 +55,9 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     // Firebase push notifications (Android-only)
     implementation("com.google.firebase:firebase-messaging:23.4.1")
+    // Coil — needed to configure singleton ImageLoader with ngrok header
+    implementation(libs.coil.core)
+    implementation(libs.coil.ktor)
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.0")
 }

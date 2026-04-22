@@ -1,0 +1,2 @@
+ALTER TABLE bookings
+    ADD COLUMN proposed_by_coach BOOLEAN NOT NULL DEFAULT FALSE;

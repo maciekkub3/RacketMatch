@@ -27,6 +27,7 @@ interface UserRepository : JpaRepository<UserEntity, UUID> {
         AND (:minElo IS NULL OR u.elo_rating >= :minElo)
         AND (:maxElo IS NULL OR u.elo_rating <= :maxElo)
         AND u.id != :currentUserId
+        AND (u.is_coach = false OR u.has_player_profile = true)
         ORDER BY ST_Distance(u.location, ST_MakePoint(:lng, :lat)::geography)
         LIMIT 50
     """, nativeQuery = true)

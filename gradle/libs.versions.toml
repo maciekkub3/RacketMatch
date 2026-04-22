@@ -1,14 +1,14 @@
 [versions]
 agp = "8.9.1"
-kotlin = "2.0.0"
-composeMultiplatform = "1.6.11"
+kotlin = "2.3.20"
+composeMultiplatform = "1.10.3"
 androidx-activityCompose = "1.9.0"
-koin = "4.0.0"
-lifecycle = "2.8.4"
+koin = "4.0.4"
+lifecycle = "2.9.0"
 ktor = "2.3.12"
 sqldelight = "2.0.2"
-kotlinx-serialization = "1.6.3"
-kotlinx-coroutines = "1.8.1"
+kotlinx-serialization = "1.7.3"
+kotlinx-coroutines = "1.10.2"
 voyager = "1.0.0"
 coil = "3.0.0"
 
@@ -24,7 +24,7 @@ coroutines-test = "1.8.1"
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
-kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version = "0.6.0" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version = "0.7.1" }
 
 # Lifecycle (KMP ViewModel)
 lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel", version.ref = "lifecycle" }
@@ -60,6 +60,7 @@ voyager-tab-navigator = { module = "cafe.adriel.voyager:voyager-tab-navigator", 
 voyager-transitions = { module = "cafe.adriel.voyager:voyager-transitions", version.ref = "voyager" }
 
 # Image loading
+coil-core = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-ktor = { module = "io.coil-kt.coil3:coil-network-ktor2", version.ref = "coil" }
 

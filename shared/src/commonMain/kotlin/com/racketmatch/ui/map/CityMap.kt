@@ -10,5 +10,6 @@ expect fun CityMap(
     courts: List<Court>,
     sessionCountByCourt: Map<String, Int>,
     onCourtTap: (Court) -> Unit,
+    city: String = "Warszawa",
     isDark: Boolean = false
 )
