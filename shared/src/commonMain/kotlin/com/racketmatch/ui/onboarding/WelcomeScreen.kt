@@ -50,12 +50,28 @@ import org.koin.compose.koinInject
  *  - **Oboje**:        Welcome → Avatar → Skill (per sport) → picker (play / set-up-coach)
  *  - **Pure coach**:   Welcome → Avatar → lands in `coachDzien` (checklist handles setup there)
  *
+ * Also used as the "role activation" onboarding when an existing user activates
+ * their second role from Settings (`activationRole` non-null):
+ *
+ *  - **COACH activation** (player adding coach): single welcome card → drops
+ *    straight into `coachDzien` with the setup checklist visible.
+ *  - **PLAYER activation** (coach adding player): welcome → skill per declared
+ *    sport → `players` tab. No avatar step (user already has a profile).
+ *
  * Skill assessment seeds per-sport ELO so first ranked matches are roughly fair.
  * First 10 matches per sport run with K × 2 (calibration window) to self-correct.
  */
-class WelcomeScreen : Screen {
+enum class ActivationRole { COACH, PLAYER }
+
+data class WelcomeScreen(
+    val activationRole: ActivationRole? = null,
+) : Screen {
     @Composable
     override fun Content() {
+        if (activationRole != null) {
+            ActivationContent(activationRole)
+            return
+        }
         val viewModel: ProfileSetupViewModel = kmpViewModel()
         val navigator = LocalNavigator.currentOrThrow
         val tokenStorage = koinInject<TokenStorage>()
@@ -606,6 +622,196 @@ private fun PickerCard(
             fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
             fontSize = 22.sp, color = ProCircuit.Lime,
         )
+    }
+}
+
+// ── Role activation onboarding ────────────────────────────────────────────
+//
+// Used when an existing user flips on their second role from Settings. Looks
+// and feels the same as fresh-registration onboarding (progress bar, lime
+// accent, AnimatedContent transitions), but skips the avatar step (user
+// already has one), skips the picker step (intent is unambiguous — they just
+// clicked the specific "Aktywuj profil X" button), and sets the mode toggle
+// + lands on the right home tab at the end.
+
+@Composable
+private fun ActivationContent(role: ActivationRole) {
+    val navigator = LocalNavigator.currentOrThrow
+    val tokenStorage = koinInject<TokenStorage>()
+    val viewModel: ProfileSetupViewModel = kmpViewModel()
+    val isSaving by viewModel.isSaving.collectAsState()
+    val declaredSports by viewModel.declaredSports.collectAsState()
+
+    LaunchedEffect(role) {
+        if (role == ActivationRole.PLAYER) viewModel.loadDeclaredSports()
+    }
+
+    // Step 1 = welcome card. For PLAYER, steps 2..N+1 = skill per declared
+    // sport. For COACH, tapping "zaczynaj" on the welcome card finishes
+    // immediately.
+    var step by remember { mutableStateOf(1) }
+    var tierBySport by remember { mutableStateOf<Map<Sport, Int>>(emptyMap()) }
+
+    fun finish() {
+        when (role) {
+            ActivationRole.COACH -> {
+                tokenStorage.coachModeActive = true
+                TabSwitchSignal.request("coachDzien")
+            }
+            ActivationRole.PLAYER -> {
+                tokenStorage.coachModeActive = false
+                TabSwitchSignal.request("players")
+            }
+        }
+        navigator.replaceAll(MainScreen)
+    }
+
+    val totalSteps = when (role) {
+        ActivationRole.COACH -> 1
+        ActivationRole.PLAYER -> 1 + declaredSports.size.coerceAtLeast(1)
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).imePadding()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+        ) {
+            Spacer(Modifier.height(56.dp))
+            Text(
+                "PRO CIRCUIT",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 13.sp, letterSpacing = 3.sp, color = ProCircuit.Lime,
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(totalSteps.coerceAtLeast(1)) { i ->
+                    Box(
+                        modifier = Modifier
+                            .height(4.dp)
+                            .weight(1f)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (i < step) ProCircuit.Lime else ProCircuit.SurfaceHigh),
+                    )
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
+                },
+            ) { currentStep ->
+                if (currentStep == 1) {
+                    ActivationWelcomeStep(
+                        role = role,
+                        canContinue = role == ActivationRole.COACH || declaredSports.isNotEmpty(),
+                        onNext = {
+                            if (role == ActivationRole.COACH) finish()
+                            else step = 2
+                        },
+                    )
+                } else {
+                    // PLAYER skill step for sport at index (currentStep - 2).
+                    val sportIdx = currentStep - 2
+                    val sport = declaredSports.getOrNull(sportIdx)
+                    if (sport != null) {
+                        SkillAssessmentStep(
+                            sport = sport,
+                            sportPosition = sportIdx + 1,
+                            sportCount = declaredSports.size,
+                            selectedTier = tierBySport[sport],
+                            isSaving = isSaving,
+                            onPickTier = { tier ->
+                                val updated = tierBySport + (sport to tier)
+                                tierBySport = updated
+                                val hasMoreSports = sportIdx < declaredSports.size - 1
+                                if (hasMoreSports) {
+                                    step += 1
+                                } else {
+                                    viewModel.saveSportLevels(updated) { finish() }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun ActivationWelcomeStep(
+    role: ActivationRole,
+    canContinue: Boolean,
+    onNext: () -> Unit,
+) {
+    val title: String
+    val body: String
+    val cta: String
+    val bullets: List<String>
+    when (role) {
+        ActivationRole.COACH -> {
+            title = "Witaj w trybie trenera!"
+            body = "Twój profil trenera jest gotowy. Na ekranie Dzień znajdziesz listę kroków — uzupełnij bio, dodaj usługi i ustaw dostępność, żeby gracze mogli zacząć rezerwować zajęcia."
+            cta = "PRZEJDŹ DO TRENERA"
+            bullets = listOf(
+                "Uzupełnij bio i zdjęcie",
+                "Dodaj usługi, które oferujesz",
+                "Ustaw dostępność w tygodniu",
+            )
+        }
+        ActivationRole.PLAYER -> {
+            title = "Witaj w trybie gracza!"
+            body = "Został ostatni krok — oceń swój poziom w każdym sporcie, żebyśmy dobrali Ci uczciwych przeciwników. Pierwsze 10 meczów liczą się podwójnie, więc system sam Cię ustawi."
+            cta = "OCEŃ POZIOM"
+            bullets = listOf(
+                "Osobne ELO na każdy sport",
+                "System skoryguje Twój poziom sam",
+                "Wchodź do rankingu w swoim mieście",
+            )
+        }
+    }
+
+    Column {
+        Text(
+            title,
+            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+            fontSize = 32.sp, letterSpacing = (-1.5).sp, color = ProCircuit.OnBg,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            body,
+            fontFamily = AppBodyFontFamily, fontSize = 15.sp,
+            color = ProCircuit.OnSurface, lineHeight = 22.sp,
+        )
+        Spacer(Modifier.height(40.dp))
+        bullets.forEachIndexed { i, b ->
+            if (i > 0) Spacer(Modifier.height(10.dp))
+            FeatureBullet(b)
+        }
+        Spacer(Modifier.height(48.dp))
+        Button(
+            onClick = onNext,
+            enabled = canContinue,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ProCircuit.Lime,
+                contentColor = ProCircuit.Bg,
+                disabledContainerColor = ProCircuit.SurfaceHigh,
+                disabledContentColor = ProCircuit.OnSurface,
+            ),
+        ) {
+            Text(
+                cta,
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 13.sp, letterSpacing = 1.sp,
+            )
+        }
     }
 }
 

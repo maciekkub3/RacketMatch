@@ -127,7 +127,7 @@ val viewModelModule = module {
     factory { PaymentViewModel(get()) }
     factory { SplashViewModel(get()) }
     factory { ProfileViewModel(get(), get(), get()) }
-    factory { SettingsViewModel(get(), get(), get()) }
+    factory { SettingsViewModel(get(), get()) }
     factory { RankingsViewModel(get(), get(), get()) }
     factory { FriendsViewModel(get(), get()) }
     factory { FeedViewModel(get()) }
