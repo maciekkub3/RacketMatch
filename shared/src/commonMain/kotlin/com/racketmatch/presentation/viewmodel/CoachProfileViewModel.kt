@@ -2,6 +2,8 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.domain.model.CoachService
+import com.racketmatch.domain.model.CoachWeeklyAvailability
 import com.racketmatch.domain.model.Sport
 import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.repository.CoachRepository
@@ -22,7 +24,9 @@ sealed class CoachProfileState {
         val sports: Set<Sport>,
         val avatarUrl: String,
         val lessonCount: Int,
-        val courts: List<String>
+        val courts: List<String>,
+        val services: List<CoachService>,
+        val weeklyAvailability: List<CoachWeeklyAvailability>,
     ) : CoachProfileState()
     object Error : CoachProfileState()
 }
@@ -50,6 +54,9 @@ class CoachProfileViewModel(
                 val user = profileRepository.getMyProfile()
                 val coachProfile = runCatching { coachRepository.getMyCoachProfile() }.getOrNull()
                 val bookings = runCatching { coachRepository.getMyBookings() }.getOrDefault(emptyList())
+                val services = runCatching { coachRepository.getMyServices() }.getOrDefault(emptyList())
+                    .filter { it.isActive }
+                val weeklyAvailability = runCatching { coachRepository.getMyAvailability() }.getOrDefault(emptyList())
                 val completedLessons = bookings.count { it.status == "CONFIRMED" || it.status == "COMPLETED" }
                 _state.value = CoachProfileState.Content(
                     displayName = user.displayName,
@@ -58,7 +65,9 @@ class CoachProfileViewModel(
                     sports = coachProfile?.sports?.toSet() ?: emptySet(),
                     avatarUrl = user.avatarUrl ?: "",
                     lessonCount = completedLessons,
-                    courts = coachProfile?.trainingLocations ?: emptyList()
+                    courts = coachProfile?.trainingLocations ?: emptyList(),
+                    services = services,
+                    weeklyAvailability = weeklyAvailability,
                 )
             } catch (e: Exception) {
                 _state.value = CoachProfileState.Error

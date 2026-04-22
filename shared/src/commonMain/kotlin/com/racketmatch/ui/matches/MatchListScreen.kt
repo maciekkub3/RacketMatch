@@ -42,7 +42,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.racketmatch.presentation.viewmodel.ActionBadgeViewModel
 import com.racketmatch.presentation.viewmodel.MatchEffect
-import com.racketmatch.ui.chat.ChatScreen
+import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.common.Eyebrow
 import com.racketmatch.ui.common.H1
 import com.racketmatch.ui.common.StatusPill
@@ -82,8 +82,22 @@ object MatchListScreen : Screen {
             viewModel.onEvent(MatchEvent.LoadMatches)
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
-                    is MatchEffect.OpenMatchChat ->
-                        rootNavigator.push(ChatScreen(effect.matchId, effect.currentUserId, effect.otherUserName))
+                    is MatchEffect.OpenMatchChat -> {
+                        // Match chat ujednolicony z DM — jedna rozmowa per
+                        // para osób. conversationId konstruowany jak w DM
+                        // wszędzie indziej: stabilne sortowanie min/max
+                        // żeby obie strony trafiły na ten sam wątek.
+                        val conversationId =
+                            minOf(effect.currentUserId, effect.otherUserId) + "_" +
+                            maxOf(effect.currentUserId, effect.otherUserId)
+                        rootNavigator.push(
+                            DmChatScreen(
+                                conversationId = conversationId,
+                                currentUserId = effect.currentUserId,
+                                otherUserName = effect.otherUserName,
+                            )
+                        )
+                    }
                     is MatchEffect.ShowError ->
                         snackbarHostState.showSnackbar(effect.msg)
                     is MatchEffect.ResultConfirmed -> {

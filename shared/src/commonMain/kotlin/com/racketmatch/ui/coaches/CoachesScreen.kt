@@ -31,10 +31,17 @@ import com.racketmatch.presentation.viewmodel.CoachesViewModel
 import com.racketmatch.presentation.viewmodel.PlayerBookingsIntent
 import com.racketmatch.presentation.viewmodel.PlayerBookingsState
 import com.racketmatch.presentation.viewmodel.PlayerBookingsViewModel
+import com.racketmatch.domain.model.emoji
+import com.racketmatch.domain.model.label
 import com.racketmatch.ui.chat.DmChatScreen
 import com.racketmatch.ui.common.Eyebrow
 import com.racketmatch.ui.common.H1
 import com.racketmatch.ui.common.IconCircleButton
+import com.racketmatch.ui.common.SportChip
+import coil3.compose.AsyncImage
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -62,30 +69,38 @@ data class CoachesScreen(val isCoachMode: Boolean = false) : Screen {
         LaunchedEffect(selectedTab) {
             if (selectedTab == 1) bookingsVm.onIntent(PlayerBookingsIntent.Refresh)
         }
+        // If ServiceBookingScreen signalled that we should land on the
+        // "Rezerwacje" inner tab (success of a booking request), consume
+        // the signal once and switch. Runs after every recomposition so
+        // returning here after a pop catches the latest request.
+        LaunchedEffect(Unit) {
+            CoachesInnerTabSignal.consume()?.let { selectedTab = it }
+        }
 
         Column(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
-            // Editorial header: circular back button on top, Eyebrow + H1
-            // below. Matches the pattern used on Notifications, CoachDetail
-            // and other pushed screens so coach mode looks cohesive with
-            // the rest of the app.
-            Column(
+            // Editorial header — circular back button on the left, Eyebrow
+            // + H1 next to it. Same layout as Messages / Feed / Friends /
+            // Settings / Coach Dzień so all pushed screens look cohesive.
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 8.dp, bottom = 12.dp),
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 IconCircleButton(
                     icon = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Wstecz",
                     onClick = { navigator.pop() },
                 )
-                Spacer(Modifier.height(14.dp))
-                Eyebrow(
-                    if (isCoachMode) "Katalog trenerów"
-                    else "Znajdź idealnego trenera"
-                )
-                Spacer(Modifier.height(6.dp))
-                H1("Trenerzy")
+                Column {
+                    Eyebrow(
+                        if (isCoachMode) "Katalog trenerów"
+                        else "Znajdź idealnego trenera"
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    H1("Trenerzy")
+                }
             }
 
             // Tab bar — hidden in coach mode (no bookings tab for coaches)
@@ -203,6 +218,11 @@ data class CoachesScreen(val isCoachMode: Boolean = false) : Screen {
 
 @Composable
 private fun CoachesList(state: CoachesState, isCoachMode: Boolean, onCoachClick: (String) -> Unit) {
+    // TODO (M3) — render a SportFilterRow (see ui/common/SportChips.kt) above
+    // the LazyColumn when Sport.values().size > 2 OR when total coaches in
+    // view exceeds ~20. VM already exposes selectedSport on CoachesState
+    // and CoachesEvent.FilterBySport(sport), so UI wiring is the only step
+    // left. Kept hidden now to avoid an empty filter row on a 2-sport MVP.
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         when (state) {
             CoachesState.Loading -> item {
@@ -356,6 +376,14 @@ private fun BookingGroupHeader(text: String) {
     )
 }
 
+/**
+ * Fit-driven coach card: avatar + name + "od X zł" + sport chips + bio teaser.
+ * Clicking opens CoachDetailScreen — the card itself is not a booking CTA,
+ * per the browse → evaluate → book funnel we agreed on.
+ *
+ * Falls back to an auto-generated line ("Trenuje tenisa · Kraków") when bio
+ * is blank, so cards without bio are still scannable.
+ */
 @Composable
 private fun CoachCard(coach: CoachProfile, isCoachMode: Boolean, onClick: () -> Unit) {
     Column(
@@ -365,117 +393,88 @@ private fun CoachCard(coach: CoachProfile, isCoachMode: Boolean, onClick: () -> 
             .clip(RoundedCornerShape(20.dp))
             .background(ProCircuit.SurfaceLow)
             .clickable(onClick = onClick)
-            .padding(16.dp)
+            .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {
+            // Avatar — photo if set, lime initials disc otherwise.
             Box(
-                modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))
-                    .background(ProCircuit.SurfaceHigh),
-                contentAlignment = Alignment.Center
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.Lime),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    coach.displayName.take(1).uppercase(),
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 28.sp, color = ProCircuit.Lime
-                )
+                if (!coach.avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = coach.avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                } else {
+                    Text(
+                        coach.displayName.take(2).uppercase(),
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 18.sp, color = ProCircuit.LimeInk,
+                    )
+                }
             }
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         coach.displayName,
                         fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp, color = ProCircuit.OnBg, modifier = Modifier.weight(1f)
+                        fontSize = 16.sp, color = ProCircuit.OnBg,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("⭐", fontSize = 12.sp)
-                        Spacer(Modifier.width(3.dp))
+                    Spacer(Modifier.width(8.dp))
+                    coach.lowestServicePriceCents?.let { cents ->
                         Text(
-                            "${coach.eloRating}",
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp, color = ProCircuit.OnBg
+                            "od ${cents / 100} zł",
+                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                            fontSize = 14.sp, color = ProCircuit.Lime,
                         )
                     }
                 }
-                Spacer(Modifier.height(2.dp))
+                if (coach.sports.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        coach.sports.forEach { sport -> SportChip(sport = sport) }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                val teaser = coach.bioTeaserOrFallback()
                 Text(
-                    "📍 ${coach.city}",
-                    fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
+                    teaser,
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp,
+                    color = ProCircuit.OnSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 17.sp,
                 )
-                if (!coach.bio.isNullOrBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        coach.bio!!,
-                        fontFamily = AppBodyFontFamily, fontSize = 12.sp,
-                        color = ProCircuit.OnSurface, maxLines = 2,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        lineHeight = 17.sp
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                coach.sports.forEach { sport -> SportChip(sport) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                coach.lowestServicePriceCents?.let { cents ->
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            "OD",
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 8.sp, letterSpacing = 1.sp, color = ProCircuit.OnSurface
-                        )
-                        Text(
-                            "${cents / 100} zł",
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 16.sp, color = ProCircuit.Lime
-                        )
-                    }
-                }
-                if (!isCoachMode) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(ProCircuit.Lime)
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            "ZAREZERWUJ",
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 10.sp, letterSpacing = 0.5.sp, color = ProCircuit.Bg
-                        )
-                    }
-                }
             }
         }
     }
 }
 
-@Composable
-private fun SportChip(sport: Sport) {
-    val label = when (sport) { Sport.TENNIS -> "🎾 TENIS"; Sport.PADEL -> "🏸 PADEL" }
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(ProCircuit.Lime.copy(alpha = 0.15f))
-            .padding(horizontal = 10.dp, vertical = 5.dp)
-    ) {
-        Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-            fontSize = 9.sp, letterSpacing = 0.5.sp, color = ProCircuit.Lime)
+/**
+ * When a coach hasn't written a bio, compose a neutral one-liner from the
+ * signals we already have — sports + city — so the card still looks full.
+ * Prefer the real bio when present.
+ */
+private fun CoachProfile.bioTeaserOrFallback(): String {
+    val trimmed = bio?.trim()
+    if (!trimmed.isNullOrBlank()) return trimmed
+    val sportsPart = when (sports.size) {
+        0 -> "Trener"
+        1 -> "Trenuje ${sports.first().label().lowercase()}"
+        else -> "Trenuje " + sports.joinToString(" i ") { it.label().lowercase() }
     }
+    return if (city.isNotBlank()) "$sportsPart · $city" else sportsPart
 }

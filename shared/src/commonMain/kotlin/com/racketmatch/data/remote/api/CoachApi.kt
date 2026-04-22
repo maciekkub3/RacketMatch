@@ -7,12 +7,24 @@ import io.ktor.client.request.*
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlin.time.Instant
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class CoachSetupStatusDto(
+    val hasBio: Boolean,
+    val hasService: Boolean,
+    val hasAvailability: Boolean,
+    val isComplete: Boolean,
+)
 
 class CoachApi(private val client: HttpClient) {
 
     // Player-facing
-    suspend fun getCoaches(city: String): List<CoachProfileDto> =
-        client.get("api/coaches") { parameter("city", city) }.body()
+    suspend fun getCoaches(city: String, sport: String? = null): List<CoachProfileDto> =
+        client.get("api/coaches") {
+            parameter("city", city)
+            if (!sport.isNullOrBlank()) parameter("sport", sport)
+        }.body()
 
     suspend fun getCoach(coachId: String): CoachProfileDto =
         client.get("api/coaches/$coachId").body()
@@ -111,6 +123,10 @@ class CoachApi(private val client: HttpClient) {
             contentType(ContentType.Application.Json)
             setBody(request)
         }.body()
+
+    // Coach-facing — setup checklist
+    suspend fun getMySetupStatus(): CoachSetupStatusDto =
+        client.get("api/coaches/me/setup-status").body()
 
     // Coach-facing — profile / booking settings
     suspend fun getMyCoachProfile(): CoachProfileDto =

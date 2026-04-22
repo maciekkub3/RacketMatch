@@ -19,4 +19,7 @@ interface CoachCalendarEventRepository : JpaRepository<CoachCalendarEventEntity,
 
     @Query("SELECT e FROM CoachCalendarEventEntity e WHERE e.coach.id = :coachId AND e.eventType = 'BLOCKED'")
     fun findBlockedByCoachId(@Param("coachId") coachId: UUID): List<CoachCalendarEventEntity>
+
+    @Query("SELECT e FROM CoachCalendarEventEntity e WHERE e.booking.id = :bookingId")
+    fun findByBookingId(@Param("bookingId") bookingId: UUID): CoachCalendarEventEntity?
 }

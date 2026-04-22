@@ -18,7 +18,14 @@ data class CoachProfileDto(
     val trainingLocations: List<String> = emptyList(),
     val bookingLeadTimeHours: Int = 24,
     val bookingHorizonDays: Int = 30,
-    val bufferMinutes: Int = 0
+    val bufferMinutes: Int = 0,
+    /**
+     * Weekly recurring hours — same shape as the coach's private
+     * schedule. Public-facing so the client can render a "generally
+     * available" summary on CoachDetailScreen without having to walk the
+     * per-slot availability list.
+     */
+    val weeklyAvailability: List<CoachAvailabilityDto> = emptyList(),
 )
 
 @Serializable
@@ -187,7 +194,10 @@ fun CoachProfileDto.toDomain() = CoachProfile(
     city = city,
     eloRating = eloRating,
     lowestServicePriceCents = lowestServicePriceCents,
-    trainingLocations = trainingLocations
+    trainingLocations = trainingLocations,
+    weeklyAvailability = weeklyAvailability.map {
+        CoachWeeklyAvailability(it.dayOfWeek, it.startTime, it.endTime)
+    },
 )
 
 fun CoachServiceDto.toDomain() = CoachService(

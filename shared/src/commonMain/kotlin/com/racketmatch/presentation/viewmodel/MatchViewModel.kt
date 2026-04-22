@@ -53,7 +53,12 @@ sealed class MatchEffect {
     /** Carries the updated match so the UI can push the reveal celebration. */
     data class ResultConfirmed(val match: Match) : MatchEffect()
     object ResultDisputed : MatchEffect()
-    data class OpenMatchChat(val matchId: String, val currentUserId: String, val otherUserName: String) : MatchEffect()
+    data class OpenMatchChat(
+        val matchId: String,
+        val currentUserId: String,
+        val otherUserId: String,
+        val otherUserName: String,
+    ) : MatchEffect()
     data class ShowError(val msg: String) : MatchEffect()
 }
 
@@ -259,8 +264,11 @@ class MatchViewModel(
         val content = (stateFlow.value as? MatchListState.Content) ?: return
         val myId = content.currentUserId
         val match = content.matches.find { it.id == matchId } ?: return
+        val otherId = if (match.challengerId == myId) match.challengedId else match.challengerId
         val otherName = if (match.challengerId == myId) match.challengedName else match.challengerName
-        viewModelScope.launch { _effects.emit(MatchEffect.OpenMatchChat(matchId, myId, otherName)) }
+        viewModelScope.launch {
+            _effects.emit(MatchEffect.OpenMatchChat(matchId, myId, otherId, otherName))
+        }
     }
 
     private fun cancelChallenge(matchId: String) {

@@ -36,7 +36,7 @@ class CoachAvailabilityControllerTest {
         val result = mockMvc.perform(
             post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"Password1!","displayName":"Test Coach","city":"Kraków","isCoach":$isCoach}""")
+                .content("""{"email":"$email","password":"Password1!","displayName":"Test Coach","city":"Kraków","isCoach":$isCoach,"ageConfirmed":true}""")
         ).andExpect(status().isCreated).andReturn()
         val body = result.response.contentAsString
         return Auth(

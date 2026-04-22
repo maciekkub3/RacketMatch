@@ -17,7 +17,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,10 +31,12 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.presentation.viewmodel.ProfileSetupEffect
 import com.racketmatch.presentation.viewmodel.ProfileSetupViewModel
 import com.racketmatch.ui.common.rememberImagePickerLauncher
 import com.racketmatch.ui.navigation.MainScreen
+import com.racketmatch.ui.navigation.TabSwitchSignal
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -43,17 +44,14 @@ import com.racketmatch.util.kmpViewModel
 import org.koin.compose.koinInject
 
 /**
- * Post-register welcome flow:
+ * Post-register onboarding — three shapes depending on role:
  *
- *  1. Welcome message ("Gotowe, {imię}")
- *  2. Avatar upload or skip
- *  3. Role-aware "first action" picker — tapping one lands the user in
- *     the relevant tab (or coach-mode tab) so they immediately see a
- *     concrete thing to do instead of a blank Today screen.
+ *  - **Pure player**:  Welcome → Avatar → Skill (per sport) → lands in `players` tab
+ *  - **Oboje**:        Welcome → Avatar → Skill (per sport) → picker (play / set-up-coach)
+ *  - **Pure coach**:   Welcome → Avatar → lands in `coachDzien` (checklist handles setup there)
  *
- * Replaces the old three-step ProfileSetup (avatar → bio → dob). Bio and
- * date-of-birth are optional and can be filled in Settings later; they
- * don't need to gate first usage.
+ * Skill assessment seeds per-sport ELO so first ranked matches are roughly fair.
+ * First 10 matches per sport run with K × 2 (calibration window) to self-correct.
  */
 class WelcomeScreen : Screen {
     @Composable
@@ -62,19 +60,32 @@ class WelcomeScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val tokenStorage = koinInject<TokenStorage>()
         val isSaving by viewModel.isSaving.collectAsState()
+        val declaredSports by viewModel.declaredSports.collectAsState()
+
+        val isCoach = tokenStorage.isCoach
+        val hasPlayer = tokenStorage.hasPlayerProfile
+        val isPureCoach = isCoach && !hasPlayer
+        val isOboje = isCoach && hasPlayer
+
+        // Two booleans decide which steps exist:
+        //   showSkillStep: only for player-capable users (pure player + oboje)
+        //   showPickerStep: only for oboje (pure player auto-lands, pure coach auto-lands)
+        val showSkillStep = hasPlayer
+        val showPickerStep = isOboje
 
         var step by remember { mutableStateOf(1) }
         var avatarBytes by remember { mutableStateOf<ByteArray?>(null) }
+        var sportIndex by remember { mutableStateOf(0) }
+        var tierBySport by remember { mutableStateOf<Map<Sport, Int>>(emptyMap()) }
         var pendingTab by remember { mutableStateOf<String?>(null) }
 
-        // Save-and-finish emits NavigateToMain when the profile row is
-        // written. We intercept it to queue a tab-switch first so the
-        // user lands directly in the action they picked.
+        LaunchedEffect(Unit) { viewModel.loadDeclaredSports() }
+
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is ProfileSetupEffect.NavigateToMain -> {
-                        pendingTab?.let { com.racketmatch.ui.navigation.TabSwitchSignal.request(it) }
+                        pendingTab?.let { TabSwitchSignal.request(it) }
                         navigator.replace(MainScreen)
                     }
                     else -> Unit
@@ -86,6 +97,12 @@ class WelcomeScreen : Screen {
             pendingTab = targetTab
             viewModel.saveAndFinish(bio = null, dateOfBirth = null)
         }
+
+        // Progress dot count depends on the role. We count steps the user
+        // actually sees, so the progress bar doesn't lie.
+        val totalSteps = 2 + // welcome greeting + avatar
+            (if (showSkillStep) declaredSports.size.coerceAtLeast(1) else 0) +
+            (if (showPickerStep) 1 else 0)
 
         Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg).imePadding()) {
             Column(
@@ -104,9 +121,10 @@ class WelcomeScreen : Screen {
 
                 Spacer(Modifier.height(20.dp))
 
-                // Progress dots
+                // Progress dots — step number maps to dots lit. Always
+                // shows at least 1 dot so the bar isn't empty.
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(3) { i ->
+                    repeat(totalSteps.coerceAtLeast(1)) { i ->
                         Box(
                             modifier = Modifier
                                 .height(4.dp)
@@ -125,19 +143,73 @@ class WelcomeScreen : Screen {
                         slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
                     },
                 ) { currentStep ->
-                    when (currentStep) {
-                        1 -> WelcomeStep(onNext = { step = 2 })
-                        2 -> AvatarStep(
+                    val effectiveStep = stepKind(
+                        step = currentStep,
+                        showSkillStep = showSkillStep,
+                        declaredSportCount = declaredSports.size,
+                        showPickerStep = showPickerStep,
+                    )
+                    when (effectiveStep) {
+                        StepKind.Welcome -> WelcomeStep(onNext = { step = 2 })
+
+                        StepKind.Avatar -> AvatarStep(
                             avatarBytes = avatarBytes,
                             onAvatarPicked = { avatarBytes = it },
-                            onNext = { viewModel.uploadAvatarAndNext(avatarBytes) { step = 3 } },
-                            onSkip = { step = 3 },
+                            onNext = {
+                                viewModel.uploadAvatarAndNext(avatarBytes) {
+                                    // After avatar:
+                                    //   - pure coach skips straight to finish → coachDzien
+                                    //   - player-capable moves to skill step
+                                    if (isPureCoach) {
+                                        finish("coachDzien")
+                                    } else {
+                                        sportIndex = 0
+                                        step = 3
+                                    }
+                                }
+                            },
+                            onSkip = {
+                                if (isPureCoach) {
+                                    finish("coachDzien")
+                                } else {
+                                    sportIndex = 0
+                                    step = 3
+                                }
+                            },
                         )
-                        3 -> RoleAwareActionStep(
-                            isCoach = tokenStorage.isCoach,
-                            hasPlayerProfile = tokenStorage.hasPlayerProfile,
+
+                        is StepKind.Skill -> SkillAssessmentStep(
+                            sport = declaredSports[effectiveStep.sportIndex],
+                            sportPosition = effectiveStep.sportIndex + 1,
+                            sportCount = declaredSports.size,
+                            selectedTier = tierBySport[declaredSports[effectiveStep.sportIndex]],
                             isSaving = isSaving,
-                            onPickAction = { tabKey -> finish(tabKey) },
+                            onPickTier = { tier ->
+                                val sport = declaredSports[effectiveStep.sportIndex]
+                                tierBySport = tierBySport + (sport to tier)
+                                val hasMoreSports = effectiveStep.sportIndex < declaredSports.size - 1
+                                if (hasMoreSports) {
+                                    // Move to next sport's skill screen
+                                    sportIndex = effectiveStep.sportIndex + 1
+                                    step += 1
+                                } else {
+                                    // All sports picked — save then go to next phase
+                                    viewModel.saveSportLevels(tierBySport + (sport to tier)) {
+                                        if (showPickerStep) {
+                                            step += 1 // advance to picker
+                                        } else {
+                                            // Pure player → auto-land in players tab
+                                            finish("players")
+                                        }
+                                    }
+                                }
+                            },
+                        )
+
+                        StepKind.Picker -> OboyePickerStep(
+                            isSaving = isSaving,
+                            onPlayerFirst = { finish("players") },
+                            onCoachFirst = { finish("coachDzien") },
                         )
                     }
                 }
@@ -145,6 +217,30 @@ class WelcomeScreen : Screen {
                 Spacer(Modifier.height(32.dp))
             }
         }
+    }
+}
+
+/** What kind of content the current step index shows. */
+private sealed class StepKind {
+    object Welcome : StepKind()
+    object Avatar : StepKind()
+    data class Skill(val sportIndex: Int) : StepKind()
+    object Picker : StepKind()
+}
+
+private fun stepKind(
+    step: Int,
+    showSkillStep: Boolean,
+    declaredSportCount: Int,
+    showPickerStep: Boolean,
+): StepKind {
+    // step is 1-indexed: 1 = welcome, 2 = avatar, 3..N = skill per sport, N+1 = picker
+    return when {
+        step == 1 -> StepKind.Welcome
+        step == 2 -> StepKind.Avatar
+        showSkillStep && step in 3..(2 + declaredSportCount) -> StepKind.Skill(step - 3)
+        showPickerStep -> StepKind.Picker
+        else -> StepKind.Welcome // fallback, shouldn't hit
     }
 }
 
@@ -166,8 +262,6 @@ private fun WelcomeStep(onNext: () -> Unit) {
 
         Spacer(Modifier.height(40.dp))
 
-        // Feature bullets mirroring the Subscription screen — lime check +
-        // short benefit line.
         FeatureBullet("Znajdziesz partnera w swojej okolicy")
         Spacer(Modifier.height(10.dp))
         FeatureBullet("ELO policzy za Ciebie, kto jest lepszy")
@@ -284,88 +378,200 @@ private fun AvatarStep(
     }
 }
 
-@Composable
-private fun RoleAwareActionStep(
-    isCoach: Boolean,
-    hasPlayerProfile: Boolean,
-    isSaving: Boolean,
-    onPickAction: (tabKey: String) -> Unit,
-) {
-    // Three role shapes from Register:
-    //   - Gracz                   (hasPlayerProfile && !isCoach)
-    //   - Trener                  (!hasPlayerProfile && isCoach)
-    //   - Gracz i trener jedn.    (hasPlayerProfile && isCoach)
-    val actions: List<ActionCardData> = when {
-        isCoach && !hasPlayerProfile -> listOf(
-            ActionCardData("📋", "Zobacz rezerwacje", "Rezerwacje i prośby od graczy w jednym miejscu.", "coachBookings"),
-            ActionCardData("📅", "Ustaw grafik", "Zaznacz kiedy możesz trenować — Twoi klienci zobaczą wolne sloty.", "coachCalendar"),
-        )
-        isCoach && hasPlayerProfile -> listOf(
-            ActionCardData("🎾", "Chcę zagrać", "Znajdę partnera w swoim mieście.", "players"),
-            ActionCardData("🏆", "Konfiguruję swój profil trenera", "Sprawdzę moje rezerwacje i plan dnia.", "coachDzien"),
-        )
-        else -> listOf(
-            // Pure player — most onboardings land here.
-            ActionCardData("🎾", "Znajdź partnera", "Zobacz kto gra w Twojej okolicy.", "players"),
-            ActionCardData("🏆", "Zobacz ranking", "Sprawdź swoją pozycję i innych w mieście.", "rankings"),
-        )
-    }
+private data class SkillTier(
+    val tier: Int,
+    val name: String,
+    val description: String,
+)
 
+private val SKILL_TIERS = listOf(
+    SkillTier(1, "Nowicjusz", "Pierwszy raz na korcie, uczę się odbijać"),
+    SkillTier(2, "Początkujący", "Gram od niedawna, znam podstawy"),
+    SkillTier(3, "Amator", "Gram regularnie (1x/tydz), dla zabawy"),
+    SkillTier(4, "Klubowicz", "2–3x/tydz, gram równe sety"),
+    SkillTier(5, "Zaawansowany", "Trenuję z trenerem, grałem turnieje"),
+    SkillTier(6, "Pro", "Były/obecny zawodnik, trener, krajowy ranking"),
+)
+
+private fun Sport.displayName(): String = when (this) {
+    Sport.TENNIS -> "tenisa"
+    Sport.PADEL -> "padla"
+}
+
+@Composable
+private fun SkillAssessmentStep(
+    sport: Sport,
+    sportPosition: Int,
+    sportCount: Int,
+    selectedTier: Int?,
+    isSaving: Boolean,
+    onPickTier: (Int) -> Unit,
+) {
     Column {
+        if (sportCount > 1) {
+            Text(
+                "SPORT $sportPosition Z $sportCount",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                fontSize = 10.sp, letterSpacing = 2.sp, color = ProCircuit.Lime,
+            )
+            Spacer(Modifier.height(6.dp))
+        }
         Text(
-            "Co teraz?",
+            "Oceń swój poziom",
             fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
             fontSize = 28.sp, letterSpacing = (-1).sp, color = ProCircuit.OnBg,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
-            "Wybierz pierwszą rzecz — zaczniesz od niej, a resztę odkryjesz po drodze.",
-            fontFamily = AppBodyFontFamily, fontSize = 14.sp,
-            color = ProCircuit.OnSurface, lineHeight = 20.sp,
+            "Jak dobrze grasz w ${sport.displayName()}? To pomoże nam dobrać Ci uczciwych przeciwników. " +
+                "Pierwsze 10 meczów liczą się podwójnie — system sam Cię ustawi jeśli się pomylisz.",
+            fontFamily = AppBodyFontFamily, fontSize = 13.sp,
+            color = ProCircuit.OnSurface, lineHeight = 18.sp,
         )
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(20.dp))
 
-        actions.forEach { action ->
-            ActionCard(
-                data = action,
+        SKILL_TIERS.forEach { tier ->
+            SkillTierCard(
+                tier = tier,
+                selected = selectedTier == tier.tier,
                 enabled = !isSaving,
-                onClick = { onPickAction(action.tabKey) },
+                onClick = { onPickTier(tier.tier) },
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        // "Pomiń" falls through to the home tab (Today for players,
-        // Dzień for coaches) — user can always discover on their own.
-        TextButton(
-            onClick = { onPickAction(null ?: if (isCoach && !hasPlayerProfile) "coachDzien" else "today") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isSaving,
-        ) {
-            if (isSaving) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = ProCircuit.Lime)
-            } else {
-                Text(
-                    "Pomiń — rozejrzę się sam",
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp, color = ProCircuit.OnSurface,
+        if (isSaving) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = ProCircuit.Lime,
                 )
             }
         }
     }
 }
 
-private data class ActionCardData(
-    val emoji: String,
-    val title: String,
-    val body: String,
-    val tabKey: String,
-)
+@Composable
+private fun SkillTierCard(
+    tier: SkillTier,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) ProCircuit.Lime else ProCircuit.SurfaceLow)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(
+                    if (selected) ProCircuit.Bg.copy(alpha = 0.2f)
+                    else ProCircuit.Lime.copy(alpha = 0.14f)
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                tier.tier.toString(),
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+                color = if (selected) ProCircuit.Bg else ProCircuit.Lime,
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                tier.name,
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 15.sp,
+                color = if (selected) ProCircuit.Bg else ProCircuit.OnBg,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                tier.description,
+                fontFamily = AppBodyFontFamily, fontSize = 12.sp,
+                color = if (selected) ProCircuit.Bg.copy(alpha = 0.75f) else ProCircuit.OnSurface,
+                lineHeight = 16.sp,
+            )
+        }
+    }
+}
 
 @Composable
-private fun ActionCard(data: ActionCardData, enabled: Boolean, onClick: () -> Unit) {
+private fun OboyePickerStep(
+    isSaving: Boolean,
+    onPlayerFirst: () -> Unit,
+    onCoachFirst: () -> Unit,
+) {
+    Column {
+        Text(
+            "Co najpierw?",
+            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+            fontSize = 28.sp, letterSpacing = (-1).sp, color = ProCircuit.OnBg,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Grasz i trenujesz — super. Wybierz od czego zaczniesz. " +
+                "Drugie skonfigurujesz później w aplikacji.",
+            fontFamily = AppBodyFontFamily, fontSize = 14.sp,
+            color = ProCircuit.OnSurface, lineHeight = 20.sp,
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        PickerCard(
+            emoji = "🎾",
+            title = "Najpierw zagram",
+            body = "Znajdę partnera w swoim mieście.",
+            enabled = !isSaving,
+            onClick = onPlayerFirst,
+        )
+        Spacer(Modifier.height(12.dp))
+        PickerCard(
+            emoji = "🏆",
+            title = "Najpierw skonfiguruję profil trenera",
+            body = "Dokończę setup trenera teraz — bio, usługi, dostępność.",
+            enabled = !isSaving,
+            onClick = onCoachFirst,
+        )
+
+        if (isSaving) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = ProCircuit.Lime,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickerCard(
+    emoji: String,
+    title: String,
+    body: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -380,17 +586,17 @@ private fun ActionCard(data: ActionCardData, enabled: Boolean, onClick: () -> Un
             modifier = Modifier.size(48.dp).clip(CircleShape).background(ProCircuit.Lime.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(data.emoji, fontSize = 24.sp)
+            Text(emoji, fontSize = 24.sp)
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                data.title,
+                title,
                 fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
                 fontSize = 15.sp, color = ProCircuit.OnBg,
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                data.body,
+                body,
                 fontFamily = AppBodyFontFamily, fontSize = 12.sp,
                 color = ProCircuit.OnSurface, lineHeight = 16.sp,
             )

@@ -22,6 +22,13 @@ data class CoachProfileDto(
     val bookingLeadTimeHours: Int = 24,
     val bookingHorizonDays: Int = 30,
     val bufferMinutes: Int = 0,
+    val weeklyAvailability: List<CoachAvailabilityResponseDto> = emptyList(),
+)
+
+data class CoachAvailabilityResponseDto(
+    val dayOfWeek: Int,
+    val startTime: String,
+    val endTime: String,
 )
 
 data class CoachServiceDto(
@@ -165,7 +172,10 @@ data class UpdateCoachProfileRequest(
     val trainingLocations: List<String>? = null
 )
 
-fun CoachProfileEntity.toDto(services: List<CoachServiceEntity> = emptyList()) = CoachProfileDto(
+fun CoachProfileEntity.toDto(
+    services: List<CoachServiceEntity> = emptyList(),
+    weeklyAvailability: List<CoachAvailabilityEntity> = emptyList(),
+) = CoachProfileDto(
     userId = userId!!,
     displayName = user.displayName,
     avatarUrl = user.avatarUrl,
@@ -179,6 +189,15 @@ fun CoachProfileEntity.toDto(services: List<CoachServiceEntity> = emptyList()) =
     bookingLeadTimeHours = bookingLeadTimeHours,
     bookingHorizonDays = bookingHorizonDays,
     bufferMinutes = bufferMinutes,
+    weeklyAvailability = weeklyAvailability
+        .sortedWith(compareBy({ it.dayOfWeek }, { it.startTime }))
+        .map {
+            CoachAvailabilityResponseDto(
+                dayOfWeek = it.dayOfWeek,
+                startTime = it.startTime.toString().substring(0, 5),
+                endTime = it.endTime.toString().substring(0, 5),
+            )
+        },
 )
 
 fun CoachServiceEntity.toDto() = CoachServiceDto(

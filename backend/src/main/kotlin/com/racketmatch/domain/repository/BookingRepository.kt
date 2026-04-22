@@ -50,13 +50,18 @@ interface BookingRepository : JpaRepository<BookingEntity, UUID> {
     @Query("""
         SELECT b FROM BookingEntity b
         WHERE (b.coach.id = :userId OR b.player.id = :userId)
+        AND b.startsAt >= :cutoff
         AND (
             b.status IN ('COMPLETED', 'CANCELLED', 'DECLINED')
             OR (b.status = 'CONFIRMED' AND b.startsAt < :now)
         )
         ORDER BY b.startsAt DESC
     """)
-    fun findHistoryForUser(@Param("userId") userId: UUID, @Param("now") now: Instant): List<BookingEntity>
+    fun findHistoryForUser(
+        @Param("userId") userId: UUID,
+        @Param("now") now: Instant,
+        @Param("cutoff") cutoff: Instant
+    ): List<BookingEntity>
 
     @Query("""
         SELECT b FROM BookingEntity b

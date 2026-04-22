@@ -74,7 +74,6 @@ object FriendsScreen : Screen {
             modifier = Modifier
                 .fillMaxSize()
                 .background(ProCircuit.Bg)
-                .windowInsetsPadding(WindowInsets.statusBars)
         ) {
             Row(
                 modifier = Modifier

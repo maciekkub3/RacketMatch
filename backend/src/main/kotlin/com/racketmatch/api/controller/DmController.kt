@@ -46,7 +46,7 @@ class DmController(
                     otherUserId = other.id!!,
                     otherUserName = other.displayName,
                     otherUserAvatarUrl = other.avatarUrl,
-                    lastMessage = latest.text,
+                    lastMessage = if (latest.messageType == "BOOKING_CARD") "📅 Rezerwacja" else latest.text,
                     lastMessageAt = latest.sentAt.toEpochMilli(),
                     unreadCount = unread
                 )

@@ -46,7 +46,8 @@ data class RegisterRequestDto(
     val city: String,
     val isCoach: Boolean = false,
     val hasPlayerProfile: Boolean = true,
-    val sports: List<String> = emptyList()
+    val sports: List<String> = emptyList(),
+    val ageConfirmed: Boolean = false,
 )
 
 fun UserDto.toDomain() = User(

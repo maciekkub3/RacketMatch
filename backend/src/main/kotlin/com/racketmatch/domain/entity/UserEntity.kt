@@ -66,6 +66,9 @@ class UserEntity(
     @Column(name = "losses")
     var losses: Int = 0,
 
+    @Column(name = "age_confirmed", nullable = false)
+    var ageConfirmed: Boolean = false,
+
     @Column(name = "created_at", updatable = false)
     val createdAt: Instant = Instant.now()
 ) {

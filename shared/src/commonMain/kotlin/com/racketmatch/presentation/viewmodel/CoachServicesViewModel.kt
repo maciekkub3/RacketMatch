@@ -2,6 +2,7 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.CoachService
 import com.racketmatch.domain.repository.CoachRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -38,6 +39,7 @@ sealed class CoachServicesEvent {
 
 class CoachServicesViewModel(
     private val coachRepository: CoachRepository,
+    private val tokenStorage: TokenStorage,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
@@ -72,6 +74,7 @@ class CoachServicesViewModel(
         viewModelScope.launch(dispatcher) {
             try {
                 coachRepository.createService(event.name, event.description, event.pricingType, event.priceCents)
+                tokenStorage.incrementProfileVersion()
                 load()
             } catch (e: Exception) {
                 _state.value = CoachServicesState.Error
@@ -122,6 +125,7 @@ class CoachServicesViewModel(
         viewModelScope.launch(dispatcher) {
             try {
                 coachRepository.deleteService(serviceId)
+                tokenStorage.incrementProfileVersion()
                 load()
             } catch (e: Exception) {
                 _state.value = CoachServicesState.Error

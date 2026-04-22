@@ -7,9 +7,11 @@ import com.racketmatch.config.JwtService
 import com.racketmatch.domain.entity.CoachProfileEntity
 import com.racketmatch.domain.entity.RefreshTokenEntity
 import com.racketmatch.domain.entity.UserEntity
+import com.racketmatch.domain.entity.UserSportLevelEntity
 import com.racketmatch.domain.repository.CoachProfileRepository
 import com.racketmatch.domain.repository.RefreshTokenRepository
 import com.racketmatch.domain.repository.UserRepository
+import com.racketmatch.domain.repository.UserSportLevelRepository
 import org.springframework.http.HttpStatus
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -24,6 +26,7 @@ class AuthService(
     private val userRepository: UserRepository,
     private val refreshTokenRepository: RefreshTokenRepository,
     private val coachProfileRepository: CoachProfileRepository,
+    private val userSportLevelRepository: UserSportLevelRepository,
     private val jwtService: JwtService,
     private val jwtConfig: JwtConfig,
     private val passwordEncoder: PasswordEncoder
@@ -36,10 +39,14 @@ class AuthService(
         city: String,
         isCoach: Boolean,
         hasPlayerProfile: Boolean = true,
-        sports: List<String> = emptyList()
+        sports: List<String> = emptyList(),
+        ageConfirmed: Boolean = false
     ): AuthResponse {
         if (userRepository.existsByEmail(email)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Email already in use")
+        }
+        if (!ageConfirmed) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Age confirmation required")
         }
         val user = userRepository.save(
             UserEntity(
@@ -49,11 +56,28 @@ class AuthService(
                 city = city,
                 isCoach = isCoach,
                 hasPlayerProfile = hasPlayerProfile,
-                sports = sports.joinToString(",")
+                sports = sports.joinToString(","),
+                ageConfirmed = ageConfirmed
             )
         )
         if (isCoach) {
             coachProfileRepository.save(CoachProfileEntity(user = user))
+        }
+        // Seed per-sport level rows with a placeholder "Amator" tier for
+        // declared sports. The onboarding skill-assessment screen will
+        // overwrite seed_tier + elo_rating via POST /api/me/sport-levels.
+        if (hasPlayerProfile) {
+            sports.filter { it.isNotBlank() }.distinct().forEach { sport ->
+                userSportLevelRepository.save(
+                    UserSportLevelEntity(
+                        userId = user.id!!,
+                        sport = sport,
+                        seedTier = 3,
+                        eloRating = UserSportLevelEntity.seedEloForTier(3),
+                        calibrationMatches = 0,
+                    )
+                )
+            }
         }
         return buildAuthResponse(user)
     }

@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +31,9 @@ import com.racketmatch.presentation.viewmodel.CoachDetailEffect
 import com.racketmatch.presentation.viewmodel.CoachDetailEvent
 import com.racketmatch.presentation.viewmodel.CoachDetailState
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.IconCircleButton
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -166,45 +171,39 @@ data class ServiceBookingScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                // TopBar
+                // Editorial header — back + Eyebrow "Rezerwacja" + H1(service.name).
+                // Price + unit rendered inline below the title, so the header's the
+                // same visual shape as every other pushed screen in M2.
                 item {
                     Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .background(ProCircuit.SurfaceLow)
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        TextButton(onClick = { navigator.pop() }, contentPadding = PaddingValues(0.dp)) {
-                            Text("←", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 20.sp, color = ProCircuit.Lime)
-                        }
-                        Spacer(Modifier.width(12.dp))
+                        IconCircleButton(
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Wstecz",
+                            onClick = { navigator.pop() },
+                        )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                service.name.uppercase(),
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 10.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface
-                            )
-                            Text(
-                                service.name,
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 20.sp, letterSpacing = (-0.5).sp, color = ProCircuit.OnBg,
-                                lineHeight = 24.sp
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                "${service.priceCents / 100}",
-                                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                fontSize = 24.sp, color = ProCircuit.Lime
-                            )
+                            Eyebrow("Rezerwacja")
+                            Spacer(Modifier.height(2.dp))
+                            H1(service.name)
+                            Spacer(Modifier.height(4.dp))
                             val unit = when (service.pricingType) {
-                                PricingType.PER_HOUR   -> "ZA GODZINĘ"
-                                PricingType.FIXED      -> "ZA SESJĘ"
-                                PricingType.PER_PERSON -> "OS./SESJA"
+                                PricingType.PER_HOUR   -> "/h"
+                                PricingType.FIXED      -> "/sesja"
+                                PricingType.PER_PERSON -> "/os."
                             }
-                            Text(unit, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                fontSize = 8.sp, letterSpacing = 1.sp, color = ProCircuit.OnSurface)
+                            Text(
+                                text = "${service.priceCents / 100} zł$unit",
+                                fontFamily = AppFontFamily,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 15.sp,
+                                color = ProCircuit.Lime,
+                            )
                         }
                     }
                 }
@@ -414,11 +413,24 @@ data class ServiceBookingScreen(
                             }
                         }
                         else -> {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            // Horizontal scroll so coaches with many courts (5+) don't
+                            // get their chips clipped at the right edge. contentPadding
+                            // gives the first/last chip a safe 20 dp inset matching the
+                            // rest of the screen's horizontal rhythm.
+                            val courtScrollState = rememberLazyListState()
+                            // If the currently selected court sits off-screen (e.g. user
+                            // scrolled back to the start and the selection is at index 7),
+                            // pull it into view so they see what's active.
+                            LaunchedEffect(selectedCourt, trainingLocations) {
+                                val idx = trainingLocations.indexOf(selectedCourt)
+                                if (idx >= 0) courtScrollState.animateScrollToItem(idx)
+                            }
+                            LazyRow(
+                                state = courtScrollState,
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                trainingLocations.forEach { court ->
+                                items(trainingLocations) { court ->
                                     val isSelected = selectedCourt == court
                                     Box(
                                         modifier = Modifier
@@ -469,47 +481,94 @@ data class ServiceBookingScreen(
         }
 
         if (showSuccess) {
+            val coachName = (state as? CoachDetailState.Content)?.coach?.displayName ?: "Trener"
             BookingSuccessSheet(
-                onDismiss = {
+                coachName = coachName,
+                onOpenBookings = {
+                    // Jump the user straight to their Rezerwacje tab inside
+                    // CoachesScreen. The signal is consumed on recomposition
+                    // of CoachesScreen so selectedTab switches to index 1.
+                    CoachesInnerTabSignal.request(1)
                     showSuccess = false
                     navigator.pop()
                 },
-                onOpenBookings = {
+                onClose = {
                     showSuccess = false
                     navigator.pop()
-                }
+                },
             )
         }
     }
 }
 
+/**
+ * Cross-screen signal so success on ServiceBookingScreen can request that
+ * CoachesScreen opens its "Rezerwacje" inner tab after the user pops back.
+ * Written once, consumed once — mirrors TabSwitchSignal's shape.
+ */
+object CoachesInnerTabSignal {
+    private var pending: Int? = null
+    fun request(tab: Int) { pending = tab }
+    fun consume(): Int? = pending.also { pending = null }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BookingSuccessSheet(onDismiss: () -> Unit, onOpenBookings: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ProCircuit.SurfaceLow) {
+private fun BookingSuccessSheet(
+    coachName: String,
+    onOpenBookings: () -> Unit,
+    onClose: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = ProCircuit.SurfaceLow) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text("✓", fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 48.sp, color = ProCircuit.Lime)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Prośba o rezerwację wysłana",
-                fontFamily = AppFontFamily, fontWeight = FontWeight.Black, fontSize = 20.sp, color = ProCircuit.OnBg
+                "Prośba wysłana",
+                fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                fontSize = 22.sp, color = ProCircuit.OnBg,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Trener potwierdzi lub zaproponuje inny termin. Powiadomimy Cię.",
-                fontFamily = AppBodyFontFamily, fontSize = 14.sp, color = ProCircuit.OnSurface
+                "$coachName dostał powiadomienie. Odpowiedź zobaczysz w Rezerwacjach.",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 14.sp,
+                color = ProCircuit.OnSurface,
+                lineHeight = 20.sp,
             )
             Spacer(Modifier.height(20.dp))
             Button(
                 onClick = onOpenBookings,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg),
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("OK", fontFamily = AppFontFamily, fontWeight = FontWeight.Black) }
-            Spacer(Modifier.height(16.dp))
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ProCircuit.Lime,
+                    contentColor = ProCircuit.Bg,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 14.dp),
+            ) {
+                Text(
+                    "Zobacz rezerwacje",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp,
+                    letterSpacing = 0.5.sp,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Zamknij",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -536,39 +595,64 @@ private fun BookingSection(label: String) {
 
 @Composable
 private fun BottomBookingBar(totalCents: Int, enabled: Boolean, onConfirm: () -> Unit) {
+    // "Wyślij prośbę" zamiast "Zarezerwuj" — booking to prośba oczekująca
+    // potwierdzenia trenera. Subtitle "Trener potwierdzi termin w ciągu 24h"
+    // tuż pod przyciskiem komunikuje to wprost, zanim user zrobi tap.
     Surface(
         color = ProCircuit.SurfaceLow,
         shadowElevation = 8.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 20.dp, vertical = 14.dp),
         ) {
-            Column {
-                Text("ŁĄCZNA CENA", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                    fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
-                Text("${totalCents / 100} PLN", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 22.sp, color = ProCircuit.OnBg)
-            }
-            Button(
-                onClick = onConfirm,
-                enabled = enabled,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ProCircuit.Lime,
-                    contentColor = ProCircuit.Bg,
-                    disabledContainerColor = ProCircuit.SurfaceHigh,
-                    disabledContentColor = ProCircuit.OnSurface
-                ),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("POTWIERDŹ REZERWACJĘ →", fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black, fontSize = 12.sp, letterSpacing = 0.5.sp)
+                Column {
+                    Text(
+                        "ŁĄCZNA CENA",
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
+                        fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface,
+                    )
+                    Text(
+                        "${totalCents / 100} zł",
+                        fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
+                        fontSize = 22.sp, color = ProCircuit.OnBg,
+                    )
+                }
+                Button(
+                    onClick = onConfirm,
+                    enabled = enabled,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ProCircuit.Lime,
+                        contentColor = ProCircuit.Bg,
+                        disabledContainerColor = ProCircuit.SurfaceHigh,
+                        disabledContentColor = ProCircuit.OnSurface,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
+                ) {
+                    Text(
+                        "WYŚLIJ PROŚBĘ",
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        letterSpacing = 0.5.sp,
+                    )
+                }
             }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Trener potwierdzi termin w ciągu 24h.",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 11.sp,
+                color = ProCircuit.OnSurface,
+            )
         }
     }
 }

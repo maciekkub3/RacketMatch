@@ -85,8 +85,7 @@ object CoachServicesScreen : Screen {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(ProCircuit.Bg)
-                .windowInsetsPadding(WindowInsets.statusBars),
+                .background(ProCircuit.Bg),
         ) {
             // ─ Editorial header: back button + title side by side so the
             //   nav icon doesn't sit alone above the heading.

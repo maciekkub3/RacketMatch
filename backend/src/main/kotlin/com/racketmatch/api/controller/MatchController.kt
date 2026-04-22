@@ -6,10 +6,13 @@ import com.racketmatch.api.dto.MatchDto
 import com.racketmatch.api.dto.SubmitResultRequest
 import com.racketmatch.api.dto.toDto
 import com.racketmatch.domain.entity.MatchEntity
+import com.racketmatch.domain.entity.UserSportLevelEntity
 import com.racketmatch.domain.repository.MatchRepository
 import com.racketmatch.domain.repository.UserRepository
+import com.racketmatch.domain.repository.UserSportLevelRepository
 import com.racketmatch.service.EloService
 import com.racketmatch.service.NotificationService
+import java.time.Instant
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
@@ -23,6 +26,7 @@ import java.util.UUID
 class MatchController(
     private val matchRepository: MatchRepository,
     private val userRepository: UserRepository,
+    private val sportLevelRepository: UserSportLevelRepository,
     private val eloService: EloService,
     private val notificationService: NotificationService
 ) {
@@ -421,13 +425,28 @@ class MatchController(
     private fun applyEloIfRanked(match: MatchEntity) {
         if (match.type != "RANKED" && match.type != "MASTER") return
         val challengerWon = (match.scoreChallenger ?: 0) > (match.scoreChallenged ?: 0)
+
+        // Look up per-sport level rows — they own calibration state and
+        // the authoritative per-sport ELO. Fall back to the legacy global
+        // elo_rating if a row is missing (grandfathered users pre-V27).
+        val challengerLevel = sportLevelRepository.findByUserIdAndSport(match.challenger.id!!, match.sport)
+        val challengedLevel = sportLevelRepository.findByUserIdAndSport(match.challenged.id!!, match.sport)
+
         val result = eloService.calculate1v1(
-            idA = match.challenger.id!!.toString(), ratingA = match.challenger.eloRating, matchesA = match.challenger.matchesPlayed,
-            idB = match.challenged.id!!.toString(), ratingB = match.challenged.eloRating, matchesB = match.challenged.matchesPlayed,
-            aWon = challengerWon
+            idA = match.challenger.id!!.toString(),
+            ratingA = challengerLevel?.eloRating ?: match.challenger.eloRating,
+            matchesA = match.challenger.matchesPlayed,
+            calibratingA = challengerLevel?.let { UserSportLevelEntity.isCalibrating(it.calibrationMatches) } ?: false,
+            idB = match.challenged.id!!.toString(),
+            ratingB = challengedLevel?.eloRating ?: match.challenged.eloRating,
+            matchesB = match.challenged.matchesPlayed,
+            calibratingB = challengedLevel?.let { UserSportLevelEntity.isCalibrating(it.calibrationMatches) } ?: false,
+            aWon = challengerWon,
         )
         match.eloChangeChallenger = result.changes[match.challenger.id!!.toString()]
         match.eloChangeChallenged = result.changes[match.challenged.id!!.toString()]
+
+        // Update legacy global ELO — still read by rankings/matchmaking today.
         match.challenger.eloRating += match.eloChangeChallenger ?: 0
         match.challenger.matchesPlayed += 1
         if (challengerWon) match.challenger.wins += 1 else match.challenger.losses += 1
@@ -436,6 +455,21 @@ class MatchController(
         if (challengerWon) match.challenged.losses += 1 else match.challenged.wins += 1
         userRepository.save(match.challenger)
         userRepository.save(match.challenged)
+
+        // Update the per-sport level rows (delta + calibration tick). The
+        // !! on id is safe here — both users are persisted by this point.
+        challengerLevel?.let {
+            it.eloRating += match.eloChangeChallenger ?: 0
+            it.calibrationMatches = (it.calibrationMatches + 1).coerceAtMost(UserSportLevelEntity.CALIBRATION_TARGET)
+            it.updatedAt = Instant.now()
+            sportLevelRepository.save(it)
+        }
+        challengedLevel?.let {
+            it.eloRating += match.eloChangeChallenged ?: 0
+            it.calibrationMatches = (it.calibrationMatches + 1).coerceAtMost(UserSportLevelEntity.CALIBRATION_TARGET)
+            it.updatedAt = Instant.now()
+            sportLevelRepository.save(it)
+        }
     }
 
     private fun findMatchForParticipant(matchId: UUID, userId: UUID): MatchEntity {

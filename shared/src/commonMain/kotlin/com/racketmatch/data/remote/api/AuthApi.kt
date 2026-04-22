@@ -26,10 +26,11 @@ class AuthApi(private val client: HttpClient) {
         city: String,
         isCoach: Boolean,
         hasPlayerProfile: Boolean = true,
-        sports: List<String> = emptyList()
+        sports: List<String> = emptyList(),
+        ageConfirmed: Boolean = false,
     ): AuthResponseDto =
         client.post("api/auth/register") {
-            setBody(RegisterRequestDto(email, password, displayName, city, isCoach, hasPlayerProfile, sports))
+            setBody(RegisterRequestDto(email, password, displayName, city, isCoach, hasPlayerProfile, sports, ageConfirmed))
         }.body()
 
     suspend fun refresh(refreshToken: String): AuthResponseDto =

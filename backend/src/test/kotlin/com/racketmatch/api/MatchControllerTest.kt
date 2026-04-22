@@ -41,7 +41,7 @@ class MatchControllerTest {
         val result = mockMvc.perform(
             post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"Password1!","displayName":"Test User","city":"Kraków","isCoach":false}""")
+                .content("""{"email":"$email","password":"Password1!","displayName":"Test User","city":"Kraków","isCoach":false,"ageConfirmed":true}""")
         ).andExpect(status().isCreated).andReturn()
         val body = result.response.contentAsString
         return Auth(

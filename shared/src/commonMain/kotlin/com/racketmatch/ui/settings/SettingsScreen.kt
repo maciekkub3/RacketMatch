@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.presentation.viewmodel.SettingsEffect
 import com.racketmatch.presentation.viewmodel.SettingsEvent
 import com.racketmatch.presentation.viewmodel.SettingsState
@@ -27,6 +28,7 @@ import com.racketmatch.ui.auth.ProTextField
 import com.racketmatch.ui.common.Eyebrow
 import com.racketmatch.ui.common.H1
 import com.racketmatch.ui.common.IconCircleButton
+import com.racketmatch.ui.common.SkillAssessmentDialog
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -45,14 +47,43 @@ object SettingsScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val snackbarHostState = remember { SnackbarHostState() }
 
+        // JIT skill assessment queue — populated when the user activates a
+        // player profile and has declared sports with no seeded ELO yet.
+        // We walk through them one at a time via the dialog, popping the
+        // head of the queue after each pick.
+        var pendingSkillSports by remember { mutableStateOf<List<String>>(emptyList()) }
+        var isSavingSkill by remember { mutableStateOf(false) }
+
         LaunchedEffect(Unit) {
             viewModel.effectFlow.collect { effect ->
                 when (effect) {
                     is SettingsEffect.Saved          -> { snackbarHostState.showSnackbar("Zapisano"); navigator.pop() }
                     is SettingsEffect.ShowError      -> snackbarHostState.showSnackbar(effect.msg)
                     is SettingsEffect.ShowMessage    -> snackbarHostState.showSnackbar(effect.msg)
+                    is SettingsEffect.NeedsSkillAssessment -> pendingSkillSports = effect.sports
                 }
             }
+        }
+
+        val currentSkillSportName = pendingSkillSports.firstOrNull()
+        val currentSkillSport = currentSkillSportName?.let { name ->
+            runCatching { Sport.valueOf(name) }.getOrNull()
+        }
+        if (currentSkillSport != null) {
+            SkillAssessmentDialog(
+                sport = currentSkillSport,
+                isSaving = isSavingSkill,
+                onPickTier = { tier ->
+                    isSavingSkill = true
+                    viewModel.setSkillTier(currentSkillSportName!!, tier)
+                    // Fire-and-forget — advance the queue immediately, the
+                    // ViewModel's POST is already in flight. If it fails,
+                    // the per-sport row just stays at its default tier.
+                    isSavingSkill = false
+                    pendingSkillSports = pendingSkillSports.drop(1)
+                },
+                onDismissRequest = { /* block outside-dismiss mid-flow */ },
+            )
         }
 
         // Scaffold kept for the snackbar, but topBar intentionally empty —
@@ -63,11 +94,13 @@ object SettingsScreen : Screen {
             snackbarHost = { SnackbarHost(snackbarHostState) },
             containerColor = ProCircuit.Bg,
         ) { padding ->
+            // Scaffold already bakes the status-bar inset into `padding`, so
+            // we just respect that. Adding windowInsetsPadding(statusBars)
+            // on top was doubling the top gap.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .windowInsetsPadding(WindowInsets.statusBars),
+                    .padding(padding),
             ) {
                 Row(
                     modifier = Modifier

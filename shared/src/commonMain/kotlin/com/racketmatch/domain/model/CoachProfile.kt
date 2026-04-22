@@ -25,7 +25,8 @@ data class CoachProfile(
     val city: String,
     val eloRating: Int,
     val lowestServicePriceCents: Int?,  // null if no active services
-    val trainingLocations: List<String> = emptyList()
+    val trainingLocations: List<String> = emptyList(),
+    val weeklyAvailability: List<CoachWeeklyAvailability> = emptyList(),
 )
 
 data class CoachService(

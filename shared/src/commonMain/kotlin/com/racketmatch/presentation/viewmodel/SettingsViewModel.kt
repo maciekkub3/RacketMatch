@@ -3,6 +3,7 @@ package com.racketmatch.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.data.remote.api.SportLevelApi
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -34,10 +35,13 @@ sealed class SettingsEffect {
     object Saved : SettingsEffect()
     data class ShowError(val msg: String) : SettingsEffect()
     data class ShowMessage(val msg: String) : SettingsEffect()
+    /** Fired after pure-coach activates player profile — UI shows the JIT skill dialog for each sport. */
+    data class NeedsSkillAssessment(val sports: List<String>) : SettingsEffect()
 }
 
 class SettingsViewModel(
     private val profileRepository: ProfileRepository,
+    private val sportLevelApi: SportLevelApi,
     private val tokenStorage: TokenStorage,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
@@ -89,9 +93,27 @@ class SettingsViewModel(
                 tokenStorage.hasPlayerProfile = true
                 _state.value = content.copy(hasPlayerProfile = true)
                 _effects.emit(SettingsEffect.ShowMessage("Profil gracza aktywowany"))
+
+                // Just-in-time skill assessment — figure out which declared
+                // sports don't yet have a UserSportLevel row and prompt the
+                // UI to walk the user through the 6-tier dialog for each.
+                val user = runCatching { profileRepository.getMyProfile() }.getOrNull()
+                val existing = runCatching { sportLevelApi.getAll() }.getOrDefault(emptyList())
+                    .map { it.sport }.toSet()
+                val missing = user?.sports?.map { it.name }?.filter { it !in existing }.orEmpty()
+                if (missing.isNotEmpty()) {
+                    _effects.emit(SettingsEffect.NeedsSkillAssessment(missing))
+                }
             } catch (e: Exception) {
                 _effects.emit(SettingsEffect.ShowError("Nie udało się aktywować profilu gracza"))
             }
+        }
+    }
+
+    /** Called by the JIT dialog after the user picks a tier for a sport. */
+    fun setSkillTier(sport: String, tier: Int) {
+        viewModelScope.launch(dispatcher) {
+            runCatching { sportLevelApi.setLevel(sport = sport, seedTier = tier) }
         }
     }
 

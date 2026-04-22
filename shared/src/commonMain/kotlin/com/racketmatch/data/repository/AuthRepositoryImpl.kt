@@ -36,9 +36,10 @@ class AuthRepositoryImpl(
         city: String,
         isCoach: Boolean,
         hasPlayerProfile: Boolean,
-        sports: List<Sport>
+        sports: List<Sport>,
+        ageConfirmed: Boolean,
     ): AuthResult {
-        val response = authApi.register(email, password, displayName, city, isCoach, hasPlayerProfile, sports.map { it.name })
+        val response = authApi.register(email, password, displayName, city, isCoach, hasPlayerProfile, sports.map { it.name }, ageConfirmed)
         tokenStorage.currentUserId = response.user.id
         tokenStorage.isCoach = response.user.isCoach
         tokenStorage.hasPlayerProfile = response.user.hasPlayerProfile

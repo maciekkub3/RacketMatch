@@ -3,6 +3,8 @@ package com.racketmatch.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.data.remote.api.SportLevelApi
+import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.repository.ProfileRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +21,7 @@ sealed class ProfileSetupEffect {
 
 class ProfileSetupViewModel(
     private val profileRepository: ProfileRepository,
+    private val sportLevelApi: SportLevelApi,
     private val tokenStorage: TokenStorage,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
@@ -26,8 +29,22 @@ class ProfileSetupViewModel(
     private val _isSaving = MutableStateFlow(false)
     val isSaving = _isSaving.asStateFlow()
 
+    private val _declaredSports = MutableStateFlow<List<Sport>>(emptyList())
+    val declaredSports = _declaredSports.asStateFlow()
+
     private val _effects = MutableSharedFlow<ProfileSetupEffect>()
     val effectFlow = _effects.asSharedFlow()
+
+    /**
+     * Pulls the user's declared sports (from Register) so the Welcome
+     * skill-assessment step knows how many sport screens to render.
+     */
+    fun loadDeclaredSports() {
+        viewModelScope.launch(dispatcher) {
+            runCatching { profileRepository.getMyProfile() }
+                .onSuccess { _declaredSports.value = it.sports }
+        }
+    }
 
     fun saveAndFinish(bio: String?, dateOfBirth: String?) {
         viewModelScope.launch(dispatcher) {
@@ -50,6 +67,23 @@ class ProfileSetupViewModel(
                 _isSaving.value = false
                 _effects.emit(ProfileSetupEffect.NavigateToMain)
             }
+        }
+    }
+
+    /**
+     * Persist the skill tier (1..6) the user picked for each sport.
+     * Fire-and-forget on failure — a dropped seed still lets the user
+     * enter the app; the per-sport row exists (seeded at Register time
+     * as tier 3) and the K×2 calibration will sort things out.
+     */
+    fun saveSportLevels(levels: Map<Sport, Int>, onDone: () -> Unit) {
+        viewModelScope.launch(dispatcher) {
+            _isSaving.value = true
+            levels.forEach { (sport, tier) ->
+                runCatching { sportLevelApi.setLevel(sport.name, tier) }
+            }
+            _isSaving.value = false
+            onDone()
         }
     }
 

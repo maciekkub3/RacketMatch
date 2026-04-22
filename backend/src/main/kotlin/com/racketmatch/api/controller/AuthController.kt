@@ -29,7 +29,8 @@ class AuthController(
             city = request.city,
             isCoach = request.isCoach,
             hasPlayerProfile = request.hasPlayerProfile,
-            sports = request.sports
+            sports = request.sports,
+            ageConfirmed = request.ageConfirmed
         )
 
     @PostMapping("/login")

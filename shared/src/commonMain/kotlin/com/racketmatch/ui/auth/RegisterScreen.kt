@@ -80,11 +80,13 @@ fun RegisterScreenContent(viewModel: RegisterViewModel) {
     // Step 2 fields
     var city           by remember { mutableStateOf("") }
     var selectedSports by remember { mutableStateOf(setOf<Sport>()) }
+    var ageConfirmed   by remember { mutableStateOf(false) }
 
     var step           by remember { mutableStateOf(0) }
     var errorMessage   by remember { mutableStateOf<String?>(null) }
     var cityError      by remember { mutableStateOf<String?>(null) }
     var sportsError    by remember { mutableStateOf<String?>(null) }
+    var ageError       by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.effectFlow.collect { effect ->
@@ -164,23 +166,27 @@ fun RegisterScreenContent(viewModel: RegisterViewModel) {
                 2 -> Step2Content(
                     city = city,
                     selectedSports = selectedSports,
+                    ageConfirmed = ageConfirmed,
                     isLoading = state is RegisterState.Loading,
                     cityError = cityError,
                     sportsError = sportsError,
+                    ageError = ageError,
                     onCityChange = { city = it; cityError = null },
                     onSportToggle = { sport ->
                         selectedSports = if (sport in selectedSports) selectedSports - sport else selectedSports + sport
                         sportsError = null
                     },
-                    onBack = { step = 1; errorMessage = null; cityError = null; sportsError = null },
+                    onAgeToggle = { ageConfirmed = !ageConfirmed; ageError = null },
+                    onBack = { step = 1; errorMessage = null; cityError = null; sportsError = null; ageError = null },
                     onSubmit = {
                         errorMessage = null
                         cityError = if (city.isBlank()) "Podaj miasto" else null
                         sportsError = if (selectedSports.isEmpty()) "Wybierz co najmniej jeden sport" else null
-                        if (cityError == null && sportsError == null) {
+                        ageError = if (!ageConfirmed) "Musisz potwierdzić wiek i zaakceptować regulamin" else null
+                        if (cityError == null && sportsError == null && ageError == null) {
                             val isCoach = selectedRole >= 1
                             val hasPlayerProfile = selectedRole != 1
-                            viewModel.onEvent(RegisterEvent.Submit(email, password, displayName, city, isCoach, hasPlayerProfile, selectedSports.toList()))
+                            viewModel.onEvent(RegisterEvent.Submit(email, password, displayName, city, isCoach, hasPlayerProfile, selectedSports.toList(), ageConfirmed))
                         }
                     }
                 )
@@ -392,11 +398,14 @@ private fun Step1Content(
 private fun Step2Content(
     city: String,
     selectedSports: Set<Sport>,
+    ageConfirmed: Boolean,
     isLoading: Boolean,
     cityError: String?,
     sportsError: String?,
+    ageError: String?,
     onCityChange: (String) -> Unit,
     onSportToggle: (Sport) -> Unit,
+    onAgeToggle: () -> Unit,
     onBack: () -> Unit,
     onSubmit: () -> Unit
 ) {
@@ -472,6 +481,58 @@ private fun Step2Content(
                 color = ProCircuit.Error,
             )
         }
+
+        Spacer(Modifier.height(24.dp))
+        // Legal gate — GDPR art. 8 requires 16+ in Poland for self-consent
+        // to data processing. Combined with regulamin + policy so user
+        // consents once. Disabled submit until checked.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onAgeToggle() }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Checkbox(
+                checked = ageConfirmed,
+                onCheckedChange = { onAgeToggle() },
+                colors = CheckboxDefaults.colors(
+                    checkedColor = ProCircuit.Lime,
+                    uncheckedColor = ProCircuit.OnSurface.copy(alpha = 0.6f),
+                    checkmarkColor = ProCircuit.Bg,
+                ),
+            )
+            Spacer(Modifier.width(4.dp))
+            Column(modifier = Modifier.padding(top = 12.dp)) {
+                Text(
+                    text = "Mam ukończone 16 lat i akceptuję regulamin oraz politykę prywatności",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnBg,
+                    lineHeight = 18.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Konto jest bezpłatne, możesz je usunąć w dowolnym momencie.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 11.sp,
+                    color = ProCircuit.OnSurface,
+                    lineHeight = 15.sp,
+                )
+            }
+        }
+        if (ageError != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = ageError,
+                fontFamily = AppBodyFontFamily,
+                fontSize = 12.sp,
+                color = ProCircuit.Error,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+        }
+
         Spacer(Modifier.height(28.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(

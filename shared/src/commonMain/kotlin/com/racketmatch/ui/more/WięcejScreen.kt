@@ -56,6 +56,7 @@ import com.racketmatch.ui.feed.FeedScreen
 import com.racketmatch.ui.friends.FriendsScreen
 import com.racketmatch.ui.messages.MessagesScreen
 import com.racketmatch.ui.notifications.NotificationsScreen
+import com.racketmatch.ui.coaches.CoachProfileScreen
 import com.racketmatch.ui.profile.ProfileScreen
 import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
@@ -105,13 +106,18 @@ object WięcejScreen : Screen {
             }
 
             // Moje konto card — tappable, opens Profile. Push LOCAL so the
-            // bottom nav stays and user can hop back to any tab.
+            // bottom nav stays and user can hop back to any tab. Route to
+            // the coach-specific profile when the user is in coach mode —
+            // player stats (wins/losses/ELO) don't make sense there.
             MeCard(
                 name = explore.myName.ifBlank { "Twój profil" },
                 avatarUrl = explore.myAvatarUrl,
                 elo = explore.myElo.takeIf { it > 0 },
                 city = explore.selectedCity.takeIf { it.isNotBlank() },
-                onClick = { tabNavigator.push(ProfileScreen) },
+                onClick = {
+                    if (isCoachMode) tabNavigator.push(CoachProfileScreen)
+                    else tabNavigator.push(ProfileScreen)
+                },
             )
 
             // Mode switch — visible only when the user has both a player and

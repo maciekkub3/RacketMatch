@@ -1,45 +1,55 @@
 package com.racketmatch.ui.coaches
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.racketmatch.domain.model.BookingSlot
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.CoachService
 import com.racketmatch.domain.model.PricingType
 import com.racketmatch.domain.model.Sport
-import kotlin.time.Clock
-import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.plus
-import kotlinx.datetime.toLocalDateTime
-import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.repository.FriendRepository
 import com.racketmatch.presentation.viewmodel.CoachDetailEffect
-import com.racketmatch.presentation.viewmodel.CoachDetailEvent
 import com.racketmatch.presentation.viewmodel.CoachDetailState
 import com.racketmatch.presentation.viewmodel.CoachDetailViewModel
 import com.racketmatch.ui.chat.DmChatScreen
+import com.racketmatch.ui.common.Eyebrow
+import com.racketmatch.ui.common.H1
+import com.racketmatch.ui.common.IconCircleButton
+import com.racketmatch.ui.common.SportChip
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -48,6 +58,12 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
+/**
+ * Player's view of a single coach — mirror of CoachProfileScreen, minus
+ * edit affordances, plus clickable services (each one → booking flow)
+ * and a chat shortcut in the top row. Identity-first, fit-driven — no
+ * ratings yet, no rankings, just who-they-are + what-they-offer.
+ */
 data class CoachDetailScreen(val coachId: String, val isCoachMode: Boolean = false) : Screen {
 
     @Composable
@@ -69,36 +85,49 @@ data class CoachDetailScreen(val coachId: String, val isCoachMode: Boolean = fal
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(ProCircuit.Bg),
-        ) {
+        Box(modifier = Modifier.fillMaxSize().background(ProCircuit.Bg)) {
             when (val s = state) {
                 CoachDetailState.Loading -> Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator(color = ProCircuit.Lime) }
+
                 CoachDetailState.Error -> Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        "Nie udało się załadować profilu trenera",
+                        text = "Nie udało się załadować profilu trenera",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 14.sp,
                         color = ProCircuit.OnSurface,
                     )
                 }
+
                 is CoachDetailState.Content -> CoachDetailContent(
                     state = s,
                     friendRepo = friendRepo,
                     tokenStorage = tokenStorage,
                     isCoachMode = isCoachMode,
+                    onBack = { navigator.pop() },
                     onBook = { service ->
-                        // Booking is a checkout-style form → hide bottom nav.
-                        (navigator.parent?.parent ?: navigator).push(ServiceBookingScreen(coachId = coachId, service = service))
+                        // Booking is a focused flow → push on root so bottom nav hides.
+                        (navigator.parent?.parent ?: navigator).push(
+                            ServiceBookingScreen(coachId = coachId, service = service)
+                        )
                     },
-                    onNavigate = { screen -> (navigator.parent?.parent ?: navigator).push(screen) },
-                    onBack = { navigator.pop() }
+                    onMessage = {
+                        val myId = tokenStorage.currentUserId ?: return@CoachDetailContent
+                        val convId = minOf(myId, s.coach.userId) + "_" + maxOf(myId, s.coach.userId)
+                        (navigator.parent?.parent ?: navigator).push(
+                            DmChatScreen(
+                                conversationId = convId,
+                                currentUserId = myId,
+                                otherUserName = s.coach.displayName,
+                                otherUserAvatarUrl = s.coach.avatarUrl,
+                            )
+                        )
+                    },
                 )
             }
             SnackbarHost(
@@ -115,9 +144,9 @@ private fun CoachDetailContent(
     friendRepo: FriendRepository,
     tokenStorage: TokenStorage,
     isCoachMode: Boolean,
+    onBack: () -> Unit,
     onBook: (CoachService) -> Unit,
-    onNavigate: (Screen) -> Unit,
-    onBack: () -> Unit
+    onMessage: () -> Unit,
 ) {
     val coach = state.coach
     var isFriend by remember { mutableStateOf(false) }
@@ -135,378 +164,334 @@ private fun CoachDetailContent(
         } catch (_: Exception) {}
     }
 
-    val nextSlot = remember(state.slots) {
-        state.slots.filter { it.isAvailable && it.startsAt > Clock.System.now() }
-            .minByOrNull { it.startsAt }
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(ProCircuit.Bg),
-        contentPadding = PaddingValues(bottom = 32.dp)
-    ) {
-        // Hero
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(380.dp)
-                    .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-            ) {
-                // Photo or fallback
-                if (!coach.avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = coach.avatarUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(ProCircuit.SurfaceHigh),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            coach.displayName.take(1).uppercase(),
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 80.sp, color = ProCircuit.Lime
-                        )
-                    }
-                }
-
-                // Dark gradient overlay — stronger at bottom for text legibility
-                Box(
-                    modifier = Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.25f),
-                            0.45f to Color.Black.copy(alpha = 0.15f),
-                            1f to Color.Black.copy(alpha = 0.85f)
-                        )
-                    )
-                )
-
-                // Content on top of photo
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 24.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Back button
-                    TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                        Text("← WSTECZ", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                            fontSize = 10.sp, letterSpacing = 1.sp, color = ProCircuit.Lime)
-                    }
-
-                    // Bottom: badge + name + buttons
-                    Column {
-                        // Badge + ELO + sports
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                    .background(ProCircuit.Lime)
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text("TRENER", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                    fontSize = 9.sp, letterSpacing = 1.5.sp, color = ProCircuit.Bg)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("⭐", fontSize = 13.sp)
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    "${coach.eloRating}",
-                                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp, color = Color.White
-                                )
-                            }
-                            coach.sports.forEach { sport ->
-                                val emoji = when (sport) { Sport.TENNIS -> "🎾"; Sport.PADEL -> "🏸" }
-                                Box(
-                                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        "$emoji ${if (sport == Sport.TENNIS) "Tenis" else "Padel"}",
-                                        fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp, color = Color.White
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-
-                        // Name
-                        Text(
-                            coach.displayName,
-                            fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                            fontSize = 32.sp, letterSpacing = (-1).sp, color = Color.White,
-                            lineHeight = 36.sp
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-
-                        // Action buttons
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            when {
-                                isFriend -> OutlinedChip("Znajomy ✓")
-                                requestSent -> OutlinedChip("Zaproszenie wysłane ✓")
-                                else -> Button(
-                                    onClick = {
-                                        scope.launch {
-                                            try { friendRepo.sendRequest(coach.userId); requestSent = true }
-                                            catch (_: Exception) {}
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.White.copy(alpha = 0.15f),
-                                        contentColor = Color.White
-                                    ),
-                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp)
-                                ) {
-                                    Text("+ Dodaj znajomego", fontFamily = AppFontFamily,
-                                        fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-                                }
-                            }
-                            Button(
-                                onClick = {
-                                    val myId = tokenStorage.currentUserId ?: return@Button
-                                    val convId = minOf(myId, coach.userId) + "_" + maxOf(myId, coach.userId)
-                                    onNavigate(DmChatScreen(
-                                        conversationId = convId,
-                                        currentUserId = myId,
-                                        otherUserName = coach.displayName,
-                                        otherUserAvatarUrl = coach.avatarUrl
-                                    ))
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = ProCircuit.Lime,
-                                    contentColor = ProCircuit.Bg
-                                ),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 9.dp)
-                            ) {
-                                Text("💬 Wiadomość", fontFamily = AppFontFamily,
-                                    fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Bio
-        if (!coach.bio.isNullOrBlank()) {
-            item {
-                Spacer(Modifier.height(24.dp))
-                SectionLabel("O MNIE")
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    coach.bio!!, fontFamily = AppBodyFontFamily, fontSize = 14.sp,
-                    color = ProCircuit.OnBg, lineHeight = 22.sp,
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
-            }
-        }
-
-        // Certifications
-        if (coach.certifications.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(24.dp))
-                SectionLabel("CERTYFIKACJA")
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    coach.certifications.forEach { cert ->
-                        Box(
-                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                                .background(ProCircuit.SurfaceHigh)
-                                .padding(horizontal = 20.dp, vertical = 14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(cert, fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                                    fontSize = 14.sp, letterSpacing = 1.sp, color = ProCircuit.Lime)
-                                Spacer(Modifier.height(2.dp))
-                                Text("CERTYFIKACJA", fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 8.sp, letterSpacing = 1.5.sp, color = ProCircuit.OnSurface)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Services
-        item {
-            Spacer(Modifier.height(24.dp))
-            SectionLabel("USŁUGI")
-            Spacer(Modifier.height(10.dp))
-            if (state.services.isEmpty()) {
-                Text(
-                    "Ten trener nie ma jeszcze żadnych usług.",
-                    fontFamily = AppBodyFontFamily, fontSize = 13.sp, color = ProCircuit.OnSurface,
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
-            }
-        }
-
-        items(state.services) { service ->
-            ServiceCard(service = service, nextAvailableSlot = nextSlot, canBook = !isCoachMode, onBook = { onBook(service) })
-        }
-
-        // Training locations
-        if (coach.trainingLocations.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(24.dp))
-                SectionLabel("LOKALIZACJE TRENINGÓW")
-                Spacer(Modifier.height(10.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(ProCircuit.SurfaceLow)
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    coach.trainingLocations.forEach { location ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("📍", fontSize = 14.sp)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                location,
-                                fontFamily = AppBodyFontFamily, fontSize = 13.sp,
-                                color = ProCircuit.OnBg
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OutlinedChip(label: String) {
-    Box(
-        modifier = Modifier.clip(RoundedCornerShape(12.dp))
-            .background(ProCircuit.SurfaceHigh)
-            .padding(horizontal = 14.dp, vertical = 9.dp)
-    ) {
-        Text(label, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-            fontSize = 12.sp, color = ProCircuit.Lime)
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-        fontSize = 11.sp, letterSpacing = 2.sp, color = ProCircuit.OnSurface,
-        modifier = Modifier.padding(horizontal = 24.dp)
-    )
-}
-
-@Composable
-private fun ServiceCard(service: CoachService, nextAvailableSlot: BookingSlot?, canBook: Boolean, onBook: () -> Unit) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(ProCircuit.SurfaceLow)
-            .padding(horizontal = 18.dp, vertical = 14.dp)
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(top = 12.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        // Editorial header — back + Eyebrow + H1 + chat ikonka po prawej.
+        // Chat jest secondary action bo prymarna to rezerwacja (klik usługi).
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(service.name, fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp, color = ProCircuit.OnBg)
-                service.description?.let {
-                    Spacer(Modifier.height(2.dp))
-                    Text(it, fontFamily = AppBodyFontFamily, fontSize = 12.sp,
-                        color = ProCircuit.OnSurface, maxLines = 2)
-                }
+            IconCircleButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Wstecz",
+                onClick = onBack,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow("Trener")
+                Spacer(Modifier.height(2.dp))
+                H1(coach.displayName)
             }
-            Column(horizontalAlignment = Alignment.End) {
-                val (amount, unit) = when (service.pricingType) {
-                    PricingType.PER_HOUR   -> Pair("${service.priceCents / 100} PLN", "ZA GODZINĘ")
-                    PricingType.FIXED      -> Pair("${service.priceCents / 100} PLN", "ZA SESJĘ")
-                    PricingType.PER_PERSON -> Pair("${service.priceCents / 100} PLN", "OS./SESJA")
-                }
-                Text(amount, fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 16.sp, color = ProCircuit.Lime, textAlign = TextAlign.End)
-                Text(unit, fontFamily = AppFontFamily, fontWeight = FontWeight.ExtraBold,
-                    fontSize = 8.sp, letterSpacing = 0.5.sp, color = ProCircuit.OnSurface,
-                    textAlign = TextAlign.End)
+            if (!isCoachMode) {
+                IconCircleButton(
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Napisz wiadomość",
+                    onClick = onMessage,
+                )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (nextAvailableSlot != null) {
+
+        IdentityHero(
+            displayName = coach.displayName,
+            avatarUrl = coach.avatarUrl,
+            city = coach.city,
+            sports = coach.sports.toSet(),
+        )
+
+        // Add-friend chip — jedna akcja, drugorzędna. Bez ego — trener
+        // sam zdecyduje czy zna gracza; my nie forsujemy CTA.
+        if (!isCoachMode) {
+            AddFriendRow(
+                isFriend = isFriend,
+                requestSent = requestSent,
+                onSend = {
+                    scope.launch {
+                        try { friendRepo.sendRequest(coach.userId); requestSent = true }
+                        catch (_: Exception) {}
+                    }
+                },
+            )
+        }
+
+        // Bio — pełna wersja (nie teaser jak w karcie). Neutralny
+        // empty-state, bo mówimy o cudzym profilu, nie o swoim.
+        Section(title = "O mnie") {
+            if (coach.bio.isNullOrBlank()) {
                 Text(
-                    "Następny wolny: ",
-                    fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
-                )
-                Text(
-                    formatNextSlot(nextAvailableSlot),
-                    fontFamily = AppFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp, color = ProCircuit.Lime
+                    text = "Ten trener nie dodał jeszcze opisu.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface,
                 )
             } else {
                 Text(
-                    "Brak wolnych terminów w najbliższym czasie",
-                    fontFamily = AppBodyFontFamily, fontSize = 12.sp, color = ProCircuit.OnSurface
+                    text = coach.bio!!,
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 14.sp,
+                    lineHeight = 21.sp,
+                    color = ProCircuit.OnBg,
                 )
             }
         }
-        if (canBook) {
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = onBook,
-                enabled = nextAvailableSlot != null,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ProCircuit.Lime, contentColor = ProCircuit.Bg,
-                    disabledContainerColor = ProCircuit.SurfaceHigh, disabledContentColor = ProCircuit.OnSurface
-                ),
-                contentPadding = PaddingValues(vertical = 10.dp)
-            ) {
-                Text("↗ ZAREZERWUJ", fontFamily = AppFontFamily, fontWeight = FontWeight.Black,
-                    fontSize = 11.sp, letterSpacing = 0.5.sp)
+
+        // Usługi — każda KLIKALNA, tap = booking flow dla tej usługi.
+        // To jest primary CTA ekranu. Wybór usługi jest wyraźną intencją,
+        // nie daje sensu mieć globalnego "Zarezerwuj" bo każda usługa ma
+        // inne parametry (PER_HOUR vs FIXED vs PER_PERSON).
+        Section(title = "Usługi") {
+            if (state.services.isEmpty()) {
+                Text(
+                    text = "Ten trener nie ma jeszcze aktywnych usług.",
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 13.sp,
+                    color = ProCircuit.OnSurface,
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.services.forEach { service ->
+                        BookableServiceRow(
+                            service = service,
+                            canBook = !isCoachMode,
+                            onClick = { onBook(service) },
+                        )
+                    }
+                }
+            }
+        }
+
+        // Dostępność — mini 7-day grid, same shape as the coach's self-view
+        // (CoachProfileScreen). The booking flow shows actual slots, so this
+        // block is a "generally available when" scan, not a booking tool.
+        if (coach.weeklyAvailability.isNotEmpty()) {
+            Section(title = "Dostępność") {
+                CoachWeeklyGrid(coach.weeklyAvailability)
+            }
+        }
+
+        // Korty treningowe — chipy z ikonką pinu, spójne z CoachProfileScreen.
+        if (coach.trainingLocations.isNotEmpty()) {
+            Section(title = "Korty treningowe") {
+                CoachCourtChips(coach.trainingLocations)
             }
         }
     }
 }
 
-private fun formatNextSlot(slot: BookingSlot): String {
-    val tz = TimeZone.currentSystemDefault()
-    val today = Clock.System.now().toLocalDateTime(tz).date
-    val tomorrow = today.plus(1, DateTimeUnit.DAY)
-    val slotLdt = slot.startsAt.toLocalDateTime(tz)
-    val slotDate = slotLdt.date
-    val hh = slotLdt.hour.toString().padStart(2, '0')
-    val mm = slotLdt.minute.toString().padStart(2, '0')
-    return when (slotDate) {
-        today    -> "Dziś • $hh:$mm"
-        tomorrow -> "Jutro • $hh:$mm"
-        else -> {
-            val dow = when (slotDate.dayOfWeek) {
-                DayOfWeek.MONDAY    -> "Pon"; DayOfWeek.TUESDAY -> "Wt"
-                DayOfWeek.WEDNESDAY -> "Śr";  DayOfWeek.THURSDAY -> "Czw"
-                DayOfWeek.FRIDAY    -> "Pt";  DayOfWeek.SATURDAY -> "Sob"
-                else                -> "Nd"
+// ─── Hero ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun IdentityHero(
+    displayName: String,
+    avatarUrl: String?,
+    city: String,
+    sports: Set<Sport>,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(ProCircuit.Forest)
+            .padding(horizontal = 22.dp, vertical = 22.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(ProCircuit.Lime),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                } else {
+                    Text(
+                        text = displayName.take(2).uppercase(),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 26.sp,
+                        color = ProCircuit.LimeInk,
+                    )
+                }
             }
-            "$dow ${slotDate.dayOfMonth}.${slotDate.monthNumber.toString().padStart(2,'0')} • $hh:$mm"
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Eyebrow(text = "TRENER", color = ProCircuit.Lime)
+                Spacer(Modifier.height(6.dp))
+                H1(text = displayName, color = ProCircuit.ForestInk)
+                if (city.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = city.uppercase(),
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.8.sp,
+                        color = ProCircuit.ForestInk.copy(alpha = 0.65f),
+                    )
+                }
+            }
+        }
+
+        if (sports.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                sports.forEach { sport -> SportChip(sport = sport) }
+            }
         }
     }
+}
+
+@Composable
+private fun AddFriendRow(
+    isFriend: Boolean,
+    requestSent: Boolean,
+    onSend: () -> Unit,
+) {
+    val (label, enabled) = when {
+        isFriend -> "Znajomy ✓" to false
+        requestSent -> "Zaproszenie wysłane" to false
+        else -> "Dodaj do znajomych" to true
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.SurfaceLow)
+            .clickable(enabled = enabled, onClick = onSend)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(ProCircuit.Lime.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(
+                imageVector = Icons.Default.PersonAdd,
+                contentDescription = null,
+                tint = ProCircuit.Lime,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Text(
+            text = label,
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = if (enabled) ProCircuit.OnBg else ProCircuit.OnSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (enabled) {
+            Text(
+                text = "›",
+                fontFamily = AppFontFamily,
+                fontSize = 18.sp,
+                color = ProCircuit.Lime,
+            )
+        }
+    }
+}
+
+// ─── Section block ─────────────────────────────────────────────────────
+
+@Composable
+private fun Section(
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = title.uppercase(),
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = 11.sp,
+            letterSpacing = 1.6.sp,
+            color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+        )
+        content()
+    }
+}
+
+// ─── Bookable service row ─────────────────────────────────────────────
+
+@Composable
+private fun BookableServiceRow(
+    service: CoachService,
+    canBook: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.SurfaceLow)
+            .then(if (canBook) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = service.name,
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = ProCircuit.OnBg,
+            )
+            if (!service.description.isNullOrBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = service.description!!,
+                    fontFamily = AppBodyFontFamily,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = ProCircuit.OnSurface,
+                    maxLines = 2,
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = service.priceLabel(),
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = 14.sp,
+            color = ProCircuit.Lime,
+        )
+        if (canBook) {
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "›",
+                fontFamily = AppFontFamily,
+                fontSize = 18.sp,
+                color = ProCircuit.Lime,
+            )
+        }
+    }
+}
+
+private fun CoachService.priceLabel(): String {
+    val zl = priceCents / 100
+    val suffix = when (pricingType) {
+        PricingType.PER_HOUR -> "/h"
+        PricingType.PER_PERSON -> "/os."
+        PricingType.FIXED -> ""
+    }
+    return "$zl zł$suffix"
 }

@@ -98,11 +98,13 @@ actual fun SubscriptionContent() {
         containerColor = ProCircuit.Bg,
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
+        // Scaffold already bakes status-bar inset into `padding` — pass it
+        // through and skip windowInsetsPadding(statusBars) so we don't
+        // double up the top gap.
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .windowInsetsPadding(WindowInsets.statusBars),
+                .padding(padding),
         ) {
             // Editorial header, consistent with Messages / Feed / Friends
             // / Settings. Not a TopAppBar.

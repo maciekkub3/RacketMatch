@@ -33,10 +33,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
+import com.racketmatch.data.remote.TokenStorage
+import com.racketmatch.data.remote.api.CoachApi
+import com.racketmatch.data.remote.api.CoachSetupStatusDto
 import com.racketmatch.domain.model.CoachBooking
 import com.racketmatch.presentation.viewmodel.CoachBookingsIntent
 import com.racketmatch.presentation.viewmodel.CoachBookingsState
@@ -52,6 +57,7 @@ import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
 import com.racketmatch.util.kmpViewModel
+import org.koin.compose.koinInject
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
@@ -81,8 +87,20 @@ object CoachDzienScreen : Screen {
         val explore by exploreVm.stateFlow.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val tabNavigator = LocalTabNavigator.current
+        val coachApi = koinInject<CoachApi>()
+        val tokenStorage = koinInject<TokenStorage>()
+        val profileVersion by tokenStorage.profileVersionFlow.collectAsState()
+        var setupStatus by remember { mutableStateOf<CoachSetupStatusDto?>(null) }
 
         LaunchedEffect(Unit) { bookingsVm.onIntent(CoachBookingsIntent.Refresh) }
+
+        // Re-fetch on every profile-version bump. The services and
+        // availability VMs bump this flow after save, so completing a
+        // checklist step updates the widget without a manual reload.
+        LaunchedEffect(profileVersion) {
+            runCatching { coachApi.getMySetupStatus() }
+                .onSuccess { setupStatus = it }
+        }
 
         val firstName = explore.myName.trim().split(' ').firstOrNull().orEmpty()
         val tz = TimeZone.currentSystemDefault()
@@ -134,11 +152,27 @@ object CoachDzienScreen : Screen {
                     weekEndExclusive = weekEndExclusive,
                     monthStart = monthStart,
                     tz = tz,
+                    setupStatus = setupStatus,
                     onGoToBookings = {
                         com.racketmatch.ui.navigation.TabSwitchSignal.request("coachBookings")
                     },
                     onOpenCalendar = {
                         com.racketmatch.ui.navigation.TabSwitchSignal.request("coachCalendar")
+                    },
+                    onEditProfile = {
+                        // Profile edit is the one "focused" full-screen flow — pushed on the
+                        // root Navigator so the bottom nav hides, matching CoachProfileScreen's
+                        // existing convention and PlayerProfileEditScreen.
+                        (navigator.parent?.parent ?: navigator).push(CoachProfileEditScreen)
+                    },
+                    onOpenServices = {
+                        // Services + availability keep the bottom nav — same pattern as
+                        // WięcejScreen uses. Pushing on the local (tab) Navigator keeps the
+                        // screen inside MainScreen's Scaffold so it inherits status-bar insets.
+                        navigator.push(CoachServicesScreen)
+                    },
+                    onOpenAvailability = {
+                        navigator.push(CoachAvailabilityScreen)
                     },
                 )
             }
@@ -155,8 +189,12 @@ private fun DzienContent(
     weekEndExclusive: LocalDate,
     monthStart: LocalDate,
     tz: TimeZone,
+    setupStatus: CoachSetupStatusDto?,
     onGoToBookings: () -> Unit,
     onOpenCalendar: () -> Unit,
+    onEditProfile: () -> Unit,
+    onOpenServices: () -> Unit,
+    onOpenAvailability: () -> Unit,
 ) {
     val upcoming = remember(state.confirmed, now) {
         state.confirmed
@@ -193,6 +231,18 @@ private fun DzienContent(
             .map { it.playerId }
             .toSet()
             .size
+    }
+
+    // ── Setup checklist (only when not yet complete) ───────────────────
+    // Shown above the hero so it's the first thing a new coach sees.
+    // Once 3/3, the widget disappears and the regular hero takes over.
+    if (setupStatus != null && !setupStatus.isComplete) {
+        SetupChecklistCard(
+            status = setupStatus,
+            onBio = onEditProfile,
+            onService = onOpenServices,
+            onAvailability = onOpenAvailability,
+        )
     }
 
     // ── Hero ────────────────────────────────────────────────────────────
@@ -671,4 +721,136 @@ private fun dayOfWeekShort(d: DayOfWeek): String = when (d) {
 private fun todayLabel(date: LocalDate): String {
     val d = dayOfWeekShort(date.dayOfWeek)
     return "$d · ${date.dayOfMonth}.${date.monthNumber.toString().padStart(2, '0')}"
+}
+
+// ─── Setup checklist ──────────────────────────────────────────────────
+
+@Composable
+private fun SetupChecklistCard(
+    status: CoachSetupStatusDto,
+    onBio: () -> Unit,
+    onService: () -> Unit,
+    onAvailability: () -> Unit,
+) {
+    val done = listOf(status.hasBio, status.hasService, status.hasAvailability).count { it }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(ProCircuit.SurfaceLow)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "DOKOŃCZ SETUP",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 10.sp,
+                letterSpacing = 1.6.sp,
+                color = ProCircuit.Lime,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = "$done / 3",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 12.sp,
+                color = ProCircuit.OnSurface,
+            )
+        }
+
+        Text(
+            text = "Twój profil zobaczą klienci dopiero po ukończeniu setupu.",
+            fontFamily = AppBodyFontFamily,
+            fontSize = 13.sp,
+            color = ProCircuit.OnSurface,
+            lineHeight = 18.sp,
+        )
+
+        Spacer(Modifier.height(2.dp))
+
+        ChecklistRow(
+            done = status.hasBio,
+            label = "Uzupełnij bio trenera",
+            subtitle = "Lata doświadczenia, specjalizacja, styl pracy.",
+            onClick = onBio,
+        )
+        ChecklistRow(
+            done = status.hasService,
+            label = "Dodaj pierwszą usługę",
+            subtitle = "Trening indywidualny, grupowy, lekcja 1h — cokolwiek prowadzisz.",
+            onClick = onService,
+        )
+        ChecklistRow(
+            done = status.hasAvailability,
+            label = "Ustaw dostępność",
+            subtitle = "Godziny w tygodniu — klienci zobaczą wolne sloty.",
+            onClick = onAvailability,
+        )
+    }
+}
+
+@Composable
+private fun ChecklistRow(
+    done: Boolean,
+    label: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = !done, onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Check circle — filled lime when done, hollow outline when pending.
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(
+                    if (done) ProCircuit.Lime else ProCircuit.SurfaceHigh.copy(alpha = 0.5f)
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (done) {
+                Text(
+                    "✓",
+                    fontFamily = AppFontFamily,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 14.sp,
+                    color = ProCircuit.LimeInk,
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = if (done) ProCircuit.OnSurface else ProCircuit.OnBg,
+            )
+            Text(
+                text = subtitle,
+                fontFamily = AppBodyFontFamily,
+                fontSize = 11.sp,
+                color = ProCircuit.OnSurface.copy(alpha = if (done) 0.5f else 0.8f),
+                lineHeight = 15.sp,
+                maxLines = 2,
+            )
+        }
+        if (!done) {
+            Text(
+                text = "›",
+                fontFamily = AppFontFamily,
+                fontSize = 18.sp,
+                color = ProCircuit.Lime,
+            )
+        }
+    }
 }

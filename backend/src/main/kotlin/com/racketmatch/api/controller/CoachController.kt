@@ -24,6 +24,13 @@ import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
+data class CoachSetupStatusDto(
+    val hasBio: Boolean,
+    val hasService: Boolean,
+    val hasAvailability: Boolean,
+    val isComplete: Boolean,
+)
+
 @RestController
 @RequestMapping("/api/coaches")
 class CoachController(
@@ -36,18 +43,58 @@ class CoachController(
 ) {
 
     @GetMapping
-    fun getCoaches(@RequestParam city: String): List<CoachProfileDto> =
-        coachProfileRepository.findByCity(city).map { profile ->
-            val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(profile.userId!!)
-            profile.toDto(services)
-        }
+    fun getCoaches(
+        @RequestParam city: String,
+        @RequestParam(required = false) sport: String?,
+    ): List<CoachProfileDto> =
+        coachProfileRepository.findByCity(city)
+            .filter { isSetupComplete(it.userId!!, it.bio) }
+            // Optional sport filter — scaffolding for the player-side
+            // SportFilterRow we'll add once more racket sports land. A
+            // coach whose `sports` collection contains the requested sport
+            // passes through; others drop out.
+            .filter { sport.isNullOrBlank() || it.sports.any { s -> s.equals(sport, ignoreCase = true) } }
+            .map { profile ->
+                val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(profile.userId!!)
+                val weekly = availabilityRepository.findByCoachId(profile.userId!!)
+                profile.toDto(services, weekly)
+            }
+
+    /**
+     * Setup checklist status for the signed-in coach. Used by the empty-
+     * state widget on the coach dashboard (coach dzień) to show progress
+     * N/3 and route to the right management screen.
+     */
+    @GetMapping("/me/setup-status")
+    fun getMySetupStatus(authentication: Authentication): CoachSetupStatusDto {
+        val coachId = UUID.fromString(authentication.name)
+        val profile = coachProfileRepository.findById(coachId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach profile not found") }
+        val hasBio = !profile.bio.isNullOrBlank()
+        val hasService = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId).isNotEmpty()
+        val hasAvailability = availabilityRepository.findByCoachId(coachId).isNotEmpty()
+        return CoachSetupStatusDto(
+            hasBio = hasBio,
+            hasService = hasService,
+            hasAvailability = hasAvailability,
+            isComplete = hasBio && hasService && hasAvailability,
+        )
+    }
+
+    private fun isSetupComplete(coachId: UUID, bio: String?): Boolean {
+        if (bio.isNullOrBlank()) return false
+        if (coachServiceRepository.findByCoachUserIdAndIsActiveTrue(coachId).isEmpty()) return false
+        if (availabilityRepository.findByCoachId(coachId).isEmpty()) return false
+        return true
+    }
 
     @GetMapping("/{id}")
     fun getCoach(@PathVariable id: UUID): CoachProfileDto {
         val profile = coachProfileRepository.findById(id)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "Coach not found") }
         val services = coachServiceRepository.findByCoachUserIdAndIsActiveTrue(id)
-        return profile.toDto(services)
+        val weekly = availabilityRepository.findByCoachId(id)
+        return profile.toDto(services, weekly)
     }
 
     @GetMapping("/{id}/availability")
@@ -67,7 +114,14 @@ class CoachController(
         val zone = ZoneOffset.UTC
         val now = Instant.now()
         val leadTimeEnd = now.plus(profile.bookingLeadTimeHours.toLong(), ChronoUnit.HOURS)
-        val horizonEnd = now.plus(profile.bookingHorizonDays.toLong(), ChronoUnit.DAYS)
+        val horizonEnd = if (profile.bookingHorizonDays == 0) {
+            // "Ten tyg." mode — cap at end of current ISO week (Sunday 23:59:59)
+            val sunday = now.atZone(zone).toLocalDate()
+                .with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY))
+            sunday.atTime(java.time.LocalTime.MAX).toInstant(zone)
+        } else {
+            now.plus(profile.bookingHorizonDays.toLong(), ChronoUnit.DAYS)
+        }
         val effectiveTo = minOf(to, horizonEnd)
 
         val rawBusyRanges = (calendarRepository.findInRange(id, from, effectiveTo).map { it.startsAt to it.endsAt } +

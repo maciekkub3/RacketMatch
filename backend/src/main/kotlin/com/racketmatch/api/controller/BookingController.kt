@@ -84,10 +84,11 @@ class BookingController(
     ): List<BookingDto> {
         val userId = UUID.fromString(authentication.name)
         val now = Instant.now()
+        val historyCutoff = now.minus(java.time.Duration.ofDays(180))
         val items = when (segment?.lowercase()) {
             "pending" -> bookingRepository.findPendingForUser(userId)
             "confirmed" -> bookingRepository.findConfirmedUpcomingForUser(userId, now)
-            "history" -> bookingRepository.findHistoryForUser(userId, now)
+            "history" -> bookingRepository.findHistoryForUser(userId, now, historyCutoff)
             null, "" -> bookingRepository.findByUserId(userId)
             else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown segment: $segment")
         }
@@ -191,6 +192,8 @@ class BookingController(
         booking.lateCancel = isLate
         booking.updatedAt = now
         val saved = bookingRepository.save(booking)
+
+        calendarRepository.findByBookingId(saved.id!!)?.let { calendarRepository.deleteById(it.id!!) }
 
         val otherPartyId = if (userId == booking.player.id) booking.coach.id!! else booking.player.id!!
         val actorName = if (userId == booking.player.id) booking.player.displayName else booking.coach.displayName

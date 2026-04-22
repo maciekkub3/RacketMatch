@@ -604,7 +604,12 @@ private fun DayEventColumn(
                     shape = RoundedCornerShape(6.dp),
                 )
             } else Modifier
-            Column(
+            // Box zamiast samej Column — pozwala wstawić wyśrodkowaną
+            // pionową etykietę "NIEDOSTĘPNE" na bloku wystarczająco wysokim
+            // (≥ ~3h). Dla niższych bloków robimy to co zawsze: horizontalny
+            // label u góry. Spójność: ten sam tekst co na full-day kolumnie,
+            // tylko dobrany układ w zależności od dostępnego miejsca.
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 1.dp)
@@ -613,38 +618,69 @@ private fun DayEventColumn(
                     .clip(RoundedCornerShape(6.dp))
                     .background(eventColor(event))
                     .then(extraMod)
-                    .clickable { onEventTap(event) }
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .clickable { onEventTap(event) },
             ) {
-                // Display the effective (clamped) start on this day, not the
-                // event's original start, so a Mon→Fri vacation shown on
-                // Wednesday reads "00:00" (continues) rather than Mon's time.
                 val startLdt = effStart.toLocalDateTime(tz)
                 val spansBefore = event.startsAt < dayStart
                 val hh = startLdt.hour.toString().padStart(2, '0')
                 val mm = startLdt.minute.toString().padStart(2, '0')
                 val timeLabel = if (spansBefore) "↑ cały dzień" else "$hh:$mm"
-                Text(
-                    text = if (isBlockedEvt) "🚫 $timeLabel" else timeLabel,
-                    fontFamily = AppFontFamily,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Black,
-                    color = textColor,
-                    maxLines = 1,
-                )
-                val label = when {
-                    isBlockedEvt -> event.title?.takeIf { it.isNotBlank() } ?: "Niedostępne"
-                    !event.title.isNullOrBlank() -> event.title
-                    else -> null
-                }
-                if (label != null) {
+                val customLabel = event.title?.takeIf { it.isNotBlank() }
+                val displayLabel = customLabel ?: "NIEDOSTĘPNE"
+                // 3h (3 * WEEK_HOUR_HEIGHT) ≈ 156.dp. Powyżej tego progu
+                // wstawiamy pionowy tekst — tekst "NIEDOSTĘPNE" przy fontSize
+                // 11 + letterSpacing 2 zajmuje ~140dp po rotacji, mieści się.
+                val tallEnoughForVertical = isBlockedEvt && heightDp >= 150.dp
+
+                Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
                     Text(
-                        text = label,
+                        text = if (isBlockedEvt) "🚫 $timeLabel" else timeLabel,
                         fontFamily = AppFontFamily,
                         fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Black,
                         color = textColor,
-                        maxLines = 2,
+                        maxLines = 1,
+                    )
+                    // Horizontal label tylko gdy pionowy nie wchodzi (małe bloki).
+                    // Dla eventów niezablokowanych — nadal pokazujemy tytuł tu.
+                    if (!tallEnoughForVertical) {
+                        val smallLabel = when {
+                            isBlockedEvt -> displayLabel
+                            customLabel != null -> customLabel
+                            else -> null
+                        }
+                        if (smallLabel != null) {
+                            Text(
+                                text = smallLabel,
+                                fontFamily = AppFontFamily,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textColor,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                }
+
+                // Pionowy "NIEDOSTĘPNE" (albo custom label) — tylko blokady ≥ 3h.
+                // wrapContentSize(unbounded = true) ważne: bez tego Text
+                // najpierw wraps do wąskiej szerokości kolumny, DOPIERO potem
+                // rotuje — wygląda źle. Unbounded mierzy natywną szerokość
+                // przed rotacją.
+                if (tallEnoughForVertical) {
+                    Text(
+                        text = displayLabel,
+                        fontFamily = AppFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp,
+                        color = textColor.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .wrapContentSize(unbounded = true)
+                            .rotate(-90f),
                     )
                 }
             }

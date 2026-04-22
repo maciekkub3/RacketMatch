@@ -10,7 +10,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -36,8 +35,10 @@ import com.racketmatch.domain.model.Sport
 import com.racketmatch.domain.model.User
 import com.racketmatch.presentation.viewmodel.ProfileState
 import com.racketmatch.presentation.viewmodel.ProfileViewModel
+import com.racketmatch.data.remote.api.UserSportLevelDto
 import com.racketmatch.ui.common.Ava
 import com.racketmatch.ui.common.AvaTone
+import com.racketmatch.ui.common.CalibrationChip
 import com.racketmatch.ui.common.DarkHeroCard
 import com.racketmatch.ui.common.Eyebrow
 import com.racketmatch.ui.common.H1
@@ -46,7 +47,6 @@ import com.racketmatch.ui.common.IconCircleButton
 import com.racketmatch.ui.common.Sparkline
 import com.racketmatch.ui.common.StatCard
 import com.racketmatch.ui.common.Tiny
-import com.racketmatch.ui.settings.SettingsScreen
 import com.racketmatch.ui.theme.AppBodyFontFamily
 import com.racketmatch.ui.theme.AppFontFamily
 import com.racketmatch.ui.theme.ProCircuit
@@ -71,15 +71,16 @@ object ProfileScreen : Screen {
                     Text("Nie udało się załadować profilu", color = ProCircuit.Ink2)
                 }
                 is ProfileState.Content -> {
-                    // Edit + settings are focused account flows → push to the
-                    // outer Navigator so the bottom nav hides. Profile itself
-                    // stays a browsable destination on the tab Navigator.
+                    // Edit is a focused flow → push to the outer Navigator so the
+                    // bottom nav hides. Profile itself stays a browsable destination
+                    // on the tab Navigator. Settings is NOT here — it lives in Więcej
+                    // as its own menu item. Profile stays an identity/preview screen,
+                    // not an account config one.
                     val rootNav = navigator.parent?.parent ?: navigator
                     ProfileContent(
                         state = s,
                         onBack = { navigator.pop() },
                         onEdit = { rootNav.push(PlayerProfileEditScreen) },
-                        onSettings = { rootNav.push(SettingsScreen) },
                     )
                 }
             }
@@ -92,7 +93,6 @@ private fun ProfileContent(
     state: ProfileState.Content,
     onBack: () -> Unit,
     onEdit: () -> Unit,
-    onSettings: () -> Unit,
 ) {
     val user = state.user
     val totalMatches = user.wins + user.losses
@@ -134,15 +134,11 @@ private fun ProfileContent(
                 contentDescription = "Edytuj profil",
                 onClick = onEdit,
             )
-            Spacer(Modifier.width(8.dp))
-            IconCircleButton(
-                icon = Icons.Default.Settings,
-                contentDescription = "Ustawienia",
-                onClick = onSettings,
-            )
         }
 
-        // Bio — subtle, directly under name. Hidden if empty.
+        // Bio — subtle, directly under name. Empty state is a CTA to the
+        // editor rather than a hidden field, per the "just-in-time" rule
+        // (collect bio contextually, not in forced onboarding).
         if (!user.bio.isNullOrBlank()) {
             Text(
                 text = user.bio!!,
@@ -151,6 +147,8 @@ private fun ProfileContent(
                 lineHeight = 20.sp,
                 color = ProCircuit.Ink2,
             )
+        } else {
+            EmptyBioPrompt(onEdit = onEdit)
         }
 
         // Forest hero card with ELO + sparkline + watermark
@@ -159,6 +157,7 @@ private fun ProfileContent(
             totalMatches = totalMatches,
             eloDelta = eloDelta,
             series = series,
+            sportLevels = state.sportLevels,
         )
 
         // 4-tile stat grid
@@ -187,7 +186,13 @@ private fun ProfileContent(
 // ─── Hero ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun HeroCard(user: User, totalMatches: Int, eloDelta: Int, series: List<Float>) {
+private fun HeroCard(
+    user: User,
+    totalMatches: Int,
+    eloDelta: Int,
+    series: List<Float>,
+    sportLevels: List<UserSportLevelDto> = emptyList(),
+) {
     // Watermark: total matches played — sizeable number for visual interest,
     // falls back to city initial for brand-new users.
     val watermark = if (totalMatches > 0) totalMatches.toString() else user.city.take(1).uppercase()
@@ -271,6 +276,19 @@ private fun HeroCard(user: User, totalMatches: Int, eloDelta: Int, series: List<
                     )
                 }
             }
+            // Calibration chip — shown while any sport is still in the
+            // first 10-match window. Lets the user see why their ELO
+            // swings hard early on, and hides automatically when done.
+            val calibrating = sportLevels.filter { it.calibrating }
+            if (calibrating.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    calibrating.forEach { level ->
+                        CalibrationChip(matchesPlayed = level.calibrationMatches)
+                    }
+                }
+            }
+
             if (series.size >= 2) {
                 Spacer(Modifier.height(8.dp))
                 Sparkline(
@@ -280,6 +298,61 @@ private fun HeroCard(user: User, totalMatches: Int, eloDelta: Int, series: List<
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyBioPrompt(onEdit: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(ProCircuit.SurfaceLow)
+            .clickable(onClick = onEdit)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(ProCircuit.Lime.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "✎",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+                color = ProCircuit.Lime,
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Dodaj bio",
+                fontFamily = AppFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = ProCircuit.Ink,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Napisz parę słów o sobie — ile grasz, jaki styl, czego szukasz.",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                color = ProCircuit.OnSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = "›",
+            fontFamily = AppFontFamily,
+            fontSize = 18.sp,
+            color = ProCircuit.Lime,
+        )
     }
 }
 

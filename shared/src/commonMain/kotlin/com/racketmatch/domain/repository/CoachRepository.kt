@@ -5,7 +5,7 @@ import kotlin.time.Instant
 
 interface CoachRepository {
     // Player-facing
-    suspend fun getCoaches(city: String): List<CoachProfile>
+    suspend fun getCoaches(city: String, sport: String? = null): List<CoachProfile>
     suspend fun getCoach(coachId: String): CoachProfile
     suspend fun getCoachServices(coachId: String): List<CoachService>
     suspend fun getAvailability(coachId: String, from: Instant, to: Instant): List<BookingSlot>

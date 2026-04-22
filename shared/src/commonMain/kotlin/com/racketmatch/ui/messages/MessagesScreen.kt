@@ -76,7 +76,6 @@ object MessagesScreen : Screen {
             modifier = Modifier
                 .fillMaxSize()
                 .background(ProCircuit.Bg)
-                .windowInsetsPadding(WindowInsets.statusBars)
         ) {
             // Editorial header — matches Coach Dzień / Coach Calendar style:
             // circular back button on the left, Eyebrow + H1 beside it.

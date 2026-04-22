@@ -2,7 +2,9 @@ package com.racketmatch.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.racketmatch.data.remote.TokenStorage
 import com.racketmatch.domain.model.BookingSettings
+import com.racketmatch.domain.model.CoachBooking
 import com.racketmatch.domain.model.CoachException
 import com.racketmatch.domain.model.CoachWeeklyAvailability
 import com.racketmatch.domain.repository.CoachRepository
@@ -63,7 +65,13 @@ sealed class CoachAvailabilityState {
     data class Content(
         val days: List<DayAvailability>,
         val bookingSettings: BookingSettings = BookingSettings(),
-        val exceptions: List<CoachException> = emptyList()
+        val exceptions: List<CoachException> = emptyList(),
+        /**
+         * Upcoming bookings — used to flag conflicts when the coach adds
+         * a new exception. Only CONFIRMED / PENDING matter for the warning;
+         * the list here is unfiltered so UI can reason about what's there.
+         */
+        val bookings: List<CoachBooking> = emptyList(),
     ) : CoachAvailabilityState()
     object Error : CoachAvailabilityState()
 }
@@ -89,6 +97,19 @@ sealed class CoachAvailabilityEvent {
     data class SetBuffer(val minutes: Int) : CoachAvailabilityEvent()
     data class CopyDayTo(val fromDayOfWeek: Int, val toDays: Set<Int>) : CoachAvailabilityEvent()
     data class AddException(val startsAt: Instant, val endsAt: Instant, val label: String?) : CoachAvailabilityEvent()
+    /**
+     * Compound action: cancel N bookings that conflict with a new exception
+     * (with a shared message sent to clients), then add the exception. All
+     * in one VM handler so partial failure doesn't leave the state in a
+     * half-applied shape.
+     */
+    data class AddExceptionWithCancellations(
+        val startsAt: Instant,
+        val endsAt: Instant,
+        val label: String?,
+        val cancelBookingIds: List<String>,
+        val cancelReason: String,
+    ) : CoachAvailabilityEvent()
     data class DeleteException(val id: String) : CoachAvailabilityEvent()
     /** Re-runs the initial load — used by the retry button on the error state. */
     object Refresh : CoachAvailabilityEvent()
@@ -101,6 +122,7 @@ sealed class CoachAvailabilityEffect {
 
 class CoachAvailabilityViewModel(
     private val coachRepository: CoachRepository,
+    private val tokenStorage: TokenStorage,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
@@ -150,6 +172,35 @@ class CoachAvailabilityViewModel(
                     }
                 }
             }
+            is CoachAvailabilityEvent.AddExceptionWithCancellations -> {
+                viewModelScope.launch(dispatcher) {
+                    try {
+                        // Cancel each overlapping booking first. Using an
+                        // individual try/catch per booking so one failing
+                        // doesn't abort the rest — the coach at least gets
+                        // the block saved for the ones that worked.
+                        val cancelledIds = mutableListOf<String>()
+                        for (bookingId in event.cancelBookingIds) {
+                            runCatching {
+                                coachRepository.cancelBooking(bookingId, event.cancelReason)
+                            }.onSuccess { cancelledIds += bookingId }
+                        }
+                        // Then add the exception.
+                        val created = coachRepository.createException(
+                            event.startsAt, event.endsAt, event.label
+                        )
+                        val cur = (_state.value as? CoachAvailabilityState.Content) ?: return@launch
+                        _state.value = cur.copy(
+                            exceptions = cur.exceptions + created,
+                            bookings = cur.bookings.map { b ->
+                                if (b.id in cancelledIds) b.copy(status = "CANCELLED") else b
+                            },
+                        )
+                    } catch (_: Exception) {
+                        _effects.emit(CoachAvailabilityEffect.Error("Nie udało się dodać wyjątku"))
+                    }
+                }
+            }
             is CoachAvailabilityEvent.DeleteException -> {
                 viewModelScope.launch(dispatcher) {
                     try {
@@ -185,7 +236,11 @@ class CoachAvailabilityViewModel(
             if (event.enabled) {
                 day.copy(enabled = true, windows = if (day.windows.isEmpty()) listOf(TimeWindow(9 * 60, 17 * 60)) else day.windows)
             } else {
-                day.copy(enabled = false)
+                // Clear windows on disable. Leaving them around meant the
+                // UI kept painting the disabled day as if it had the old
+                // schedule — confusing, and save() already filtered them
+                // out anyway so data-wise nothing's lost.
+                day.copy(enabled = false, windows = emptyList())
             }
         }
         is CoachAvailabilityEvent.AddWindow -> {
@@ -229,19 +284,30 @@ class CoachAvailabilityViewModel(
                         .filter { it.dayOfWeek == dow }
                         .sortedBy { it.startTime }
                         .map { TimeWindow(parseTime(it.startTime), parseTime(it.endTime)) }
+                    // Don't pre-populate a phantom 9-17 window for days that
+                    // have nothing saved. The old fallback rendered times on
+                    // disabled days and users thought "I didn't set this".
+                    // Default window is synthesised only on explicit toggle
+                    // on, see applyEvent(ToggleDay) below.
                     DayAvailability(
                         dayOfWeek = dow,
                         dayName   = DAY_NAMES[dow] ?: "",
                         enabled   = windows.isNotEmpty(),
-                        windows   = if (windows.isEmpty()) listOf(TimeWindow(9 * 60, 17 * 60)) else windows
+                        windows   = windows,
                     )
                 }
                 val exceptions = coachRepository.getMyExceptions()
                 val bookingSettings = coachRepository.getMyBookingSettings()
+                // Best-effort bookings fetch — needed for the exception
+                // conflict warning. If the call fails the screen still
+                // works, just without conflict detection.
+                val bookings = runCatching { coachRepository.getMyBookings() }
+                    .getOrDefault(emptyList())
                 _state.value = CoachAvailabilityState.Content(
                     days = days,
                     bookingSettings = bookingSettings,
-                    exceptions = exceptions
+                    exceptions = exceptions,
+                    bookings = bookings,
                 )
             } catch (e: Exception) {
                 println("CoachAvailabilityViewModel: load() failed — ${e.message}")
@@ -268,6 +334,7 @@ class CoachAvailabilityViewModel(
                     horizonDays = current.bookingSettings.horizonDays,
                     bufferMinutes = current.bookingSettings.bufferMinutes
                 )
+                tokenStorage.incrementProfileVersion()
                 _effects.emit(CoachAvailabilityEffect.Saved)
             } catch (e: Exception) {
                 println("CoachAvailabilityViewModel: save() failed — ${e.message}")

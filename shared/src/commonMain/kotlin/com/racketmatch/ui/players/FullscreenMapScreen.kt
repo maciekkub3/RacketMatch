@@ -74,7 +74,6 @@ object FullscreenMapScreen : Screen {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.Top,
             ) {

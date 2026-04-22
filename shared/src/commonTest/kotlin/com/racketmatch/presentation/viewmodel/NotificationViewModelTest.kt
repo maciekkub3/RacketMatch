@@ -76,17 +76,11 @@ class NotificationViewModelTest {
         }
     }
 
-    @Test
-    fun `unreadMatchCount counts only match types`() = runTest {
-        every { repo.observeNotifications("user1") } returns
-                flowOf(listOf(unreadMatch, unreadFriend, readNotif))
-        vm = NotificationViewModel(repo, "user1", dispatcher)
-        dispatcher.scheduler.advanceUntilIdle()
-
-        vm.state.value.unreadMatchCount shouldBe 1
-        vm.state.value.unreadFriendCount shouldBe 1
-        vm.state.value.unreadDmCount shouldBe 0
-    }
+    // Per-category unread counts (unreadMatchCount / unreadFriendCount /
+    // unreadDmCount) were retired when NotificationState was collapsed
+    // into a single unreadCount — per-category badges now flow from
+    // dedicated version flows on TokenStorage, not from parsing the
+    // notification feed. Keeping the total-count test only.
 
     @Test
     fun `MarkAllRead calls repo with unread ids only`() = runTest {

@@ -18,8 +18,8 @@ class CoachRepositoryImpl(
     }
 
     // Player-facing
-    override suspend fun getCoaches(city: String): List<CoachProfile> =
-        coachApi.getCoaches(city).map { it.toDomain() }
+    override suspend fun getCoaches(city: String, sport: String?): List<CoachProfile> =
+        coachApi.getCoaches(city, sport).map { it.toDomain() }
 
     override suspend fun getCoach(coachId: String): CoachProfile =
         coachApi.getCoach(coachId).toDomain()
