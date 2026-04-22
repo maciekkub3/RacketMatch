@@ -225,7 +225,14 @@ object CoachCalendarScreen : Screen {
         }
 
         if (showAddSheet) {
+            // Pass the full event list so the sheet can detect overlaps with
+            // existing sessions/bookings and warn the coach before saving.
+            // We send visibleEvents (declined bookings already filtered out)
+            // if the content branch populated it, else an empty list.
+            val existingEvents = (state as? CoachCalendarState.Content)?.events.orEmpty()
             AddCalendarEventSheet(
+                existingEvents = existingEvents,
+                tz = tz,
                 onDismiss = { showAddSheet = false },
                 onConfirm = { title, notes, type, start, end ->
                     viewModel.onEvent(CoachCalendarEvent.AddEvent(title, notes, type, start, end))
@@ -1783,6 +1790,8 @@ private operator fun Dp.div(factor: Float): Dp = (this.value / factor).dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddCalendarEventSheet(
+    existingEvents: List<CalendarEvent>,
+    tz: TimeZone,
     onDismiss: () -> Unit,
     onConfirm: (String?, String?, String, Instant, Instant) -> Unit,
 ) {
@@ -1807,6 +1816,27 @@ private fun AddCalendarEventSheet(
 
     val canSave = startMillis != null &&
         (customEndMillis == null || customEndMillis!! > startMillis!!)
+
+    // Overlap detection — surfaces any existing event whose time range
+    // intersects the currently-staged (start, end). BLOCKED events are
+    // excluded from the check because blocking your own vacation on top of
+    // another block is fine, and the vacation-vs-booking case is handled by
+    // the availability screen's conflict panel. We warn (not block) since
+    // a coach may legitimately want overlapping commitments (e.g. a
+    // clinic running alongside individual warm-up). The save CTA stays
+    // active; the banner just makes the conflict visible.
+    val conflicts: List<CalendarEvent> = remember(startMillis, customEndMillis, durationMinutes, eventType, existingEvents) {
+        val start = startMillis ?: return@remember emptyList()
+        val end = customEndMillis ?: (start + durationMinutes * 60L * 1000L)
+        val startInstant = Instant.fromEpochMilliseconds(start)
+        val endInstant = Instant.fromEpochMilliseconds(end)
+        if (eventType == "BLOCKED") return@remember emptyList()
+        existingEvents.filter { other ->
+            other.eventType != CalendarEventType.BLOCKED &&
+                other.startsAt < endInstant &&
+                other.endsAt > startInstant
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1983,6 +2013,10 @@ private fun AddCalendarEventSheet(
                 }
             }
 
+            if (conflicts.isNotEmpty()) {
+                ConflictWarningBanner(conflicts = conflicts, tz = tz)
+            }
+
             Spacer(Modifier.height(4.dp))
 
             Box(
@@ -2014,6 +2048,71 @@ private fun AddCalendarEventSheet(
                 )
             }
         }
+    }
+}
+
+/**
+ * Warning banner shown inside AddCalendarEventSheet when the staged time
+ * range collides with existing events. Lime-tinted (not red) because the
+ * save CTA stays active — a coach may deliberately book overlapping
+ * sessions (clinic + warm-up, emergency sub, etc.) and we don't want to
+ * block them; we just make the collision visible.
+ */
+@Composable
+private fun ConflictWarningBanner(conflicts: List<CalendarEvent>, tz: TimeZone) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(ProCircuit.Lime.copy(alpha = 0.12f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = "⚠  Koliduje z istniejącymi " +
+                if (conflicts.size == 1) "zdarzeniem" else "zdarzeniami",
+            fontFamily = AppFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = 12.sp,
+            letterSpacing = 0.4.sp,
+            color = ProCircuit.Lime2,
+        )
+        conflicts.take(3).forEach { c ->
+            val start = c.startsAt.toLocalDateTime(tz)
+            val end = c.endsAt.toLocalDateTime(tz)
+            val hh = start.hour.toString().padStart(2, '0')
+            val mm = start.minute.toString().padStart(2, '0')
+            val eh = end.hour.toString().padStart(2, '0')
+            val em = end.minute.toString().padStart(2, '0')
+            val dateLabel = "${start.dayOfMonth}.${start.monthNumber.toString().padStart(2, '0')}"
+            val label = c.title?.takeIf { it.isNotBlank() } ?: when (c.eventType) {
+                CalendarEventType.BOOKING -> "Rezerwacja gracza"
+                CalendarEventType.EXTERNAL_CLIENT -> "Klient zewnętrzny"
+                else -> "Zdarzenie"
+            }
+            Text(
+                text = "• $label · $dateLabel $hh:$mm–$eh:$em",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 12.sp,
+                color = ProCircuit.OnBg,
+                lineHeight = 16.sp,
+            )
+        }
+        if (conflicts.size > 3) {
+            Text(
+                text = "+${conflicts.size - 3} więcej",
+                fontFamily = AppBodyFontFamily,
+                fontSize = 11.sp,
+                color = ProCircuit.OnSurface,
+            )
+        }
+        Text(
+            text = "Możesz zapisać mimo kolizji — upewnij się tylko, że to celowe.",
+            fontFamily = AppBodyFontFamily,
+            fontSize = 11.sp,
+            color = ProCircuit.OnSurface,
+            lineHeight = 15.sp,
+        )
     }
 }
 
