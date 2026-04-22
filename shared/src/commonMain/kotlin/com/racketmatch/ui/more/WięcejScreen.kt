@@ -163,9 +163,18 @@ object WięcejScreen : Screen {
 
             // Trenerzy — non-coach users get "find a coach", coaches get
             // service + availability management (moved here from the bottom
-            // bar when CoachDzienTab took its spot).
+            // bar when CoachDzienTab took its spot), plus a browsable list
+            // of the other coaches on the platform so they can scout the
+            // competition. The browse entry routes to CoachesScreen with
+            // isCoachMode=true — that flag hides the booking CTAs so the
+            // coach can read profiles without being offered a reservation.
             Section(if (isCoachMode) "Trener" else "Trenerzy") {
                 if (isCoachMode) {
+                    MoreRow(
+                        icon = Icons.Default.PeopleAlt,
+                        label = "Trenerzy",
+                        onClick = { tabNavigator.push(CoachesScreen(isCoachMode = true)) },
+                    )
                     MoreRow(
                         icon = Icons.Default.SportsTennis,
                         label = "Moje usługi",
