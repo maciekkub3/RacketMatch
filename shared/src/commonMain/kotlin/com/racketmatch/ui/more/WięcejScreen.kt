@@ -79,7 +79,11 @@ object WięcejScreen : Screen {
         val authRepository: AuthRepository = koinInject()
         val tokenStorage: TokenStorage = koinInject()
         val scope = rememberCoroutineScope()
-        val isCoachMode = tokenStorage.isCoach && tokenStorage.coachModeActive
+        // Observe the mode flag so the toggle re-renders immediately on tap.
+        // Reading `tokenStorage.coachModeActive` directly wasn't observable
+        // — the switch looked dead until the screen was re-entered.
+        val coachModeActive by tokenStorage.coachModeActiveFlow.collectAsState()
+        val isCoachMode = tokenStorage.isCoach && coachModeActive
 
         val badgeVm: ActionBadgeViewModel = kmpViewModel()
         val badgeState by badgeVm.state.collectAsState()
@@ -129,12 +133,14 @@ object WięcejScreen : Screen {
                     coachModeActive = isCoachMode,
                     onSelect = { targetCoachMode ->
                         if (targetCoachMode != isCoachMode) {
+                            // Flipping the flag emits on coachModeActiveFlow,
+                            // MainScreen observes it and rebuilds the tab
+                            // structure automatically. No manual remount —
+                            // replaceAll(MainScreen) with the same Screen
+                            // object was a no-op under Voyager's keyed
+                            // saveableState, which is why the old approach
+                            // looked dead.
                             tokenStorage.coachModeActive = targetCoachMode
-                            // Remount MainScreen so the tab structure
-                            // (coach vs player) rebuilds with the new mode.
-                            rootNavigator.replaceAll(
-                                com.racketmatch.ui.navigation.MainScreen
-                            )
                         }
                     },
                 )

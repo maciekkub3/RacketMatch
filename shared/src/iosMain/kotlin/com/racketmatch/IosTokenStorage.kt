@@ -7,6 +7,12 @@ class IosTokenStorage : InMemoryTokenStorage() {
 
     private val defaults = NSUserDefaults.standardUserDefaults
 
+    init {
+        // Seed the observable flow from NSUserDefaults so a returning user in
+        // coach mode doesn't read `false` on first composition.
+        _coachModeActiveFlow.value = defaults.boolForKey("coach_mode_active")
+    }
+
     override var accessToken: String?
         get() = defaults.stringForKey("access_token")
         set(value) { if (value != null) defaults.setObject(value, "access_token") else defaults.removeObjectForKey("access_token") }
@@ -37,7 +43,10 @@ class IosTokenStorage : InMemoryTokenStorage() {
 
     override var coachModeActive: Boolean
         get() = defaults.boolForKey("coach_mode_active")
-        set(value) { defaults.setBool(value, forKey = "coach_mode_active") }
+        set(value) {
+            defaults.setBool(value, forKey = "coach_mode_active")
+            _coachModeActiveFlow.value = value
+        }
 
     override var hasPlayerProfile: Boolean
         get() = defaults.boolForKey("has_player_profile")

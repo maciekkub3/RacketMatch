@@ -69,7 +69,11 @@ object MainScreen : Screen {
         // install (or until they reinstall/clear storage).
         var onboardingComplete by remember { mutableStateOf(tokenStorage.isOnboardingComplete) }
         val isCoach = tokenStorage.isCoach
-        val coachModeActive = tokenStorage.coachModeActive
+        // Observe the mode flag — plain `tokenStorage.coachModeActive` reads
+        // aren't Compose-observable, so toggling on WięcejScreen wouldn't
+        // re-evaluate this branch and the tab structure stayed in the old
+        // mode until a full app restart.
+        val coachModeActive by tokenStorage.coachModeActiveFlow.collectAsState()
 
         if (isCoach && coachModeActive) {
             // ── Coach mode ───────────────────────────────────────────────────

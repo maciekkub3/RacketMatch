@@ -11,6 +11,15 @@ interface TokenStorage {
     var isDarkTheme: Boolean
     var isCoach: Boolean
     var coachModeActive: Boolean
+    /**
+     * Observable mirror of [coachModeActive]. MainScreen + the mode-switch
+     * card on WięcejScreen read this so a mode flip triggers recomposition —
+     * plain `coachModeActive` reads aren't Compose-observable, and Voyager's
+     * saveableState keeps MainScreen alive across `replaceAll(MainScreen)`,
+     * so the old approach (re-push the same Screen object) didn't rebuild
+     * the tab structure.
+     */
+    val coachModeActiveFlow: kotlinx.coroutines.flow.StateFlow<Boolean>
     var hasPlayerProfile: Boolean
     /**
      * Comma-separated match IDs the current user has already seen the result
@@ -51,7 +60,11 @@ open class InMemoryTokenStorage : TokenStorage {
     override var isOnboardingComplete: Boolean = false
     override var isDarkTheme: Boolean = false
     override var isCoach: Boolean = false
-    override var coachModeActive: Boolean = false
+    protected val _coachModeActiveFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
+    override val coachModeActiveFlow: kotlinx.coroutines.flow.StateFlow<Boolean> = _coachModeActiveFlow
+    override var coachModeActive: Boolean
+        get() = _coachModeActiveFlow.value
+        set(value) { _coachModeActiveFlow.value = value }
     override var hasPlayerProfile: Boolean = true
     override var seenResultMatchIds: String = ""
 

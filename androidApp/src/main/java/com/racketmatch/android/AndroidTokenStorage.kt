@@ -7,6 +7,13 @@ class AndroidTokenStorage(context: Context) : InMemoryTokenStorage() {
 
     private val prefs = context.getSharedPreferences("racketmatch_prefs", Context.MODE_PRIVATE)
 
+    init {
+        // Seed the observable flow from persisted prefs — otherwise it starts
+        // at the InMemoryTokenStorage default (false) and the first read on
+        // MainScreen sees the wrong value until the user toggles.
+        _coachModeActiveFlow.value = prefs.getBoolean("coach_mode_active", false)
+    }
+
     override var accessToken: String?
         get() = prefs.getString("access_token", null)
         set(value) { prefs.edit().putString("access_token", value).apply() }
@@ -37,7 +44,10 @@ class AndroidTokenStorage(context: Context) : InMemoryTokenStorage() {
 
     override var coachModeActive: Boolean
         get() = prefs.getBoolean("coach_mode_active", false)
-        set(value) { prefs.edit().putBoolean("coach_mode_active", value).apply() }
+        set(value) {
+            prefs.edit().putBoolean("coach_mode_active", value).apply()
+            _coachModeActiveFlow.value = value
+        }
 
     override var hasPlayerProfile: Boolean
         get() = prefs.getBoolean("has_player_profile", true)
