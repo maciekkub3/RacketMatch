@@ -11,23 +11,24 @@ Dokument dla testera przygotowującego apkę do launchu. Nie jest to wyczerpują
 - **Backend działa** — sprawdź `GET /actuator/health` → 200
 
 ### DEV buttons — szybkie logowanie na jednym telefonie
-U dołu LoginScreen (pod dividerem "DEV") są 4 przyciski logujące na pre-seedowane konta. Używaj ich do przeskakiwania ról zamiast rejestrować nowe konta ręcznie:
+U dołu LoginScreen (pod dividerem "DEV") są 4 przyciski logujące na konta testowe. **Konta te nie istnieją do momentu aż je ręcznie zarejestrujesz** (sekcja 1). Po rejestracji DEV button działa jak skrót logowania — wyloguj → tap DEV → natychmiast zalogowany na dane konto.
 
-| Przycisk | Rola | Email | Hasło |
+| Przycisk | Rola | Email (rejestrujesz w sekcji 1) | Hasło |
 |---|---|---|---|
 | **Gracz** | Player-only | `maciek@gmail.com` | `Maciek123` |
 | **Daniel** | Player-only (drugi) | `daniel@gmail.com` | `Daniel123` |
 | **Trener** | Coach-only | `trener@gmail.com` | `Trener123` |
 | **Oboje** | Coach + Player | `trainerplayer@gmail.com` | `Trainer123` |
 
-**Flow na jednym telefonie:**
-1. Login DEV → "Gracz" (Maciek)
-2. Wyślij wyzwanie/wiadomość/zaproszenie do "Daniel" albo "Trener"
-3. Więcej → Wyloguj
-4. Login DEV → "Daniel" / "Trener" — zobacz odebrane wydarzenie, odpowiedz
-5. Wyloguj → znów "Gracz" → zobacz ack/odpowiedź
+**Plan testu:**
+1. Sekcja 1: **rejestrujesz** 4 konta dokładnie tymi credentialami (każde to osobny test wariantu rejestracji).
+2. Sekcje 2+: **używasz** DEV buttons do szybkiego przeskakiwania między rolami. Wyloguj → DEV Gracz / Daniel / Trener / Oboje → natychmiast zalogowany.
 
-**⚠ Uwaga:** DEV buttons logują na **istniejące** konto — **nie** testują flow rejestracji + onboarding. Do testów 1.1–1.3 (rejestracja + WelcomeScreen + coach-marks tour) MUSISZ odinstalować/wyczyścić apkę i zarejestrować świeżego usera ręcznie, bo DEV konta już dawno zakończyły swój onboarding.
+**Flow "gracz vs gracz" na jednym telefonie po sekcji 1:**
+1. Login DEV → **Gracz**. Wyślij wyzwanie do Daniela (w Explore widzisz go, bo oboje w Warszawie).
+2. Więcej → Wyloguj.
+3. Login DEV → **Daniel**. Zobacz zaproszenie, odpowiedz.
+4. Wyloguj → DEV **Gracz** → zobacz ack/odpowiedź.
 
 ### Jak zgłaszać wyniki
 Przy każdym teście jeden z trzech znaczników:
@@ -43,35 +44,69 @@ Przy każdym teście jeden z trzech znaczników:
 
 ---
 
-## 1. Setup kont testowych
+## 1. Setup kont testowych — rejestracja jest częścią testu
 
-> **Uwaga:** sekcja 1.1–1.4 testuje **sam flow rejestracji** (fresh install → role picker → WelcomeScreen → skill assessment). Reszta dokumentu używa pre-seedowanych kont z DEV buttons (Gracz/Daniel/Trener/Oboje) żeby nie rejestrować co chwilę nowego usera. Po skończeniu sekcji 1 odinstaluj apkę i zainstaluj ponownie, żeby DEV buttons miały czystą podstawę.
+> **Kluczowe:** konta dla DEV buttons **nie są pre-seedowane na backendzie** — musisz je najpierw zarejestrować ręcznie z dokładnie tymi credentialami z tabeli DEV buttons powyżej. Dopiero po rejestracji (sekcje 1.1–1.4) DEV buttons zalogują cię natychmiast w kolejnych sekcjach. Rejestracja 4 kont tymi credentialami **jest zarazem testem samego flow rejestracji** — każda z 4 prób testuje osobny wariant (pure player, drugi player, pure coach, oboje).
+>
+> Jedyne wymagania kolejności: zarejestruj **Gracz** pierwszego (bo sekcja 2 używa świeżego usera). Kolejność pozostałych trzech dowolna.
 
-### 1.1 Rejestracja świeżego gracza
-- **Co:** cały flow rejestracji dla roli "Gram" działa.
+### 1.1 Rejestracja → DEV **Gracz** (pure player)
+- **Co:** cały flow rejestracji dla roli "Gram" + przygotowanie konta do DEV button.
 - **Jak:**
-  1. Odpal apkę, kliknij "Utwórz konto".
+  1. Odpal świeżo zainstalowaną apkę, kliknij "Utwórz konto".
   2. Krok 0: wybierz "🎾 Gram".
-  3. Krok 1: wpisz imię, email (`player-a@test.local`), hasło (min 6 znaków). Zaznacz preferencję motywu.
-  4. Krok 2: wybierz miasto (np. Warszawa), sport (Tenis lub oba), zaznacz zgodę 16+.
+  3. Krok 1: wpisz imię "Maciek", email **`maciek@gmail.com`**, hasło **`Maciek123`**. Zaznacz preferencję motywu.
+  4. Krok 2: wybierz miasto **Warszawa**, sport Tenis (+ ewentualnie Padel), zaznacz zgodę 16+.
   5. Kliknij "ZAREJESTRUJ SIĘ".
-- **Oczekiwane:** po ~2s przechodzi do WelcomeScreen (avatar + skill).
+- **Oczekiwane:**
+  - Po ~2s WelcomeScreen (Witaj! → avatar → skill per sport).
+  - Po skończeniu onboardingu ląduje w MainScreen w trybie gracza.
+  - Tour coach-marks odpala się (Twój dzień → Znajdź rywala → Matches → Rankings → celebration). To potwierdza, że konto świeże.
+- **Zostań zalogowany do DEV Gracz** — w sekcji 2 będziesz sprawdzać post-register onboarding na tym samym koncie.
 
-### 1.2 Rejestracja trenera (pure coach)
-- **Jak:** jak wyżej, ale w kroku 0 wybierz "🏆 Trenuję innych". Konto: `pure-coach@test.local`.
-- **Oczekiwane:** po rejestracji WelcomeScreen → avatar → od razu ląduje w trybie trenera (zakładka "Dzień" z checklist setup).
+### 1.2 Rejestracja → DEV **Daniel** (drugi player, do testów "gracz vs gracz")
+- **Jak:**
+  1. Wyloguj się (Więcej → dół, ikona wylogowania).
+  2. "Utwórz konto" → "🎾 Gram".
+  3. Imię "Daniel", email **`daniel@gmail.com`**, hasło **`Daniel123`**.
+  4. Miasto **Warszawa** (to samo co Gracz, żeby widzieli się w Explore), sport Tenis.
+  5. Submit.
+- **Oczekiwane:** jak 1.1. DEV button **Daniel** będzie teraz logował to konto.
 
-### 1.3 Rejestracja oboje
-- **Jak:** jak wyżej, ale krok 0 = "🎾🏆 Robię obie rzeczy". Konto: `oboje@test.local`.
-- **Oczekiwane:** WelcomeScreen → avatar → skill per sport → Picker "Co najpierw?" → user wybiera tryb startowy.
+### 1.3 Rejestracja → DEV **Trener** (pure coach)
+- **Jak:**
+  1. Wyloguj się.
+  2. "Utwórz konto" → **"🏆 Trenuję innych"**.
+  3. Imię "Trener", email **`trener@gmail.com`**, hasło **`Trener123`**.
+  4. Miasto **Warszawa**, sport Tenis.
+  5. Submit.
+- **Oczekiwane:**
+  - WelcomeScreen → avatar → **bez skill step** (pure coach nie potrzebuje ELO).
+  - Ląduje od razu w trybie trenera (tabs: Dzień / Rezerwacje / Kalendarz / Więcej).
+  - Na Dzień widzi setup-checklist (bio, usługi, dostępność).
+- DEV button **Trener** teraz zaloguje to konto.
 
-### 1.4 Walidacje rejestracji
+### 1.4 Rejestracja → DEV **Oboje** (coach + player)
+- **Jak:**
+  1. Wyloguj się.
+  2. "Utwórz konto" → **"🎾🏆 Robię obie rzeczy"**.
+  3. Imię "Trainer Player", email **`trainerplayer@gmail.com`**, hasło **`Trainer123`**.
+  4. Miasto **Warszawa**, oba sporty (Tenis + Padel żeby wymusić dwa skill steps).
+  5. Submit.
+- **Oczekiwane:**
+  - WelcomeScreen → avatar → skill step per sport (2 kroki: tenis, potem padel) → Picker "Co najpierw?".
+  - Tap "Najpierw zagram" → ląduje w trybie gracza.
+  - (Albo tap "Najpierw skonfiguruję profil trenera" → ląduje w trybie trenera — przetestuj obie opcje na różnych uruchomieniach, albo cofnij rejestrację i powtórz.)
+- DEV button **Oboje** teraz zaloguje to konto.
+
+### 1.5 Walidacje rejestracji (edge-cases)
+Podczas którejkolwiek z powyższych rejestracji sprawdź walidacje. Użyj nowego maila (nie powyższych) bo nie chcesz zjeść DEV credentiala duplikatem.
 - **⚠ Edge-case:**
   - Email bez `@` lub bez domeny → błąd inline "Nieprawidłowy adres email".
   - Hasło <6 znaków → błąd inline.
   - Krok 2 bez wybranego sportu → błąd "Wybierz co najmniej jeden sport".
   - Niezaznaczona zgoda 16+ → błąd + submit nieaktywny.
-  - Duplikat email → server błąd: "Email już zarejestrowany" (albo podobnie).
+  - Duplikat email (np. spróbuj zarejestrować się drugi raz na `maciek@gmail.com`) → server błąd: "Email już zarejestrowany" (albo podobnie).
 
 ---
 
@@ -79,13 +114,13 @@ Przy każdym teście jeden z trzech znaczników:
 
 ### 2.1 Post-register WelcomeScreen
 - **Co:** onboarding prowadzi od rejestracji do głównego ekranu.
-- **Jak:** jako świeży player-a, po submit rejestracji:
-  1. Strona "Witaj!" — 3 bullety, przycisk "ZACZYNAJMY".
-  2. Avatar — tap "Galeria" lub "Pomiń" → następny krok.
-  3. Skill assessment — 6 tier cards, wybierz jeden (np. "Amator").
-  4. Jeśli masz dwa sporty — kolejny skill step dla drugiego.
-  5. (Tylko oboje) Picker "Co najpierw? Gram / Trener" → wybór.
-- **Oczekiwane:** ląduje w MainScreen.
+- **Jak:** już sprawdzone w sekcji 1 (każda z 4 rejestracji przechodzi przez WelcomeScreen). Dodatkowa weryfikacja:
+  1. Strona "Witaj!" — 3 bullety, przycisk "ZACZYNAJMY" widoczny i klikalny.
+  2. Avatar — zarówno "Galeria" jak i "Pomiń" przechodzą do następnego kroku. Wybrane zdjęcie pojawia się w podglądzie.
+  3. Skill assessment — 6 tier cards, tap dowolnego → przechodzi do następnego sportu lub kolejnego kroku.
+  4. (Pure coach — 1.3) skill step **nie** pojawia się.
+  5. (Oboje — 1.4) po skill per sport Picker "Co najpierw? Gram / Trener" → oba wybory działają.
+- **Oczekiwane:** po ostatnim kroku ląduje w MainScreen. Nowi gracze widzą coach-marks tour (2.2).
 
 ### 2.2 Coach-marks tour dla gracza
 - **Co:** tour 5 kroków pokazuje się świeżym graczom raz.
@@ -113,7 +148,7 @@ Przy każdym teście jeden z trzech znaczników:
 - **Co:** tokeny persystują, logout czyści auth ale NIE onboardingu.
 - **Jak:**
   1. Wyloguj się (Więcej → ikona wylogowania u dołu).
-  2. Zaloguj ponownie tym samym mailem.
+  2. Zaloguj ponownie — teraz **testuj DEV button Gracz** zamiast ręcznego wpisywania (to samo konto). Alternatywnie wpisz `maciek@gmail.com` / `Maciek123` ręcznie — oba powinny działać.
 - **Oczekiwane:**
   - Kończy w MainScreen, nie w rejestracji.
   - Tour **nie replay** (flag `isOnboardingComplete` przeżył logout).
