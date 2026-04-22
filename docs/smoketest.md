@@ -6,14 +6,28 @@ Dokument dla testera przygotowującego apkę do launchu. Nie jest to wyczerpują
 
 ### Co potrzebujesz
 - **Świeża instalacja apki** (odinstaluj + zainstaluj ponownie albo wyczyść dane) — ważne, żeby reset onboardingu i flag.
-- **Dwa urządzenia** (lub jedno + emulator) — wiele testów wymaga "gracz A vs gracz B" albo "gracz vs trener" w czasie rzeczywistym.
-- **Minimum 3 konta testowe:**
-  - `player-a@test.local` — czysty gracz
-  - `player-b@test.local` — drugi gracz do wyzwań / znajomych / DM
-  - `oboje@test.local` — konto z dwiema rolami (trener + gracz)
-  - (opcjonalnie) `pure-coach@test.local` — sam trener, do testu aktywacji profilu gracza
+- **Jedno urządzenie wystarcza** — LoginScreen ma DEV buttons (patrz niżej) które pozwalają przeskakiwać między 4 pre-seedowanymi kontami bez ręcznego wpisywania credsów. Drugie urządzenie przyda się tylko do testów real-time (push'e, DM w obie strony).
 - **Stabilne połączenie + możliwość wyłączenia Wi-Fi** do testów offline
 - **Backend działa** — sprawdź `GET /actuator/health` → 200
+
+### DEV buttons — szybkie logowanie na jednym telefonie
+U dołu LoginScreen (pod dividerem "DEV") są 4 przyciski logujące na pre-seedowane konta. Używaj ich do przeskakiwania ról zamiast rejestrować nowe konta ręcznie:
+
+| Przycisk | Rola | Email | Hasło |
+|---|---|---|---|
+| **Gracz** | Player-only | `maciek@gmail.com` | `Maciek123` |
+| **Daniel** | Player-only (drugi) | `daniel@gmail.com` | `Daniel123` |
+| **Trener** | Coach-only | `trener@gmail.com` | `Trener123` |
+| **Oboje** | Coach + Player | `trainerplayer@gmail.com` | `Trainer123` |
+
+**Flow na jednym telefonie:**
+1. Login DEV → "Gracz" (Maciek)
+2. Wyślij wyzwanie/wiadomość/zaproszenie do "Daniel" albo "Trener"
+3. Więcej → Wyloguj
+4. Login DEV → "Daniel" / "Trener" — zobacz odebrane wydarzenie, odpowiedz
+5. Wyloguj → znów "Gracz" → zobacz ack/odpowiedź
+
+**⚠ Uwaga:** DEV buttons logują na **istniejące** konto — **nie** testują flow rejestracji + onboarding. Do testów 1.1–1.3 (rejestracja + WelcomeScreen + coach-marks tour) MUSISZ odinstalować/wyczyścić apkę i zarejestrować świeżego usera ręcznie, bo DEV konta już dawno zakończyły swój onboarding.
 
 ### Jak zgłaszać wyniki
 Przy każdym teście jeden z trzech znaczników:
@@ -30,6 +44,8 @@ Przy każdym teście jeden z trzech znaczników:
 ---
 
 ## 1. Setup kont testowych
+
+> **Uwaga:** sekcja 1.1–1.4 testuje **sam flow rejestracji** (fresh install → role picker → WelcomeScreen → skill assessment). Reszta dokumentu używa pre-seedowanych kont z DEV buttons (Gracz/Daniel/Trener/Oboje) żeby nie rejestrować co chwilę nowego usera. Po skończeniu sekcji 1 odinstaluj apkę i zainstaluj ponownie, żeby DEV buttons miały czystą podstawę.
 
 ### 1.1 Rejestracja świeżego gracza
 - **Co:** cały flow rejestracji dla roli "Gram" działa.
@@ -135,7 +151,7 @@ Przy każdym teście jeden z trzech znaczników:
 
 ### 4.1 Lista graczy
 - **Co:** sortowanie po bliskim ELO, self-exclusion.
-- **Jak:** jako player-a, otwórz Explore, zjedź do "Sparing" → Gracze.
+- **Jak:** login DEV → **Gracz**, otwórz Explore, zjedź do "Sparing" → Gracze.
 - **Oczekiwane:** lista graczy z tego samego miasta, **bez** siebie. ELO blisko własnego na górze.
 
 ### 4.2 Zmiana miasta
@@ -152,7 +168,7 @@ Przy każdym teście jeden z trzech znaczników:
 
 ### 4.5 Publikacja własnej sesji (FAB +)
 - **Jak:** Explore → FAB "+" (dół prawo) → wybór typ/sport/kort/czas.
-- **Oczekiwane:** po publikacji sesja widoczna w "Otwarte mecze" innego użytkownika (zaloguj player-b i sprawdź).
+- **Oczekiwane:** po publikacji sesja widoczna w "Otwarte mecze" innego użytkownika (wyloguj → DEV **Daniel** i sprawdź).
 - **⚠ Edge-case:** FAB wyłączony dopóki kort i czas niewybrane.
 
 ### 4.6 Pełnoekranowa mapa
@@ -166,7 +182,7 @@ Przy każdym teście jeden z trzech znaczników:
 ### 5.1 Wysłanie wyzwania z Explore
 - **Co:** pełen flow od tapu gracza do celebracji.
 - **Jak:**
-  1. Explore → tap "Wyzwij" na karcie gracza (player-b).
+  1. Zalogowany jako DEV **Gracz**. Explore → tap "Wyzwij" na karcie DEV **Daniel**.
   2. Dialog: wybierz typ (Towarzyski/Rankingowy), sport.
   3. Opcjonalnie: rozwiń "Proponuję szczegóły" → wybierz dzień + godzinę ze stripu, kort z dropdowna.
   4. Tap "WYŚLIJ WYZWANIE".
@@ -174,12 +190,12 @@ Przy każdym teście jeden z trzech znaczników:
 - **⚠ Edge-case:** wyślij **bez** szczegółów → submit nadal działa ("Termin i kort ustalicie po akceptacji").
 
 ### 5.2 Akceptacja wyzwania
-- **Jak:** zaloguj player-b → Dziś lub Matches → "Przyjmij" na karcie zaproszenia od player-a.
+- **Jak:** wyloguj → DEV **Daniel** → Dziś lub Matches → "Przyjmij" na karcie zaproszenia od Gracz.
 - **Oczekiwane:** status PENDING → SCHEDULED. Mecz pojawia się w Dziś jako NextMatchHero.
 
 ### 5.3 Kontrpropozycja
-- **Jak:** jako player-b w Matches: tap tile "Kort" albo "Data" → edytuj → tap "WYŚLIJ PROPOZYCJĘ".
-- **Oczekiwane:** player-a widzi DiffBox "ICH PROPOZYCJA: Zmiana kortu/godziny" z before→after.
+- **Jak:** jako DEV **Daniel** w Matches: tap tile "Kort" albo "Data" → edytuj → tap "WYŚLIJ PROPOZYCJĘ".
+- **Oczekiwane:** po zalogowaniu na DEV **Gracz** widać DiffBox "ICH PROPOZYCJA: Zmiana kortu/godziny" z before→after.
 - **⚠ Edge-case:** nic nie zmienione → komunikat "Zmień kort lub godzinę żeby wysłać propozycję".
 
 ### 5.4 Brak duplikatu "TWOJA PROPOZYCJA"
@@ -264,16 +280,16 @@ Przy każdym teście jeden z trzech znaczników:
 
 ### 8.1 Znajomi — send/accept
 - **Jak:**
-  1. player-a → PlayerProfile innego → "+ Dodaj znajomego".
-  2. player-b → Więcej → Znajomi → zobacz pending request → "Akceptuj".
+  1. DEV **Gracz** → PlayerProfile DEV **Daniel** → "+ Dodaj znajomego".
+  2. Wyloguj → DEV **Daniel** → Więcej → Znajomi → zobacz pending request → "Akceptuj".
 - **Oczekiwane:**
-  - Request sent → u player-a button pokazuje "Zaproszenie wysłane ✓".
+  - Request sent → u Gracza button pokazuje "Zaproszenie wysłane ✓".
   - Po akceptacji obaj widzą się w liście znajomych.
   - Ich aktywności widoczne w Feed obu.
 
 ### 8.2 Odmowa + anulowanie
-- **Jak:** player-b "Odrzuć" na pending request.
-- **Oczekiwane:** request znika, player-a może wysłać nowy.
+- **Jak:** DEV **Daniel** "Odrzuć" na pending request.
+- **Oczekiwane:** request znika, Gracz może wysłać nowy.
 
 ### 8.3 Usunięcie znajomego
 - **Jak:** w liście znajomych → menu → "Usuń".
@@ -304,7 +320,7 @@ Przy każdym teście jeden z trzech znaczników:
 ### 9.1 Gracz → aktywacja profilu trenera
 - **Co:** nowy flow przez WelcomeScreen activation.
 - **Jak:**
-  1. Jako player-a: Więcej → Ustawienia → "Aktywuj profil trenera".
+  1. Jako DEV **Gracz**: Więcej → Ustawienia → "Aktywuj profil trenera".
   2. Obserwuj co się dzieje po tapie.
 - **Oczekiwane:**
   - Backend zwraca OK (brak błędu toast).
@@ -313,7 +329,7 @@ Przy każdym teście jeden z trzech znaczników:
 
 ### 9.2 Trener → aktywacja profilu gracza
 - **Jak:**
-  1. Jako pure-coach: Więcej → Ustawienia → "Aktywuj profil gracza".
+  1. Jako DEV **Trener** (zakładam że nie ma jeszcze player profile): Więcej → Ustawienia → "Aktywuj profil gracza". Jeśli DEV Trener już aktywował gracza — przetestuj na świeżo zarejestrowanym pure-coach z sekcji 1.2.
   2. Skill assessment step per zadeklarowany sport.
   3. Submit.
 - **Oczekiwane:**
@@ -358,7 +374,7 @@ Przy każdym teście jeden z trzech znaczników:
 - **Oczekiwane:** każda opcja prowadzi do odpowiedniego edit-ekranu.
 
 ### 11.3 Publiczny widok (jak widzi gracz)
-- **Jak:** jako player-a: Więcej → "Znajdź trenera" → CoachDetailScreen.
+- **Jak:** jako DEV **Gracz**: Więcej → "Znajdź trenera" → tap na DEV **Trener** → CoachDetailScreen.
 - **Oczekiwane:** widok bez edit buttonów, z listą usług + CTA "Zarezerwuj".
 
 ### 11.4 Self-exclusion z listy trenerów
@@ -563,7 +579,7 @@ Przy każdym teście jeden z trzech znaczników:
 - **Jak:** Więcej w player-only → brak "ModeSwitchCard".
 
 ### 17.2 Przełączenie player → coach
-- **Jak:** oboje-account: Więcej → ModeSwitchCard → "🏆 Trener".
+- **Jak:** DEV **Oboje**: Więcej → ModeSwitchCard → "🏆 Trener".
 - **Oczekiwane:**
   - Toggle wizualnie flipuje **natychmiast** (nie dopiero po odświeżeniu).
   - MainScreen rebuilduje się → coach tabs (Dzień/Rezerwacje/Kalendarz/Więcej).
@@ -602,7 +618,7 @@ Przy każdym teście jeden z trzech znaczników:
 - **Jak:** (trudne bez logów backendu — zostaw devowi)
 
 ### 19.2 Odbiór push — wyzwanie
-- **Jak:** player-b wyśle wyzwanie do player-a (zalogowany ale ekran wygaszony).
+- **Jak:** DEV **Daniel** wyśle wyzwanie do DEV **Gracz** (zalogowany ale ekran wygaszony).
 - **Oczekiwane:** push "Masz zaproszenie" → tap → otwiera apkę na Matches.
 
 ### 19.3 Odbiór push — rezerwacja
