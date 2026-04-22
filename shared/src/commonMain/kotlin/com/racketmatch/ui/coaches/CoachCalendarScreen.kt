@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1047,39 +1049,55 @@ private fun MonthHeatmap(
         }
         val selectedLabel = "${dayOfWeekShortLabel(selectedDate.dayOfWeek)} · " +
             "${selectedDate.dayOfMonth}.${selectedDate.monthNumber.toString().padStart(2, '0')}"
-        Column(
+        // Scrollable list — previously a plain Column.forEach inside a
+        // fillMaxSize column, which meant a day with >2 events clipped the
+        // overflow at the bottom of the screen with no way to reach them.
+        // weight(1f) claims the remaining space below the heatmap, and
+        // LazyColumn scrolls within that space.
+        LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+                .weight(1f)
+                .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(top = 14.dp, bottom = 24.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = selectedLabel,
-                    fontFamily = AppFontFamily,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp,
-                    color = ProCircuit.OnBg,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = if (dayEvents.isEmpty()) "0 sesji"
-                    else "${dayEvents.size} " + if (dayEvents.size == 1) "sesja" else "sesje",
-                    fontFamily = AppBodyFontFamily,
-                    fontSize = 11.sp,
-                    color = ProCircuit.OnSurface,
-                )
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = selectedLabel,
+                        fontFamily = AppFontFamily,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp,
+                        color = ProCircuit.OnBg,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = if (dayEvents.isEmpty()) "0 sesji"
+                        else "${dayEvents.size} " + if (dayEvents.size == 1) "sesja" else "sesje",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 11.sp,
+                        color = ProCircuit.OnSurface,
+                    )
+                }
             }
             if (dayEvents.isEmpty()) {
-                Text(
-                    text = "Brak sesji tego dnia.",
-                    fontFamily = AppBodyFontFamily,
-                    fontSize = 12.sp,
-                    color = ProCircuit.OnSurface.copy(alpha = 0.7f),
-                )
+                item {
+                    Text(
+                        text = "Brak sesji tego dnia.",
+                        fontFamily = AppBodyFontFamily,
+                        fontSize = 12.sp,
+                        color = ProCircuit.OnSurface.copy(alpha = 0.7f),
+                    )
+                }
             } else {
-                dayEvents.forEach { evt ->
-                    MonthDayEventRow(event = evt, selectedDate = selectedDate, tz = tz, onTap = { onEventTap(evt) })
+                items(dayEvents, key = { it.id }) { evt ->
+                    MonthDayEventRow(
+                        event = evt,
+                        selectedDate = selectedDate,
+                        tz = tz,
+                        onTap = { onEventTap(evt) },
+                    )
                 }
             }
         }
